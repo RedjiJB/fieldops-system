@@ -6,7 +6,9 @@ import { assetsRouter } from "./routes/assets.js";
 import { checkoutsRouter } from "./routes/checkouts.js";
 import { consumablesRouter } from "./routes/consumables.js";
 import { loadoutsRouter } from "./routes/loadouts.js";
+import { ordersRouter } from "./routes/orders.js";
 import { sitesRouter } from "./routes/sites.js";
+import { vendorsRouter } from "./routes/vendors.js";
 
 const app = express();
 app.use(express.json());
@@ -21,16 +23,25 @@ app.use("/api/v1", consumablesRouter);
 app.use("/api/v1", sitesRouter);
 app.use("/api/v1", loadoutsRouter);
 app.use("/api/v1", checkoutsRouter);
+app.use("/api/v1", ordersRouter);
+app.use("/api/v1", vendorsRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
     res.status(err.status).json({ error: err.message });
     return;
   }
-  // Postgres invalid-text-representation (e.g. a malformed UUID in a path param)
-  if (err && typeof err === "object" && "code" in err && err.code === "22P02") {
-    res.status(400).json({ error: "Invalid ID format" });
-    return;
+  if (err && typeof err === "object" && "code" in err) {
+    // Postgres invalid-text-representation (e.g. a malformed UUID in a path param)
+    if (err.code === "22P02") {
+      res.status(400).json({ error: "Invalid ID format" });
+      return;
+    }
+    // Postgres foreign_key_violation (e.g. a vendor_id/requester_id that doesn't exist)
+    if (err.code === "23503") {
+      res.status(400).json({ error: "References a record that doesn't exist" });
+      return;
+    }
   }
   console.error(err);
   res.status(500).json({ error: "Internal server error" });
