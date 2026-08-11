@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { type ErrorRequestHandler } from "express";
 import { pool } from "./db/pool.js";
 import { HttpError } from "./lib/httpError.js";
+import { alertsRouter } from "./routes/alerts.js";
 import { assetsRouter } from "./routes/assets.js";
 import { checkoutsRouter } from "./routes/checkouts.js";
 import { consumablesRouter } from "./routes/consumables.js";
@@ -10,6 +11,7 @@ import { ordersRouter } from "./routes/orders.js";
 import { shiftsRouter } from "./routes/shifts.js";
 import { sitesRouter } from "./routes/sites.js";
 import { vendorsRouter } from "./routes/vendors.js";
+import { startExceptionsWorker } from "./workers/exceptions.js";
 
 const app = express();
 app.use(express.json());
@@ -27,6 +29,7 @@ app.use("/api/v1", checkoutsRouter);
 app.use("/api/v1", ordersRouter);
 app.use("/api/v1", vendorsRouter);
 app.use("/api/v1", shiftsRouter);
+app.use("/api/v1", alertsRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
@@ -54,3 +57,6 @@ const port = process.env.PORT ?? 3000;
 app.listen(port, () => {
   console.log(`fieldops-backend listening on :${port}`);
 });
+
+const alertsCheckIntervalMs = Number(process.env.ALERTS_CHECK_INTERVAL_MS ?? 5 * 60 * 1000);
+startExceptionsWorker(alertsCheckIntervalMs);

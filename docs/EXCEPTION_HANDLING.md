@@ -24,3 +24,12 @@ This is the `alerts` table plus a background worker — not a REST endpoint on i
 Each of these, on a gap, writes a row to `alerts` (see [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#alerts)) and triggers a WhatsApp notification to the relevant person(s) — management for most, plus the affected crew for redirects and teammate status changes.
 
 This is flagged in [ROADMAP.md](ROADMAP.md) as worth pulling forward in build priority — it's where the real daily pain in the source data actually lives.
+
+## Implementation status
+
+`backend/src/workers/exceptions.ts` implements four of the six alert types on a periodic timer (`ALERTS_CHECK_INTERVAL_MS`, default 5 min), deduplicating against any already-open alert of the same type for the same record: `overdue`, `order_stalled`, `idle`, and `wrong_site` (circular geofences only — polygon sites aren't checked yet).
+
+`delay` and `loadout_gap` are **not** implemented yet, deliberately:
+
+- `delay` needs an "expected travel time" concept that doesn't exist anywhere in the schema (no site-to-site duration data).
+- `loadout_gap` needs a link from a shift to a job type/loadout, which doesn't exist — a shift currently records crew + site + date only. Resolving this depends on the "jobs" concept already flagged as deferred in `documents.job_id` (see [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#documents)).
