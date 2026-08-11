@@ -3,7 +3,9 @@ import express, { type ErrorRequestHandler } from "express";
 import { pool } from "./db/pool.js";
 import { HttpError } from "./lib/httpError.js";
 import { assetsRouter } from "./routes/assets.js";
+import { checkoutsRouter } from "./routes/checkouts.js";
 import { consumablesRouter } from "./routes/consumables.js";
+import { loadoutsRouter } from "./routes/loadouts.js";
 import { sitesRouter } from "./routes/sites.js";
 
 const app = express();
@@ -17,6 +19,8 @@ app.get("/health", async (_req, res) => {
 app.use("/api/v1", assetsRouter);
 app.use("/api/v1", consumablesRouter);
 app.use("/api/v1", sitesRouter);
+app.use("/api/v1", loadoutsRouter);
+app.use("/api/v1", checkoutsRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
