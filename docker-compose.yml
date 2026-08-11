@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fieldops
+      POSTGRES_USER: fieldops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"   # local only — not reachable outside the Pi
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgres://fieldops:${POSTGRES_PASSWORD}@postgres:5432/fieldops
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  openclaw:
+    # verify install method (npm vs docker image) against docs.openclaw.ai
+    # before relying on this service name/image
+    build: ./openclaw
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - ./openclaw.config.json:/root/.openclaw/openclaw.json
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    ports:
+      - "127.0.0.1:18789:18789"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+
+volumes:
+  pgdata:

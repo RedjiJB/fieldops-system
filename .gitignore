@@ -1,0 +1,25 @@
+# Secrets
+.env
+*.pem
+*.key
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups
+*.sql.gz
+backups/
+
+# OpenClaw local state
+openclaw/.openclaw/

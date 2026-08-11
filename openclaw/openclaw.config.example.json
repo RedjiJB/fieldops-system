@@ -1,0 +1,40 @@
+{
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "token": "${OPENCLAW_GATEWAY_TOKEN}"
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "deepseek": {
+        "baseUrl": "https://api.deepseek.com/v1",
+        "apiKey": "${DEEPSEEK_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "deepseek-v4-flash",
+            "name": "DeepSeek V4 Flash",
+            "contextWindow": 1000000,
+            "maxTokens": 8192
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "deepseek/deepseek-v4-flash",
+        "fallbacks": ["anthropic/claude-sonnet-5"],
+        "retryOnFailure": true,
+        "maxRetries": 2
+      }
+    }
+  },
+  "channels": {
+    "whatsapp": {
+      "enabled": true
+    }
+  }
+}
