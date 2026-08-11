@@ -7,6 +7,7 @@ import { checkoutsRouter } from "./routes/checkouts.js";
 import { consumablesRouter } from "./routes/consumables.js";
 import { loadoutsRouter } from "./routes/loadouts.js";
 import { ordersRouter } from "./routes/orders.js";
+import { shiftsRouter } from "./routes/shifts.js";
 import { sitesRouter } from "./routes/sites.js";
 import { vendorsRouter } from "./routes/vendors.js";
 
@@ -25,6 +26,7 @@ app.use("/api/v1", loadoutsRouter);
 app.use("/api/v1", checkoutsRouter);
 app.use("/api/v1", ordersRouter);
 app.use("/api/v1", vendorsRouter);
+app.use("/api/v1", shiftsRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {

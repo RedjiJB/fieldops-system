@@ -201,7 +201,7 @@ CREATE TABLE crew_members (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TYPE shift_status AS ENUM ('assigned', 'confirmed', 'no_show');
+CREATE TYPE shift_status AS ENUM ('assigned', 'confirmed', 'declined', 'no_show'); -- 'declined' covers the API's confirm-or-decline flow
 
 CREATE TABLE shifts (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
