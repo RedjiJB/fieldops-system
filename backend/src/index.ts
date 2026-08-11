@@ -6,6 +6,7 @@ import { alertsRouter } from "./routes/alerts.js";
 import { assetsRouter } from "./routes/assets.js";
 import { checkoutsRouter } from "./routes/checkouts.js";
 import { consumablesRouter } from "./routes/consumables.js";
+import { documentsRouter } from "./routes/documents.js";
 import { loadoutsRouter } from "./routes/loadouts.js";
 import { ordersRouter } from "./routes/orders.js";
 import { shiftsRouter } from "./routes/shifts.js";
@@ -32,6 +33,7 @@ app.use("/api/v1", vendorsRouter);
 app.use("/api/v1", shiftsRouter);
 app.use("/api/v1", alertsRouter);
 app.use("/api/v1", vehiclesRouter);
+app.use("/api/v1", documentsRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
