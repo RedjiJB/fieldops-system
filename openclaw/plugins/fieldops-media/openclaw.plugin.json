@@ -1,0 +1,18 @@
+{
+  "id": "fieldops-media",
+  "name": "FieldOps Media Auto-Logger",
+  "description": "Hook-only plugin that auto-logs inbound WhatsApp photo attachments as documents against the FieldOps backend.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "backendUrl": {
+        "type": "string",
+        "description": "FieldOps backend API base URL, e.g. http://localhost:3000/api/v1"
+      }
+    }
+  },
+  "activation": {
+    "onStartup": true
+  }
+}
