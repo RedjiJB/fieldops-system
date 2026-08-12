@@ -1,0 +1,30 @@
+{
+  "id": "fieldops-tools",
+  "name": "FieldOps Tools",
+  "description": "Tools for the FieldOps inventory and dispatch backend — assets and consumables.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "backendUrl": {
+        "type": "string",
+        "description": "FieldOps backend API base URL, e.g. http://localhost:3000/api/v1"
+      }
+    }
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "list_assets",
+      "get_asset",
+      "register_asset",
+      "verify_asset",
+      "update_asset_status",
+      "list_consumables",
+      "adjust_consumable_quantity",
+      "get_site_inventory"
+    ]
+  }
+}

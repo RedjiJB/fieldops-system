@@ -1,40 +1,35 @@
 {
+  "_comment": "Verified against a real installed OpenClaw 2026.7.1-2 instance (openclaw config schema / openclaw config get), not just docs. Don't hand-edit API keys into this file — run `openclaw onboard --deepseek-api-key <key> --anthropic-api-key <key>` or `openclaw config set` so credentials go through OpenClaw's own secret handling.",
+
   "gateway": {
     "mode": "local",
     "port": 18789,
-    "token": "${OPENCLAW_GATEWAY_TOKEN}"
-  },
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "deepseek": {
-        "baseUrl": "https://api.deepseek.com/v1",
-        "apiKey": "${DEEPSEEK_API_KEY}",
-        "api": "openai-completions",
-        "models": [
-          {
-            "id": "deepseek-v4-flash",
-            "name": "DeepSeek V4 Flash",
-            "contextWindow": 1000000,
-            "maxTokens": 8192
-          }
-        ]
-      }
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
     }
   },
+
+  "tools": {
+    "profile": "messaging"
+  },
+
   "agents": {
     "defaults": {
+      "workspace": "~/.openclaw/workspace",
       "model": {
-        "primary": "deepseek/deepseek-v4-flash",
-        "fallbacks": ["anthropic/claude-sonnet-5"],
-        "retryOnFailure": true,
-        "maxRetries": 2
+        "primary": "deepseek/deepseek-chat",
+        "fallbacks": ["anthropic/claude-sonnet-5"]
       }
     }
   },
+
   "channels": {
     "whatsapp": {
-      "enabled": true
+      "enabled": true,
+      "dmPolicy": "allowlist",
+      "allowFrom": []
     }
   }
 }
