@@ -265,7 +265,9 @@ CREATE TABLE documents (
   job_id       UUID, -- references a future jobs table if one is split out from sites
   site_id      UUID REFERENCES sites(id),
   type         TEXT NOT NULL, -- contract, permit, photo, receipt, disposal_ticket, insurance_cert
-  filename     TEXT NOT NULL,
+  filename     TEXT NOT NULL, -- human-readable original filename
+  storage_path TEXT, -- internal generated filename on disk (backend/uploads); null if this row is metadata-only with no stored file
+  mime_type    TEXT, -- needed to serve the file with the right Content-Type
   uploaded_by  UUID REFERENCES crew_members(id),
   uploaded_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   tags         TEXT[],

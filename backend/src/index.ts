@@ -17,7 +17,10 @@ import { vendorsRouter } from "./routes/vendors.js";
 import { startExceptionsWorker } from "./workers/exceptions.js";
 
 const app = express();
-app.use(express.json());
+// Default express.json() limit (100kb) is too small for base64-encoded
+// photo uploads (POST /documents/upload) — WhatsApp images are typically
+// a few hundred KB to a few MB, and base64 inflates that by ~33%.
+app.use(express.json({ limit: "15mb" }));
 
 app.get("/health", async (_req, res) => {
   await pool.query("SELECT 1");

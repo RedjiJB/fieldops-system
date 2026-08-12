@@ -1,3 +1,6 @@
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
@@ -14,6 +17,12 @@ const DOCUMENT_TYPES = [
   "disposal_ticket",
   "insurance_cert",
 ] as const;
+
+// Backed by a Docker volume (see docker-compose.yml) so uploads survive
+// container rebuilds. Stored filenames are always generated (crypto
+// randomUUID), never derived from user input, to avoid path traversal.
+const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "/app/uploads";
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 documentsRouter.post(
   "/documents",
@@ -41,6 +50,79 @@ documentsRouter.post(
       ],
     );
     res.status(201).json(result.rows[0]);
+  }),
+);
+
+documentsRouter.post(
+  "/documents/upload",
+  asyncHandler(async (req, res) => {
+    const {
+      content_base64,
+      original_filename,
+      mime_type,
+      site_id,
+      job_id,
+      type,
+      uploaded_by,
+      tags,
+      expiry_date,
+    } = req.body;
+
+    if (!content_base64 || !original_filename || !mime_type || !uploaded_by) {
+      throw new HttpError(400, "content_base64, original_filename, mime_type, and uploaded_by are required");
+    }
+    if (!DOCUMENT_TYPES.includes(type)) {
+      throw new HttpError(400, `type must be one of: ${DOCUMENT_TYPES.join(", ")}`);
+    }
+
+    // Node's Buffer.from(str, "base64") never throws on malformed input — it
+    // silently skips invalid characters and decodes whatever's left, so a
+    // try/catch here is useless. Validate the alphabet/padding ourselves first.
+    const normalized = content_base64.replace(/\s/g, "");
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) || normalized.length % 4 !== 0) {
+      throw new HttpError(400, "content_base64 is not valid base64");
+    }
+    const buffer = Buffer.from(normalized, "base64");
+    if (buffer.length === 0) throw new HttpError(400, "decoded file content is empty");
+
+    const ext = path.extname(original_filename).slice(0, 10); // cap in case of a malformed name
+    const storedFilename = `${crypto.randomUUID()}${ext}`;
+    fs.writeFileSync(path.join(UPLOAD_DIR, storedFilename), buffer);
+
+    const result = await pool.query(
+      `INSERT INTO documents (site_id, job_id, type, filename, storage_path, mime_type, uploaded_by, tags, expiry_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        site_id ?? null,
+        job_id ?? null,
+        type,
+        original_filename,
+        storedFilename,
+        mime_type,
+        uploaded_by,
+        tags ?? null,
+        expiry_date ?? null,
+      ],
+    );
+    res.status(201).json(result.rows[0]);
+  }),
+);
+
+documentsRouter.get(
+  "/documents/:id/file",
+  asyncHandler(async (req, res) => {
+    const result = await pool.query("SELECT * FROM documents WHERE id = $1", [req.params.id]);
+    const doc = result.rows[0];
+    if (!doc) throw new HttpError(404, "Document not found");
+    if (!doc.storage_path) throw new HttpError(404, "No file stored for this document");
+
+    const filePath = path.join(UPLOAD_DIR, doc.storage_path);
+    if (!fs.existsSync(filePath)) throw new HttpError(404, "Stored file is missing");
+
+    res.type(doc.mime_type ?? "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.filename)}"`);
+    fs.createReadStream(filePath).pipe(res);
   }),
 );
 

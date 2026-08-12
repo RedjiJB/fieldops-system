@@ -66,6 +66,7 @@ Surfaced by a real gap: nothing in the original spec could look up or register a
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/shifts` | Assign a shift (crew, site, date, time) |
+| `POST` | `/shifts/batch` | Assign several shifts at once, all-or-nothing — matches the real dispatch pattern of one message assigning multiple people to multiple sites |
 | `PATCH` | `/shifts/:id/confirm` | Crew confirms or declines |
 | `GET` | `/shifts?date=&site_id=&crew_member_id=` | List shifts |
 | `POST` | `/timeclock` | Log a check-in/break/check-out event |
@@ -84,7 +85,9 @@ Surfaced by a real gap: nothing in the original spec could look up or register a
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/documents` | Upload/log a document (photo, receipt, permit, etc.) with site/job tagging |
+| `POST` | `/documents` | Log a document's *metadata only* (photo, receipt, permit, etc.) with site/job tagging — no file content, just a filename record |
+| `POST` | `/documents/upload` | Upload actual file content (base64) alongside metadata — stored on a persistent volume, retrievable via `/documents/:id/file`. What the WhatsApp photo auto-logging hook uses. |
+| `GET` | `/documents/:id/file` | Retrieve the stored file content for a document created via `/documents/upload` |
 | `GET` | `/documents?site_id=&type=` | Retrieve documents, e.g. "everything for Site 7" |
 | `GET` | `/documents/expiring?within_days=` | Insurance/cert/permit expiry alerts |
 

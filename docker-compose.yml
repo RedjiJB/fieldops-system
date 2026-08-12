@@ -18,6 +18,8 @@ services:
       - postgres
     environment:
       DATABASE_URL: postgres://fieldops:${POSTGRES_PASSWORD}@postgres:5432/fieldops
+    volumes:
+      - uploads:/app/uploads
     ports:
       - "127.0.0.1:3000:3000"
 
@@ -35,3 +37,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:
