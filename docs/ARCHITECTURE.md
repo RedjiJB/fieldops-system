@@ -9,7 +9,7 @@ Crew / Management phone (WhatsApp)
         ↕
 OpenClaw gateway (self-hosted, WhatsApp channel, QR-paired)
         ↕
-Agent (DeepSeek primary, Claude fallback — tool-use enabled)
+Agent (DeepSeek → Kimi → OpenAI → Gemini → Claude fallback chain — tool-use enabled)
    ── Speech-to-text (voice notes) ── OCR (receipts/tickets)
         ↕
 Backend API (REST)
@@ -42,7 +42,7 @@ Self-hosted on a Raspberry Pi 5 (8GB), via Docker Compose — Postgres, backend 
 
 ## Model provider
 
-DeepSeek V4 Flash as primary (handles the large majority of dispatch/ordering/status traffic at near-zero cost), Claude Sonnet 5 as automatic fallback (only triggers on error/timeout — worth paying more there since it barely runs). Configured via OpenClaw's native fallback support — see `openclaw/openclaw.config.example.json`.
+A 5-provider fallback chain, cheapest to most expensive, each one only tried if the previous fails or times out: **DeepSeek** (`deepseek-chat`) → **Kimi/Moonshot** (`kimi-k2.6`) → **OpenAI** (`gpt-5.4-mini`) → **Gemini** (`gemini-2.5-flash`) → **Claude** (`claude-sonnet-5`). DeepSeek handles the large majority of dispatch/ordering/status traffic at near-zero cost; everything after it is pure resilience — a provider outage or rate limit shouldn't take the agent down, and each fallback step also happens to run on different underlying infrastructure than the one before it. Configured per-agent (scoped to the `fieldops` agent specifically, not the personal `main` agent) via `openclaw models set` / `openclaw models fallbacks add` — see `openclaw/openclaw.config.example.json`.
 
 ## Location strategy (POC)
 
