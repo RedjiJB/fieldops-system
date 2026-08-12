@@ -95,8 +95,10 @@ Surfaced by the same gap crew-members/sites had: nothing could look up or regist
 | `POST` | `/vehicles` | Register a new vehicle |
 | `POST` | `/vehicles/:id/telemetry` | Log a WhatsApp location share against a vehicle — reverse-geocodes to a real address (OpenStreetMap Nominatim) automatically, reusing the last address if the vehicle hasn't moved more than ~100m |
 | `POST` | `/trips` | Start/label a trip ("dump run", "sod pickup") |
-| `PATCH` | `/trips/:id/end` | Close out a trip |
+| `PATCH` | `/trips/:id/end` | Close out a trip — computes and stores `distance_meters`/`duration_seconds` (see below) |
 | `GET` | `/vehicles/:id/trips` | Trip history for a vehicle |
+
+`PATCH /trips/:id/end` sums haversine distance across `vehicle_telemetry` points recorded for that vehicle between the trip's `started_at` and the close-out time. Telemetry is WhatsApp-share-driven, not continuous GPS, so this is a lower-bound distance estimate, not GPS-accurate — `distance_meters` is `NULL` (not `0`) when fewer than 2 telemetry points fall in the window, meaning no data rather than no movement.
 
 ## Documents
 
@@ -116,3 +118,13 @@ Surfaced by the same gap crew-members/sites had: nothing could look up or regist
 | `PATCH` | `/alerts/:id/resolve` | Mark resolved |
 
 The alert-raising logic itself isn't a REST endpoint — it's a background job/worker comparing expected vs. actual state (shift assignments vs. check-ins, order timestamps vs. status, geofence vs. assigned site) and writing to `alerts` when it finds a gap. See [EXCEPTION_HANDLING.md](EXCEPTION_HANDLING.md).
+
+## Notifications
+
+A single event log feeding two different consumers — see [ARCHITECTURE.md](ARCHITECTURE.md) for the full "management notifications" data flow. Rows are inserted internally (asset status changes, newly-raised alerts, order status changes) with a pre-formatted human-readable `message`, never created directly by a client.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/notifications/pending` | `critical` priority, undelivered — polled every minute by `openclaw/notifier/` and pushed to WhatsApp the moment they're found |
+| `GET` | `/notifications?priority=routine&since=` | `routine` priority for a time window (defaults to last 24h) — pulled by the digest agent's `list_notifications` tool, never pushed |
+| `PATCH` | `/notifications/:id/delivered` | Marks a `critical` row delivered — called by the notifier script after a successful send |

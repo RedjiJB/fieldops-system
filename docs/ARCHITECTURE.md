@@ -36,6 +36,26 @@ There's real equipment and material history scattered across past job sites, tru
 
 Bootstrapping is a physical sweep (Access Storage, active sites, trucks) tagging every asset with a QR code, condition, and status — split across the crew as part of normal days rather than one big shutdown-and-count event. Full detail in [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#assets) under the `assets.status` / `last_verified_at` fields.
 
+## Management notifications
+
+Principle 4 ("the system notices first") originally only meant alerts sat in Postgres until someone asked (`list_alerts`) or a fixed-time digest cron read them out. As of 2026-08, genuine exceptions push to management on WhatsApp within a minute of happening, without waiting for a digest — a tool marked missing/retired, a vehicle outside its geofence, an overdue checkout, or a stalled order. Everything else (normal registration/verification, routine order progress, idle-crew flags) stays digest-only, to avoid turning this into a stream of pings once real crew are onboarded.
+
+This couldn't be built as "the backend calls OpenClaw directly," because it structurally can't: the backend runs in its own Docker container with no filesystem access to the `openclaw` binary (a native systemd service on the Pi host, not in `docker-compose.yml`) and no network path to the gateway (loopback-bound on the host, not reachable from inside the container). So the flow keeps the one direction that already works everywhere else in this system — OpenClaw calling the backend's HTTP API, never the reverse — just inverted into a poll instead of a push:
+
+```
+Backend route/worker detects an event
+        ↓ (writes a pre-formatted message)
+Postgres `notifications` table (priority: critical | routine)
+        ↓ (polled every minute, host-side)
+openclaw/notifier/deliver-notifications.mjs  (runs as an `openclaw cron --command` job, on the Pi host)
+        ↓ (critical only — routine rows are pulled separately by the digest agent's list_notifications tool)
+openclaw message send --channel whatsapp     (direct send, no LLM call)
+        ↓
+Management's WhatsApp
+```
+
+See `openclaw/notifier/README.md` for the delivery script and cron job, and [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#notifications) for the table.
+
 ## Hosting (POC)
 
 Self-hosted on a Raspberry Pi 5 (8GB), via Docker Compose — Postgres, backend API, and OpenClaw as separate services. Exposed through **Cloudflare Tunnel** rather than router port-forwarding, so nothing on the home network accepts inbound connections directly. Runs off a USB SSD, not the microSD card — sustained Postgres writes wear microSD out quickly. Nightly `pg_dump` backup to a second location. Migrating to a small VPS later is a same-`docker-compose.yml` move if this graduates past POC. Full setup in [DEPLOYMENT.md](DEPLOYMENT.md).

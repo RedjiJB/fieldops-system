@@ -897,5 +897,21 @@ export default defineToolPlugin({
         return callBackend(config, `/documents/expiring?within_days=${within_days}`);
       },
     }),
+
+    tool({
+      name: "list_notifications",
+      label: "List Notifications",
+      description:
+        "List routine (non-urgent) tool/order/alert events for a time window — new tools registered, verifications, maintenance, order status moves, idle-crew flags. Use this for digest/status-check summaries. Does NOT include critical events (missing tools, wrong-site, overdue, stalled orders) — those are already pushed to management directly the moment they happen, so surfacing them again here would be redundant.",
+      parameters: Type.Object({
+        since: Type.Optional(
+          Type.String({ description: "ISO 8601 timestamp; defaults to the last 24 hours." }),
+        ),
+      }),
+      async execute({ since }, config) {
+        const qs = since ? `?priority=routine&since=${encodeURIComponent(since)}` : "?priority=routine";
+        return callBackend(config, `/notifications${qs}`);
+      },
+    }),
   ],
 });

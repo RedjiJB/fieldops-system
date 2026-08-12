@@ -248,13 +248,15 @@ CREATE TABLE vehicle_telemetry (
 );
 
 CREATE TABLE trips (
-  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  vehicle_id     UUID NOT NULL REFERENCES vehicles(id),
-  driver_id      UUID NOT NULL REFERENCES crew_members(id),
-  purpose_tag    TEXT, -- driver-supplied label, e.g. "dump run", "sod pickup"
-  site_id        UUID REFERENCES sites(id),
-  started_at     TIMESTAMPTZ,
-  ended_at       TIMESTAMPTZ
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vehicle_id       UUID NOT NULL REFERENCES vehicles(id),
+  driver_id        UUID NOT NULL REFERENCES crew_members(id),
+  purpose_tag      TEXT, -- driver-supplied label, e.g. "dump run", "sod pickup"
+  site_id          UUID REFERENCES sites(id),
+  started_at       TIMESTAMPTZ,
+  ended_at         TIMESTAMPTZ,
+  distance_meters  DOUBLE PRECISION, -- summed haversine across vehicle_telemetry in the trip window; NULL (not 0) when <2 points exist
+  duration_seconds INTEGER -- ended_at - started_at, set alongside distance_meters when the trip closes
 );
 ```
 
@@ -284,13 +286,32 @@ The exceptions engine's output — see [EXCEPTION_HANDLING.md](EXCEPTION_HANDLIN
 CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue');
 
 CREATE TABLE alerts (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  type              alert_type NOT NULL,
-  site_id           UUID REFERENCES sites(id),
-  related_record_id UUID, -- polymorphic reference to the order/checkout/shift/etc. that triggered it
-  raised_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
-  resolved_at       TIMESTAMPTZ,
-  resolved_by       UUID REFERENCES crew_members(id)
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type                alert_type NOT NULL,
+  site_id             UUID REFERENCES sites(id),
+  related_record_id   UUID, -- polymorphic reference to the order/checkout/shift/etc. that triggered it
+  raised_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolved_at         TIMESTAMPTZ,
+  resolved_by         UUID REFERENCES crew_members(id), -- set when a crew member/agent turn resolves it
+  resolved_by_user_id UUID REFERENCES users(id) -- set when a dashboard user resolves it; mutually exclusive with resolved_by
+);
+```
+
+## notifications
+
+A single event log feeding two consumers: `critical` rows get pushed to management on WhatsApp within a minute by `openclaw/notifier/`; `routine` rows are only ever pulled by the digest agent's `list_notifications` tool. `message` is pre-formatted, human-readable text set by whichever backend code inserted the row (asset status changes, newly-raised alerts, order status changes) — this table has no writer-facing REST endpoint, only reader/delivery endpoints (see [API.md](API.md)).
+
+```sql
+CREATE TYPE notification_priority AS ENUM ('critical', 'routine');
+
+CREATE TABLE notifications (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  priority     notification_priority NOT NULL,
+  message      TEXT NOT NULL,
+  source_type  TEXT NOT NULL, -- 'asset' | 'alert' | 'order'
+  source_id    UUID, -- polymorphic, like alerts.related_record_id
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  delivered_at TIMESTAMPTZ -- only ever set for 'critical' rows; stays NULL forever for 'routine' ones
 );
 ```
 

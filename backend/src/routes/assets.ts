@@ -2,6 +2,12 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
+import { insertNotification } from "../lib/notify.js";
+
+// Only 'missing'/'retired' are genuine exceptions worth an instant push to
+// management -- everything else (registration, verification, maintenance)
+// is routine and only ever shows up in the digest via list_notifications.
+const CRITICAL_ASSET_STATUSES = new Set(["missing", "retired"]);
 
 export const assetsRouter = Router();
 
@@ -83,7 +89,15 @@ assetsRouter.post(
        RETURNING *`,
       [name, category, qr_tag_id, purchase_date ?? null, condition ?? null],
     );
-    res.status(201).json(result.rows[0]);
+    const asset = result.rows[0];
+    await insertNotification(
+      pool,
+      "routine",
+      `New tool registered: ${asset.name} (${asset.category}) — pending verification.`,
+      "asset",
+      asset.id,
+    );
+    res.status(201).json(asset);
   }),
 );
 
@@ -100,8 +114,10 @@ assetsRouter.patch(
        RETURNING *`,
       [req.params.id, verified_by],
     );
-    if (!result.rows[0]) throw new HttpError(404, "Asset not found");
-    res.json(result.rows[0]);
+    const asset = result.rows[0];
+    if (!asset) throw new HttpError(404, "Asset not found");
+    await insertNotification(pool, "routine", `${asset.name} verified — now available.`, "asset", asset.id);
+    res.json(asset);
   }),
 );
 
@@ -117,10 +133,37 @@ assetsRouter.patch(
     }
 
     const result = await pool.query(
-      `UPDATE assets SET status = $2 WHERE id = $1 RETURNING *`,
+      `UPDATE assets a SET status = $2 WHERE a.id = $1
+       RETURNING a.*,
+         (SELECT name FROM sites WHERE id = a.current_site_id) AS current_site_name,
+         (SELECT name FROM crew_members WHERE id = a.current_holder) AS current_holder_name`,
       [req.params.id, status],
     );
-    if (!result.rows[0]) throw new HttpError(404, "Asset not found");
-    res.json(result.rows[0]);
+    const asset = result.rows[0];
+    if (!asset) throw new HttpError(404, "Asset not found");
+
+    const location = asset.current_holder_name
+      ? ` — last held by ${asset.current_holder_name}${asset.current_site_name ? ` at ${asset.current_site_name}` : ""}`
+      : asset.current_site_name
+        ? ` — last at ${asset.current_site_name}`
+        : "";
+    const statusMessage: Record<string, string> = {
+      missing: `🚨 ${asset.name} marked MISSING${location}.`,
+      retired: `${asset.name} retired — removed from active inventory${location}.`,
+      checked_out: `${asset.name} checked out${location}.`,
+      in_maintenance: `${asset.name} sent to maintenance${location}.`,
+      unconfirmed: `${asset.name} status reset to unconfirmed.`,
+    };
+    await insertNotification(
+      pool,
+      CRITICAL_ASSET_STATUSES.has(status) ? "critical" : "routine",
+      statusMessage[status] ?? `${asset.name} status changed to ${status}.`,
+      "asset",
+      asset.id,
+    );
+
+    delete asset.current_site_name;
+    delete asset.current_holder_name;
+    res.json(asset);
   }),
 );

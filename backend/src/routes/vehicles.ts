@@ -3,6 +3,7 @@ import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
 import { metersBetween, reverseGeocode } from "../lib/geocode.js";
+import { haversineDistanceMeters } from "../lib/geo.js";
 
 export const vehiclesRouter = Router();
 
@@ -155,12 +156,37 @@ vehiclesRouter.patch(
   "/trips/:id/end",
   asyncHandler(async (req, res) => {
     const existing = await pool.query("SELECT * FROM trips WHERE id = $1", [req.params.id]);
-    if (!existing.rows[0]) throw new HttpError(404, "Trip not found");
-    if (existing.rows[0].ended_at) throw new HttpError(400, "Trip already ended");
+    const trip = existing.rows[0];
+    if (!trip) throw new HttpError(404, "Trip not found");
+    if (trip.ended_at) throw new HttpError(400, "Trip already ended");
+
+    const endedAtResult = await pool.query("SELECT now() AS now");
+    const endedAt: Date = endedAtResult.rows[0].now;
+    const durationSeconds = Math.round((endedAt.getTime() - new Date(trip.started_at).getTime()) / 1000);
+
+    // Telemetry is WhatsApp-share-driven, not continuous GPS -- summing
+    // haversine distance between consecutive points in the trip window is a
+    // lower-bound estimate, not a GPS-accurate reading. Fewer than 2 points
+    // means no distance data at all (NULL), not zero movement.
+    const telemetryResult = await pool.query(
+      `SELECT lat, lng FROM vehicle_telemetry
+       WHERE vehicle_id = $1 AND timestamp >= $2 AND timestamp <= $3
+       ORDER BY timestamp ASC`,
+      [trip.vehicle_id, trip.started_at, endedAt],
+    );
+    let distanceMeters: number | null = null;
+    if (telemetryResult.rows.length >= 2) {
+      distanceMeters = 0;
+      for (let i = 1; i < telemetryResult.rows.length; i++) {
+        const prev = telemetryResult.rows[i - 1];
+        const curr = telemetryResult.rows[i];
+        distanceMeters += haversineDistanceMeters(prev.lat, prev.lng, curr.lat, curr.lng);
+      }
+    }
 
     const result = await pool.query(
-      "UPDATE trips SET ended_at = now() WHERE id = $1 RETURNING *",
-      [req.params.id],
+      `UPDATE trips SET ended_at = $2, distance_meters = $3, duration_seconds = $4 WHERE id = $1 RETURNING *`,
+      [req.params.id, endedAt, distanceMeters, durationSeconds],
     );
     res.json(result.rows[0]);
   }),

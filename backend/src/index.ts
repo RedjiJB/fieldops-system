@@ -10,6 +10,7 @@ import { consumablesRouter } from "./routes/consumables.js";
 import { crewMembersRouter } from "./routes/crewMembers.js";
 import { documentsRouter } from "./routes/documents.js";
 import { loadoutsRouter } from "./routes/loadouts.js";
+import { notificationsRouter } from "./routes/notifications.js";
 import { ordersRouter } from "./routes/orders.js";
 import { shiftsRouter } from "./routes/shifts.js";
 import { sitesRouter } from "./routes/sites.js";
@@ -43,6 +44,7 @@ app.use("/api/v1", alertsRouter);
 app.use("/api/v1", vehiclesRouter);
 app.use("/api/v1", documentsRouter);
 app.use("/api/v1", crewMembersRouter);
+app.use("/api/v1", notificationsRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {

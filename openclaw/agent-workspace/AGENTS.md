@@ -44,6 +44,8 @@ The response includes a real street address (reverse-geocoded), not just coordin
 
 This is WhatsApp-share-based, not automatic GPS polling — there's no live tracking between shares, and no geofence/expected-site comparison yet (see "What you can't do yet" below).
 
+**Relaying a completed trip (`end_trip`):** the response includes `distance_meters`/`duration_seconds` — convert to human units (km, minutes) rather than relaying raw numbers. `distance_meters` can be `null` if too few location shares happened during the trip to estimate one; say plainly that no distance estimate is available rather than guessing or reporting 0. This is a lower-bound estimate from location pings, not GPS-precise — same honesty as the address caveat above.
+
 ## Business rules the backend enforces — know them so you don't fight the tool
 
 - **An asset is never usable until verified.** New assets start `unconfirmed`. Only `verify_asset` can make one `available`. `update_asset_status` explicitly refuses to set `available` — that's not a bug, don't retry with a different status.

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
+import { insertNotification } from "../lib/notify.js";
 
 export const ordersRouter = Router();
 
@@ -127,11 +128,16 @@ ordersRouter.patch(
       );
     }
 
-    const result = await pool.query("UPDATE orders SET status = $2 WHERE id = $1 RETURNING *", [
-      req.params.id,
-      status,
-    ]);
-    res.json(result.rows[0]);
+    const result = await pool.query(
+      `UPDATE orders o SET status = $2 WHERE o.id = $1
+       RETURNING o.*, (SELECT name FROM sites WHERE id = o.site_id) AS site_name`,
+      [req.params.id, status],
+    );
+    const order = result.rows[0];
+    const forSite = order.site_name ? ` for ${order.site_name}` : "";
+    await insertNotification(pool, "routine", `Order${forSite} moved to ${status}.`, "order", order.id);
+    delete order.site_name;
+    res.json(order);
   }),
 );
 

@@ -1,6 +1,19 @@
 import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { haversineDistanceMeters } from "../lib/geo.js";
+import { insertNotification } from "../lib/notify.js";
+
+// wrong_site/overdue/order_stalled are genuine exceptions worth an instant
+// push to management; idle is explicitly a "rough proxy" prone to false
+// positives (see checkIdleCrew below) -- routine, digest-only.
+const CRITICAL_ALERT_TYPES = new Set(["wrong_site", "overdue", "order_stalled"]);
+
+const ALERT_MESSAGES: Record<string, string> = {
+  overdue: "🚨 A checked-out asset is overdue for return.",
+  order_stalled: "🚨 An order has been sitting unconfirmed for over 24 hours.",
+  wrong_site: "🚨 A vehicle is outside its expected site's geofence.",
+  idle: "A crew member has been on-shift 2+ hours with no recorded site activity.",
+};
 
 // Orders sitting in 'requested' longer than this without advancing get flagged.
 const ORDER_STALL_HOURS = 24;
@@ -42,6 +55,13 @@ async function raiseAlert(
     siteId,
     relatedRecordId,
   ]);
+  await insertNotification(
+    client,
+    CRITICAL_ALERT_TYPES.has(type) ? "critical" : "routine",
+    ALERT_MESSAGES[type] ?? `Alert raised: ${type}.`,
+    "alert",
+    relatedRecordId,
+  );
 }
 
 async function checkOverdueCheckouts(client: PoolClient): Promise<void> {
