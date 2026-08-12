@@ -2,10 +2,16 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
+import { metersBetween, reverseGeocode } from "../lib/geocode.js";
 
 export const vehiclesRouter = Router();
 
 const TELEMETRY_SOURCES = ["whatsapp_location", "obd"] as const;
+
+// Reuse the last resolved address instead of re-geocoding when a vehicle
+// hasn't meaningfully moved — keeps well within Nominatim's 1 req/sec free
+// usage policy even if a crew member's live location pings every few minutes.
+const GEOCODE_REUSE_RADIUS_METERS = 100;
 
 // GET /vehicles/:id needs the crew member's assigned vehicle to resolve
 // "which vehicle is this WhatsApp location share for" — there was no way
@@ -78,13 +84,26 @@ vehiclesRouter.post(
     const vehicle = await pool.query("SELECT id FROM vehicles WHERE id = $1", [req.params.id]);
     if (!vehicle.rows[0]) throw new HttpError(404, "Vehicle not found");
 
+    const lastPoint = await pool.query(
+      "SELECT lat, lng, address FROM vehicle_telemetry WHERE vehicle_id = $1 ORDER BY timestamp DESC LIMIT 1",
+      [req.params.id],
+    );
+    const last = lastPoint.rows[0] as { lat: number; lng: number; address: string | null } | undefined;
+
+    let address: string | null;
+    if (last?.address && metersBetween(lat, lng, last.lat, last.lng) < GEOCODE_REUSE_RADIUS_METERS) {
+      address = last.address;
+    } else {
+      address = await reverseGeocode(lat, lng);
+    }
+
     // WhatsApp shared location is the sole real-time source for the POC
     // (ARCHITECTURE.md) — OBD is a later upgrade, not wired up yet.
     const result = await pool.query(
-      `INSERT INTO vehicle_telemetry (vehicle_id, lat, lng, source)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO vehicle_telemetry (vehicle_id, lat, lng, source, address)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [req.params.id, lat, lng, source ?? "whatsapp_location"],
+      [req.params.id, lat, lng, source ?? "whatsapp_location", address],
     );
     res.status(201).json(result.rows[0]);
   }),

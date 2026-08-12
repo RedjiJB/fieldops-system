@@ -736,7 +736,8 @@ export default defineToolPlugin({
     tool({
       name: "get_vehicle",
       label: "Get Vehicle",
-      description: "Vehicle detail, including its latest logged location if any.",
+      description:
+        "Vehicle detail, including its latest logged location if any — latest_location.address is a real street address, prefer it over the raw lat/lng.",
       parameters: Type.Object({
         id: Type.String(),
       }),
@@ -766,7 +767,7 @@ export default defineToolPlugin({
       name: "log_vehicle_location",
       label: "Log Vehicle Location",
       description:
-        "Log a WhatsApp shared-location point against a vehicle. This is the sole real-time position source for now — no OBD hardware yet.",
+        "Log a WhatsApp shared-location point against a vehicle. This is the sole real-time position source for now — no OBD hardware yet. The response includes a reverse-geocoded `address` (a real street address, e.g. '45 O'Connor Street, Ottawa') — use that in replies, not the raw lat/lng.",
       parameters: Type.Object({
         id: Type.String({ description: "The vehicle's UUID." }),
         lat: Type.Number(),

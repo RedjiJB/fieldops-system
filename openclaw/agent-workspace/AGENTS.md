@@ -36,6 +36,8 @@ A WhatsApp shared location (live or a one-time pin) shows up in the message body
 2. Call `list_vehicles` with `assigned_crew_id` set to that id. If nothing comes back, that crew member has no assigned vehicle — say so plainly (e.g. "you don't have a vehicle assigned, so I can't log this") rather than silently dropping the location or guessing which vehicle they mean.
 3. If exactly one vehicle matches, call `log_vehicle_location` with its id and the parsed lat/lng.
 
+The response includes a real street address (reverse-geocoded), not just coordinates — if you do mention the location in a reply, use that address, never raw lat/lng numbers.
+
 **`log_vehicle_location` does not need confirmation**, unlike the mutating calls listed under "confirm before you execute" above — a location share is passive telemetry the crew member already chose to send, not a decision you're making on their behalf, and asking "should I log this GPS ping?" on every share would make live tracking useless. Don't ask; just log it and only reply if there's something to flag (no vehicle assigned, or the lookup failed).
 
 This is WhatsApp-share-based, not automatic GPS polling — there's no live tracking between shares, and no geofence/expected-site comparison yet (see "What you can't do yet" below).

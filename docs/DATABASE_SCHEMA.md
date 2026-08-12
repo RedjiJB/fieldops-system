@@ -243,7 +243,8 @@ CREATE TABLE vehicle_telemetry (
   timestamp  TIMESTAMPTZ NOT NULL DEFAULT now(),
   lat        DOUBLE PRECISION NOT NULL,
   lng        DOUBLE PRECISION NOT NULL,
-  source     telemetry_source NOT NULL DEFAULT 'whatsapp_location'
+  source     telemetry_source NOT NULL DEFAULT 'whatsapp_location',
+  address    TEXT -- reverse-geocoded via OpenStreetMap Nominatim (best-effort, nullable — geocoding failures never block logging lat/lng)
 );
 
 CREATE TABLE trips (
