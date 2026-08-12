@@ -1,7 +1,8 @@
 <!-- Heartbeat template; comments-only content prevents scheduled heartbeat API calls. -->
-<!-- Not wired up yet on purpose: the backend's own exceptions worker (backend/src/workers/exceptions.ts) -->
-<!-- already runs on a timer and writes to the alerts table. Relaying unresolved alerts into WhatsApp -->
-<!-- via a heartbeat would be a reasonable future step (list_alerts + resolved=false, on some interval), -->
-<!-- but that's not built — don't assume it's happening until this file has real content. -->
+<!-- Left unused on purpose: the status digests (morning/midday/evening) were built as three -->
+<!-- `openclaw cron` jobs instead of the per-agent heartbeat mechanism, because heartbeat's -->
+<!-- `every` field is an interval since last run (drifts, doesn't land on a fixed clock time) -->
+<!-- while `cron` supports real cron expressions for exact daily times — see -->
+<!-- ../README.md#status-digests for the job definitions. -->
 
 # Keep this file empty (or with only comments) to skip heartbeat API calls.
