@@ -67,7 +67,8 @@
       "list_vehicle_trips",
       "log_document",
       "list_documents",
-      "list_expiring_documents"
+      "list_expiring_documents",
+      "list_notifications"
     ]
   }
 }
