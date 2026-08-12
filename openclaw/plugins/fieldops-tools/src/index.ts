@@ -592,6 +592,30 @@ export default defineToolPlugin({
     }),
 
     tool({
+      name: "assign_shifts_batch",
+      label: "Assign Multiple Shifts",
+      description:
+        "Assign several shifts at once, all-or-nothing — use this instead of calling assign_shift repeatedly when one dispatch message covers multiple people/sites (e.g. 'Team 1: Jesse + Doug at Site A 800hh, Team 2: Korbin at Site B 730hh'). If any single assignment is invalid, none are created — no partial dispatch.",
+      parameters: Type.Object({
+        shifts: Type.Array(
+          Type.Object({
+            crew_member_id: Type.String(),
+            site_id: Type.String(),
+            date: Type.String({ description: "ISO date." }),
+            start_time: Type.Optional(Type.String({ description: "e.g. 07:00." })),
+            end_time: Type.Optional(Type.String()),
+          }),
+        ),
+      }),
+      async execute(input, config) {
+        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/shifts/batch", {
+          method: "POST",
+          body: JSON.stringify(input),
+        });
+      },
+    }),
+
+    tool({
       name: "confirm_shift",
       label: "Confirm Or Decline Shift",
       description:

@@ -35,6 +35,59 @@ shiftsRouter.post(
   }),
 );
 
+interface BatchShiftInput {
+  crew_member_id: string;
+  site_id: string;
+  date: string;
+  start_time?: string;
+  end_time?: string;
+}
+
+function validateBatchShifts(shifts: unknown): BatchShiftInput[] {
+  if (!Array.isArray(shifts) || shifts.length === 0) {
+    throw new HttpError(400, "shifts must be a non-empty array");
+  }
+  for (const s of shifts) {
+    if (!s.crew_member_id || !s.site_id || !s.date) {
+      throw new HttpError(400, "each shift needs crew_member_id, site_id, and date");
+    }
+  }
+  return shifts;
+}
+
+// For dispatch messages that assign several people to several sites at
+// once — the real-world pattern this exists for. All-or-nothing: if any
+// one assignment is invalid (e.g. bad crew_member_id), none are created,
+// so a partial dispatch never silently happens.
+shiftsRouter.post(
+  "/shifts/batch",
+  asyncHandler(async (req, res) => {
+    const validShifts = validateBatchShifts(req.body.shifts);
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const created = [];
+      for (const s of validShifts) {
+        const result = await client.query(
+          `INSERT INTO shifts (crew_member_id, site_id, date, start_time, end_time)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
+          [s.crew_member_id, s.site_id, s.date, s.start_time ?? null, s.end_time ?? null],
+        );
+        created.push(result.rows[0]);
+      }
+      await client.query("COMMIT");
+      res.status(201).json(created);
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }),
+);
+
 shiftsRouter.patch(
   "/shifts/:id/confirm",
   asyncHandler(async (req, res) => {

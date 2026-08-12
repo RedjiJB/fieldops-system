@@ -35,6 +35,7 @@ describe("fieldops-tools", () => {
       "list_crew_members",
       "register_crew_member",
       "assign_shift",
+      "assign_shifts_batch",
       "confirm_shift",
       "list_shifts",
       "log_timeclock_event",
