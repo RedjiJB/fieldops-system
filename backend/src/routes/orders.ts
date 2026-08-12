@@ -83,16 +83,24 @@ ordersRouter.get(
         throw new HttpError(400, `Invalid status. Must be one of: ${ORDER_STATUSES.join(", ")}`);
       }
       params.push(status);
-      conditions.push(`status = $${params.length}`);
+      conditions.push(`o.status = $${params.length}`);
     }
     if (site_id) {
       params.push(site_id);
-      conditions.push(`site_id = $${params.length}`);
+      conditions.push(`o.site_id = $${params.length}`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    // Joined names are for the dashboard's ops overview — a raw
+    // site_id/requester_id UUID is useless on a management screen. Purely
+    // additive: the agent's list_orders tool just gets extra fields.
     const result = await pool.query(
-      `SELECT * FROM orders ${where} ORDER BY created_at DESC`,
+      `SELECT o.*, s.name AS site_name, cm.name AS requester_name
+       FROM orders o
+       LEFT JOIN sites s ON s.id = o.site_id
+       LEFT JOIN crew_members cm ON cm.id = o.requester_id
+       ${where}
+       ORDER BY o.created_at DESC`,
       params,
     );
     res.json(result.rows);

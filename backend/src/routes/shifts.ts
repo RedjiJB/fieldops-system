@@ -123,20 +123,27 @@ shiftsRouter.get(
 
     if (date) {
       params.push(date);
-      conditions.push(`date = $${params.length}`);
+      conditions.push(`sh.date = $${params.length}`);
     }
     if (site_id) {
       params.push(site_id);
-      conditions.push(`site_id = $${params.length}`);
+      conditions.push(`sh.site_id = $${params.length}`);
     }
     if (crew_member_id) {
       params.push(crew_member_id);
-      conditions.push(`crew_member_id = $${params.length}`);
+      conditions.push(`sh.crew_member_id = $${params.length}`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    // Joined names for the dashboard's ops overview — same reasoning as
+    // GET /orders. Purely additive for the agent's list_shifts tool.
     const result = await pool.query(
-      `SELECT * FROM shifts ${where} ORDER BY date, start_time`,
+      `SELECT sh.*, s.name AS site_name, cm.name AS crew_member_name
+       FROM shifts sh
+       LEFT JOIN sites s ON s.id = sh.site_id
+       LEFT JOIN crew_members cm ON cm.id = sh.crew_member_id
+       ${where}
+       ORDER BY sh.date, sh.start_time`,
       params,
     );
     res.json(result.rows);
