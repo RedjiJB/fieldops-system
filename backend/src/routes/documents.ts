@@ -24,6 +24,21 @@ const DOCUMENT_TYPES = [
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "/app/uploads";
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+// mime_type is client-reported (whatever a WhatsApp sender's device claims),
+// not verified against actual file bytes — allowlisting it at upload time is
+// what stops someone uploading something that reports itself as text/html
+// (or worse) and having it rendered inline by a browser later. Only image
+// types render inline (see GET /documents/:id/file); everything else is
+// forced to download regardless of what's in this list.
+const SAFE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "application/pdf",
+]);
+
 documentsRouter.post(
   "/documents",
   asyncHandler(async (req, res) => {
@@ -74,6 +89,12 @@ documentsRouter.post(
     if (!DOCUMENT_TYPES.includes(type)) {
       throw new HttpError(400, `type must be one of: ${DOCUMENT_TYPES.join(", ")}`);
     }
+    // mime_type is whatever the uploading client claims — reject anything
+    // outside a real document/photo allowlist rather than trusting it
+    // unchecked (see SAFE_MIME_TYPES comment above for why this matters).
+    if (!SAFE_MIME_TYPES.has(mime_type)) {
+      throw new HttpError(400, `mime_type must be one of: ${[...SAFE_MIME_TYPES].join(", ")}`);
+    }
 
     // Node's Buffer.from(str, "base64") never throws on malformed input — it
     // silently skips invalid characters and decodes whatever's left, so a
@@ -120,8 +141,16 @@ documentsRouter.get(
     const filePath = path.join(UPLOAD_DIR, doc.storage_path);
     if (!fs.existsSync(filePath)) throw new HttpError(404, "Stored file is missing");
 
-    res.type(doc.mime_type ?? "application/octet-stream");
-    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.filename)}"`);
+    // Old rows from before SAFE_MIME_TYPES existed could still carry an
+    // unvalidated mime_type — never trust it enough to render inline.
+    // nosniff stops the browser from ignoring our Content-Type and
+    // guessing its own from the bytes, which is exactly how a mislabeled
+    // upload could still end up rendered as HTML.
+    const isSafeInlineType = SAFE_MIME_TYPES.has(doc.mime_type);
+    res.type(isSafeInlineType ? doc.mime_type : "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    const disposition = isSafeInlineType && doc.mime_type.startsWith("image/") ? "inline" : "attachment";
+    res.setHeader("Content-Disposition", `${disposition}; filename="${encodeURIComponent(doc.filename)}"`);
     fs.createReadStream(filePath).pipe(res);
   }),
 );

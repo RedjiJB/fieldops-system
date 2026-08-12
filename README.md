@@ -34,6 +34,7 @@ fieldops-system/
 │   ├── EXCEPTION_HANDLING.md    ← failure patterns → system response
 │   ├── USER_STORIES.md          ← full user stories by role
 │   ├── DEPLOYMENT.md            ← self-hosting setup (Pi + Docker + Cloudflare Tunnel)
+│   ├── SECURITY.md              ← threat model, verified findings, what's fixed vs. still open
 │   └── ROADMAP.md               ← build phases + timeline
 ├── backend/                     ← Postgres schema migrations + REST API + dashboard auth
 ├── frontend/                    ← web dashboard (React + Vite + Leaflet) — login + live vehicle map
