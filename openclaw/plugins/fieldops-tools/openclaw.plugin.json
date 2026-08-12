@@ -1,7 +1,7 @@
 {
   "id": "fieldops-tools",
   "name": "FieldOps Tools",
-  "description": "Tools for the FieldOps inventory and dispatch backend: assets & consumables, loadouts & checkout, orders & transfers, vendors & purchase orders, scheduling & check-in, alerts, vehicles & location, and documents.",
+  "description": "Tools for the FieldOps inventory and dispatch backend: assets & consumables, loadouts & checkout, orders & transfers, vendors & purchase orders, crew members, scheduling & check-in, alerts, vehicles & location, and documents.",
   "version": "0.1.0",
   "configSchema": {
     "type": "object",
@@ -24,6 +24,9 @@
       "update_asset_status",
       "list_consumables",
       "adjust_consumable_quantity",
+      "list_sites",
+      "get_site",
+      "register_site",
       "get_site_inventory",
       "list_loadouts",
       "create_loadout",
@@ -41,6 +44,8 @@
       "add_vendor",
       "send_purchase_order",
       "mark_purchase_order_fulfilled",
+      "list_crew_members",
+      "register_crew_member",
       "assign_shift",
       "confirm_shift",
       "list_shifts",

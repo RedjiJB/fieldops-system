@@ -6,6 +6,7 @@ import { alertsRouter } from "./routes/alerts.js";
 import { assetsRouter } from "./routes/assets.js";
 import { checkoutsRouter } from "./routes/checkouts.js";
 import { consumablesRouter } from "./routes/consumables.js";
+import { crewMembersRouter } from "./routes/crewMembers.js";
 import { documentsRouter } from "./routes/documents.js";
 import { loadoutsRouter } from "./routes/loadouts.js";
 import { ordersRouter } from "./routes/orders.js";
@@ -34,6 +35,7 @@ app.use("/api/v1", shiftsRouter);
 app.use("/api/v1", alertsRouter);
 app.use("/api/v1", vehiclesRouter);
 app.use("/api/v1", documentsRouter);
+app.use("/api/v1", crewMembersRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
@@ -49,6 +51,11 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     // Postgres foreign_key_violation (e.g. a vendor_id/requester_id that doesn't exist)
     if (err.code === "23503") {
       res.status(400).json({ error: "References a record that doesn't exist" });
+      return;
+    }
+    // Postgres unique_violation (e.g. a phone/qr_tag_id that's already registered)
+    if (err.code === "23505") {
+      res.status(409).json({ error: "A record with that unique value already exists" });
       return;
     }
   }

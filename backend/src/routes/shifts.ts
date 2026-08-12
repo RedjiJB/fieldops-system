@@ -64,7 +64,7 @@ shiftsRouter.patch(
 shiftsRouter.get(
   "/shifts",
   asyncHandler(async (req, res) => {
-    const { date, site_id } = req.query;
+    const { date, site_id, crew_member_id } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
 
@@ -75,6 +75,10 @@ shiftsRouter.get(
     if (site_id) {
       params.push(site_id);
       conditions.push(`site_id = $${params.length}`);
+    }
+    if (crew_member_id) {
+      params.push(crew_member_id);
+      conditions.push(`crew_member_id = $${params.length}`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";

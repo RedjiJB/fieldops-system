@@ -37,7 +37,7 @@ export default defineToolPlugin({
   id: "fieldops-tools",
   name: "FieldOps Tools",
   description:
-    "Tools for the FieldOps inventory and dispatch backend: assets & consumables, loadouts & checkout, orders & transfers, vendors & purchase orders, scheduling & check-in, alerts, vehicles & location, and documents.",
+    "Tools for the FieldOps inventory and dispatch backend: assets & consumables, loadouts & checkout, orders & transfers, vendors & purchase orders, crew members, scheduling & check-in, alerts, vehicles & location, and documents.",
   configSchema,
   tools: (tool) => [
     tool({
@@ -159,6 +159,56 @@ export default defineToolPlugin({
         return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/consumables/${id}/quantity`, {
           method: "PATCH",
           body: JSON.stringify({ delta }),
+        });
+      },
+    }),
+
+    tool({
+      name: "list_sites",
+      label: "List Sites",
+      description:
+        "List/filter sites (job_site, depot, vendor, or shop). Use this to resolve a site name someone mentions (e.g. 'Site 7', 'Access Storage') to a site_id before acting.",
+      parameters: Type.Object({
+        type: Type.Optional(
+          Type.Union(["job_site", "depot", "vendor", "shop"].map((t) => Type.Literal(t))),
+        ),
+      }),
+      async execute({ type }, config) {
+        const qs = type ? `?type=${type}` : "";
+        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/sites${qs}`);
+      },
+    }),
+
+    tool({
+      name: "get_site",
+      label: "Get Site Detail",
+      description: "Get full detail for one site by id.",
+      parameters: Type.Object({
+        id: Type.String({ description: "The site's UUID." }),
+      }),
+      async execute({ id }, config) {
+        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/sites/${id}`);
+      },
+    }),
+
+    tool({
+      name: "register_site",
+      label: "Register Site",
+      description: "Register a new site — a job site, depot, vendor location, or shop.",
+      parameters: Type.Object({
+        name: Type.String(),
+        type: Type.Union(["job_site", "depot", "vendor", "shop"].map((t) => Type.Literal(t))),
+        address: Type.Optional(Type.String()),
+        access_instructions: Type.Optional(Type.String()),
+        access_hours: Type.Optional(Type.String()),
+        center_lat: Type.Optional(Type.Number()),
+        center_lng: Type.Optional(Type.Number()),
+        geofence_radius_m: Type.Optional(Type.Integer()),
+      }),
+      async execute(input, config) {
+        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/sites", {
+          method: "POST",
+          body: JSON.stringify(input),
         });
       },
     }),
@@ -471,6 +521,55 @@ export default defineToolPlugin({
       },
     }),
 
+    // --- Crew Members ---
+    // Added after testing surfaced a real gap: nothing could resolve a
+    // WhatsApp sender's phone number to a crew_member_id, even though
+    // crew_members.phone is explicitly commented "WhatsApp identity" in the
+    // schema. See AGENTS.md's "Resolving who's messaging you" section —
+    // use list_crew_members with the phone filter for that, always, before
+    // answering any "my/me" style question.
+
+    tool({
+      name: "list_crew_members",
+      label: "List Crew Members",
+      description:
+        "List/filter crew members. Use the phone filter to resolve a WhatsApp sender's phone number to a crew_member_id — do this before answering any question about 'my' shift, checkouts, or status.",
+      parameters: Type.Object({
+        phone: Type.Optional(Type.String({ description: "E.164 phone number, e.g. +15555550123." })),
+        role: Type.Optional(
+          Type.Union(["crew", "crew_lead", "yard", "management"].map((r) => Type.Literal(r))),
+        ),
+        active: Type.Optional(Type.Boolean()),
+      }),
+      async execute({ phone, role, active }, config) {
+        const params = new URLSearchParams();
+        if (phone) params.set("phone", phone);
+        if (role) params.set("role", role);
+        if (active !== undefined) params.set("active", String(active));
+        const qs = params.toString();
+        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/crew-members${qs ? `?${qs}` : ""}`);
+      },
+    }),
+
+    tool({
+      name: "register_crew_member",
+      label: "Register Crew Member",
+      description: "Register a new crew member (new hire). Defaults to role 'crew' if not specified.",
+      parameters: Type.Object({
+        name: Type.String(),
+        phone: Type.String({ description: "E.164 phone number, e.g. +15555550123." }),
+        role: Type.Optional(
+          Type.Union(["crew", "crew_lead", "yard", "management"].map((r) => Type.Literal(r))),
+        ),
+      }),
+      async execute(input, config) {
+        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/crew-members", {
+          method: "POST",
+          body: JSON.stringify(input),
+        });
+      },
+    }),
+
     // --- Scheduling & Check-in ---
 
     tool({
@@ -512,15 +611,18 @@ export default defineToolPlugin({
     tool({
       name: "list_shifts",
       label: "List Shifts",
-      description: "List shifts, optionally filtered by date and/or site_id.",
+      description:
+        "List shifts, optionally filtered by date, site_id, and/or crew_member_id. For 'what's my shift' questions, resolve the sender to a crew_member_id first (list_crew_members), then filter by it here.",
       parameters: Type.Object({
         date: Type.Optional(Type.String({ description: "ISO date." })),
         site_id: Type.Optional(Type.String()),
+        crew_member_id: Type.Optional(Type.String()),
       }),
-      async execute({ date, site_id }, config) {
+      async execute({ date, site_id, crew_member_id }, config) {
         const params = new URLSearchParams();
         if (date) params.set("date", date);
         if (site_id) params.set("site_id", site_id);
+        if (crew_member_id) params.set("crew_member_id", crew_member_id);
         const qs = params.toString();
         return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/shifts${qs ? `?${qs}` : ""}`);
       },

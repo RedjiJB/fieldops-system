@@ -15,6 +15,9 @@ Every mutating endpoint (POST/PATCH/DELETE) that the agent calls should be treat
 | `PATCH` | `/assets/:id/status` | Update status (missing, in_maintenance, retired, etc.) |
 | `GET` | `/consumables?stocking_type=` | List consumables, with on-hand quantities where applicable |
 | `PATCH` | `/consumables/:id/quantity` | Adjust on-hand quantity (crew-reported restock/usage) |
+| `GET` | `/sites?type=` | List/filter sites — surfaced as missing the same way crew-members was: nothing could register a site at all before this |
+| `GET` | `/sites/:id` | Site detail |
+| `POST` | `/sites` | Register a new site (job_site, depot, vendor, or shop) |
 | `GET` | `/sites/:id/inventory` | Everything currently confirmed at a given site (e.g. "what's at Access Storage") |
 
 ## Loadouts & Checkout
@@ -48,13 +51,23 @@ Every mutating endpoint (POST/PATCH/DELETE) that the agent calls should be treat
 | `POST` | `/purchase-orders/:id/send` | Send compiled PO info to `info@` or a specified picker contact — no direct vendor contact |
 | `PATCH` | `/purchase-orders/:id/fulfilled` | Mark fulfilled once a receipt photo is logged |
 
+## Crew Members
+
+Surfaced by a real gap: nothing in the original spec could look up or register a crew member — `/crew/status` existed, but there was no way to resolve a WhatsApp sender's phone number to a `crew_member_id`, which the agent needs for any "my/me" style question (see EXCEPTION_HANDLING.md-adjacent note in ARCHITECTURE.md's WhatsApp-identity design intent: `crew_members.phone` is literally commented `-- WhatsApp identity` in the schema, but nothing used it until now).
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/crew-members?phone=&role=&active=` | List/filter crew members — `phone` lookup is how the agent resolves a message sender to a crew_member_id |
+| `GET` | `/crew-members/:id` | Crew member detail |
+| `POST` | `/crew-members` | Register a new crew member |
+
 ## Scheduling & Check-in
 
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/shifts` | Assign a shift (crew, site, date, time) |
 | `PATCH` | `/shifts/:id/confirm` | Crew confirms or declines |
-| `GET` | `/shifts?date=&site_id=` | List shifts |
+| `GET` | `/shifts?date=&site_id=&crew_member_id=` | List shifts |
 | `POST` | `/timeclock` | Log a check-in/break/check-out event |
 | `GET` | `/crew/status` | Live status for every active crew member (site, last event, geofence match) — powers the team-wide map view |
 
