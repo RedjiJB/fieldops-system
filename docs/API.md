@@ -74,8 +74,13 @@ Surfaced by a real gap: nothing in the original spec could look up or register a
 
 ## Vehicles & Location
 
+Surfaced by the same gap crew-members/sites had: nothing could look up or register a vehicle at all until the live-location feature needed to resolve "which vehicle does this crew member drive" from a WhatsApp location share.
+
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/vehicles?assigned_crew_id=&plate=` | List/filter vehicles — `assigned_crew_id` is how a shared location gets resolved to a vehicle |
+| `GET` | `/vehicles/:id` | Vehicle detail, including `latest_location` (most recent telemetry row, or null) |
+| `POST` | `/vehicles` | Register a new vehicle |
 | `POST` | `/vehicles/:id/telemetry` | Log a WhatsApp location share against a vehicle |
 | `POST` | `/trips` | Start/label a trip ("dump run", "sod pickup") |
 | `PATCH` | `/trips/:id/end` | Close out a trip |

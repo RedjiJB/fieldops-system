@@ -719,6 +719,50 @@ export default defineToolPlugin({
     // --- Vehicles & Location ---
 
     tool({
+      name: "list_vehicles",
+      label: "List Vehicles",
+      description:
+        "List/filter vehicles. Use assigned_crew_id to find which vehicle a crew member drives — this is how you resolve a WhatsApp location share to a vehicle before calling log_vehicle_location.",
+      parameters: Type.Object({
+        assigned_crew_id: Type.Optional(Type.String()),
+        plate: Type.Optional(Type.String()),
+      }),
+      async execute(input, config) {
+        const qs = new URLSearchParams(input as Record<string, string>).toString();
+        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/vehicles${qs ? `?${qs}` : ""}`);
+      },
+    }),
+
+    tool({
+      name: "get_vehicle",
+      label: "Get Vehicle",
+      description: "Vehicle detail, including its latest logged location if any.",
+      parameters: Type.Object({
+        id: Type.String(),
+      }),
+      async execute({ id }, config) {
+        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/vehicles/${id}`);
+      },
+    }),
+
+    tool({
+      name: "register_vehicle",
+      label: "Register Vehicle",
+      description: "Register a new vehicle (plate, optionally an assigned crew member and current mileage).",
+      parameters: Type.Object({
+        plate: Type.String(),
+        assigned_crew_id: Type.Optional(Type.String()),
+        current_mileage: Type.Optional(Type.Number()),
+      }),
+      async execute(input, config) {
+        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/vehicles", {
+          method: "POST",
+          body: JSON.stringify(input),
+        });
+      },
+    }),
+
+    tool({
       name: "log_vehicle_location",
       label: "Log Vehicle Location",
       description:

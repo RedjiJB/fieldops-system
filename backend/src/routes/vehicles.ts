@@ -7,6 +7,63 @@ export const vehiclesRouter = Router();
 
 const TELEMETRY_SOURCES = ["whatsapp_location", "obd"] as const;
 
+// GET /vehicles/:id needs the crew member's assigned vehicle to resolve
+// "which vehicle is this WhatsApp location share for" — there was no way
+// to look up a vehicle at all before this (same gap crew-members/sites had).
+vehiclesRouter.get(
+  "/vehicles",
+  asyncHandler(async (req, res) => {
+    const { assigned_crew_id, plate } = req.query;
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (assigned_crew_id) {
+      params.push(assigned_crew_id);
+      conditions.push(`assigned_crew_id = $${params.length}`);
+    }
+    if (plate) {
+      params.push(plate);
+      conditions.push(`plate = $${params.length}`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const result = await pool.query(`SELECT * FROM vehicles ${where} ORDER BY plate`, params);
+    res.json(result.rows);
+  }),
+);
+
+vehiclesRouter.get(
+  "/vehicles/:id",
+  asyncHandler(async (req, res) => {
+    const vehicleResult = await pool.query("SELECT * FROM vehicles WHERE id = $1", [req.params.id]);
+    const vehicle = vehicleResult.rows[0];
+    if (!vehicle) throw new HttpError(404, "Vehicle not found");
+
+    const latestLocationResult = await pool.query(
+      "SELECT * FROM vehicle_telemetry WHERE vehicle_id = $1 ORDER BY timestamp DESC LIMIT 1",
+      [req.params.id],
+    );
+
+    res.json({ ...vehicle, latest_location: latestLocationResult.rows[0] ?? null });
+  }),
+);
+
+vehiclesRouter.post(
+  "/vehicles",
+  asyncHandler(async (req, res) => {
+    const { plate, assigned_crew_id, current_mileage } = req.body;
+    if (!plate) throw new HttpError(400, "plate is required");
+
+    const result = await pool.query(
+      `INSERT INTO vehicles (plate, assigned_crew_id, current_mileage)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [plate, assigned_crew_id ?? null, current_mileage ?? null],
+    );
+    res.status(201).json(result.rows[0]);
+  }),
+);
+
 vehiclesRouter.post(
   "/vehicles/:id/telemetry",
   asyncHandler(async (req, res) => {
