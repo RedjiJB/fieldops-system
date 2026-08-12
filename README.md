@@ -2,7 +2,7 @@
 
 A WhatsApp-native inventory, equipment, and dispatch system for a landscaping/construction crew — built so that scheduling, equipment loadouts, material ordering, and check-ins run through conversational messages instead of scattered group chats, spreadsheets, and memory.
 
-**Status: Proof of concept.** Core schema and docs are in place; backend + agent wiring are the next build phase (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+**Status: Proof of concept, backend + agent + dashboard v1 built.** Backend API, the WhatsApp agent (44+ tools), status digests, photo auto-logging, and a web dashboard (login + live vehicle map) are all built and deployed. See [docs/ROADMAP.md](docs/ROADMAP.md) and `openclaw/README.md` for what's done vs. still open.
 
 ## What this is
 
@@ -35,16 +35,18 @@ fieldops-system/
 │   ├── USER_STORIES.md          ← full user stories by role
 │   ├── DEPLOYMENT.md            ← self-hosting setup (Pi + Docker + Cloudflare Tunnel)
 │   └── ROADMAP.md               ← build phases + timeline
-├── backend/                     ← Postgres schema migrations + REST API (next phase)
-│   └── README.md
-├── openclaw/                    ← OpenClaw config + agent tool definitions
+├── backend/                     ← Postgres schema migrations + REST API + dashboard auth
+├── frontend/                    ← web dashboard (React + Vite + Leaflet) — login + live vehicle map
+├── openclaw/                    ← OpenClaw config, agent workspace, and tool/hook plugins
 │   ├── openclaw.config.example.json
+│   ├── agent-workspace/         ← the fieldops agent's system prompt (AGENTS.md, etc.)
+│   ├── plugins/                 ← fieldops-tools (agent tools), fieldops-media (WhatsApp photo hook)
 │   └── README.md
 └── scripts/                     ← one-off tooling (QR generation, bootstrap audit helpers)
     └── README.md
 ```
 
-## Quick start (once backend/ is built)
+## Quick start
 
 ```bash
 git clone <this-repo>

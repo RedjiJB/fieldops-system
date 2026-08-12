@@ -18,10 +18,19 @@ services:
       - postgres
     environment:
       DATABASE_URL: postgres://fieldops:${POSTGRES_PASSWORD}@postgres:5432/fieldops
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN}
     volumes:
       - uploads:/app/uploads
     ports:
       - "127.0.0.1:3000:3000"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8080:80"   # local only, same pattern as backend — external access via cloudflared
 
   # OpenClaw is NOT a service here. Confirmed by actually installing it: it's
   # a CLI tool (curl install script / npm global package) that runs as its

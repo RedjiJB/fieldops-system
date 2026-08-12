@@ -25,15 +25,31 @@ vehiclesRouter.get(
 
     if (assigned_crew_id) {
       params.push(assigned_crew_id);
-      conditions.push(`assigned_crew_id = $${params.length}`);
+      conditions.push(`v.assigned_crew_id = $${params.length}`);
     }
     if (plate) {
       params.push(plate);
-      conditions.push(`plate = $${params.length}`);
+      conditions.push(`v.plate = $${params.length}`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    const result = await pool.query(`SELECT * FROM vehicles ${where} ORDER BY plate`, params);
+    // LATERAL join pulls each vehicle's latest telemetry row in the same
+    // query — the map view needs every vehicle's location in one call,
+    // not the N+1 pattern GET /vehicles/:id uses for a single vehicle.
+    const result = await pool.query(
+      `SELECT v.*, lt.latest_location
+       FROM vehicles v
+       LEFT JOIN LATERAL (
+         SELECT to_jsonb(t) AS latest_location
+         FROM vehicle_telemetry t
+         WHERE t.vehicle_id = v.id
+         ORDER BY t.timestamp DESC
+         LIMIT 1
+       ) lt ON true
+       ${where}
+       ORDER BY v.plate`,
+      params,
+    );
     res.json(result.rows);
   }),
 );

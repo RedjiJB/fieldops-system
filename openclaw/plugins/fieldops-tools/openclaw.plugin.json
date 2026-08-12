@@ -9,6 +9,10 @@
       "backendUrl": {
         "type": "string",
         "description": "FieldOps backend API base URL, e.g. http://localhost:3000/api/v1"
+      },
+      "serviceToken": {
+        "type": "string",
+        "description": "Bearer token authenticating this plugin against the backend's AGENT_SERVICE_TOKEN — required once the backend has dashboard auth enabled."
       }
     }
   },

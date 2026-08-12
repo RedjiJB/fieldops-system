@@ -294,6 +294,29 @@ CREATE TABLE alerts (
 );
 ```
 
+## Dashboard auth
+
+`users`/`sessions` back the web dashboard's login — entirely separate from `crew_members`, which is the WhatsApp/agent-side identity model. No `role` column on `users` yet; every dashboard account sees the same thing (map view only, in v1).
+
+```sql
+CREATE TABLE users (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         TEXT UNIQUE NOT NULL,
+  name          TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- token_hash stores sha256(raw token), never the raw token — same principle
+-- as password_hash never storing the plaintext password.
+CREATE TABLE sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+```
+
 ## Entity relationship summary
 
 ```

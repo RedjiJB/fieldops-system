@@ -16,7 +16,7 @@ Backend API (REST)
         ↕
 Postgres  +  WhatsApp shared location (live + one-time pins) for real-time position — POC phase, no hardware
         ↕
-Web dashboard (management) + Map view (crew sees full team status; management sees everything + flags)
+Web dashboard (management) + Map view — v1 built: login + live vehicle-location map (see openclaw/README.md and docs/DEPLOYMENT.md#dashboard-auth-rollout). Additional screens (ops overview, inventory browser, reports) not yet built.
 ```
 
 Outbound material orders don't hit a vendor API directly — the agent compiles the order details and sends them to `info@thesodboys.ca` (or straight to whoever's picking it up), for a human to actually contact the vendor. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) for the `purchase_orders` status flow.

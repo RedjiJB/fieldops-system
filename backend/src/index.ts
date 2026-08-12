@@ -4,6 +4,7 @@ import { pool } from "./db/pool.js";
 import { HttpError } from "./lib/httpError.js";
 import { alertsRouter } from "./routes/alerts.js";
 import { assetsRouter } from "./routes/assets.js";
+import { authRouter } from "./routes/auth.js";
 import { checkoutsRouter } from "./routes/checkouts.js";
 import { consumablesRouter } from "./routes/consumables.js";
 import { crewMembersRouter } from "./routes/crewMembers.js";
@@ -15,6 +16,7 @@ import { sitesRouter } from "./routes/sites.js";
 import { vehiclesRouter } from "./routes/vehicles.js";
 import { vendorsRouter } from "./routes/vendors.js";
 import { startExceptionsWorker } from "./workers/exceptions.js";
+import { requireAuth } from "./middleware/auth.js";
 
 const app = express();
 // Default express.json() limit (100kb) is too small for base64-encoded
@@ -27,6 +29,8 @@ app.get("/health", async (_req, res) => {
   res.json({ status: "ok" });
 });
 
+app.use("/api/v1", authRouter);
+app.use("/api/v1", requireAuth);
 app.use("/api/v1", assetsRouter);
 app.use("/api/v1", consumablesRouter);
 app.use("/api/v1", sitesRouter);

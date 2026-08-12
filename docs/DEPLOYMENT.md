@@ -37,6 +37,40 @@ docker compose logs -f backend
 curl http://localhost:3000/health
 ```
 
+## Dashboard auth rollout
+
+The backend API had zero authentication until the web dashboard needed to expose it to the internet. Auth now guards every `/api/v1/*` route via one of two credential types: the agent's static service token, or a dashboard user's session cookie. **The agent's calls have no concept of logging in** — the rollout order below exists specifically so deploying auth never breaks the live WhatsApp pipeline. Do these in order, on the Pi, over SSH:
+
+1. **Generate a token** (a human runs this, not scripted):
+   ```bash
+   openssl rand -hex 32
+   ```
+2. **Set it on the agent side first** — this must land before the backend starts enforcing auth:
+   ```bash
+   openclaw config set plugins.entries.fieldops-tools.config.serviceToken "<the token>"
+   systemctl --user restart openclaw-gateway
+   ```
+3. **Verify the agent still works** before touching the backend — trigger a real tool call (a cron digest run, or a real WhatsApp message) and confirm it still returns real data. If this step is skipped and step 4 happens first, the agent silently loses backend access.
+4. **Set the same token for the backend**, in `.env`:
+   ```
+   AGENT_SERVICE_TOKEN=<the same token>
+   ```
+5. **Deploy the auth-enforcing backend and run migrations**:
+   ```bash
+   docker compose up -d --build backend
+   docker compose exec backend npm run migrate
+   ```
+6. **Create your own dashboard account, interactively** — there is no public register endpoint:
+   ```bash
+   docker compose exec backend npm run create-user
+   ```
+7. **Re-verify the agent** one more time (same check as step 3) — this confirms the service-token path survived the real deploy, not just the config-side restart.
+8. **Bring up the dashboard**:
+   ```bash
+   docker compose up -d --build frontend
+   ```
+9. **Add one Cloudflare Tunnel public hostname** for the dashboard, in the Cloudflare Zero Trust dashboard (this repo's tunnel is remotely managed via `CLOUDFLARE_TUNNEL_TOKEN`, so ingress routes are configured cloud-side, not in a local `config.yml`): a new public hostname (e.g. `dashboard.<your-domain>`) pointed at `http://frontend:80`.
+
 ### Installing OpenClaw
 
 ```bash

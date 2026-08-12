@@ -1,8 +1,20 @@
 # Backend API
 
-REST API that the OpenClaw agent calls as tools, and that a future web dashboard reads from directly. Not yet implemented — this is the contract to build against (see [ROADMAP.md](ROADMAP.md)). Base path: `/api/v1`.
+REST API that the OpenClaw agent calls as tools, and that the web dashboard reads from directly. Base path: `/api/v1`.
 
 Every mutating endpoint (POST/PATCH/DELETE) that the agent calls should be treated as requiring a confirmed action upstream — the agent echoes back to the crew member before calling it, per the confirm-before-execute principle in [ARCHITECTURE.md](ARCHITECTURE.md). The API itself doesn't enforce confirmation; that's the agent's job. The API's job is to refuse anything that violates a data rule (e.g. assigning an unconfirmed asset).
+
+## Auth
+
+Every `/api/v1/*` route requires authentication except `POST /auth/login` — either a valid dashboard session cookie, or the agent's static service token, checked by one `requireAuth` middleware. `/health` (outside `/api/v1`) stays fully public. See [DEPLOYMENT.md](DEPLOYMENT.md#dashboard-auth-rollout) for how the two credential types are provisioned.
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/auth/login` | `{email, password}` → sets an `HttpOnly` session cookie. Public. |
+| `POST` | `/auth/logout` | Deletes the current session, clears the cookie. |
+| `GET` | `/auth/me` | Current dashboard user, or 401. |
+
+Dashboard accounts are created via `npm run create-user` (interactive CLI, run by a human on the Pi) — there is no public register endpoint.
 
 ## Assets & Inventory
 
@@ -78,7 +90,7 @@ Surfaced by the same gap crew-members/sites had: nothing could look up or regist
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/vehicles?assigned_crew_id=&plate=` | List/filter vehicles — `assigned_crew_id` is how a shared location gets resolved to a vehicle |
+| `GET` | `/vehicles?assigned_crew_id=&plate=` | List/filter vehicles, each row including `latest_location` — the dashboard map view's data source |
 | `GET` | `/vehicles/:id` | Vehicle detail, including `latest_location` (most recent telemetry row, or null) |
 | `POST` | `/vehicles` | Register a new vehicle |
 | `POST` | `/vehicles/:id/telemetry` | Log a WhatsApp location share against a vehicle — reverse-geocodes to a real address (OpenStreetMap Nominatim) automatically, reusing the last address if the vehicle hasn't moved more than ~100m |

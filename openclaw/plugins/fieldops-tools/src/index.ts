@@ -5,18 +5,31 @@ const configSchema = Type.Object({
   backendUrl: Type.Optional(
     Type.String({ description: "FieldOps backend API base URL, e.g. http://localhost:3000/api/v1" }),
   ),
+  serviceToken: Type.Optional(
+    Type.String({
+      description:
+        "Bearer token authenticating this plugin against the backend's AGENT_SERVICE_TOKEN — required once the backend has dashboard auth enabled.",
+    }),
+  ),
 });
 
 const DEFAULT_BACKEND_URL = "http://localhost:3000/api/v1";
 
+type PluginConfig = { backendUrl?: string; serviceToken?: string };
+
 async function callBackend(
-  backendUrl: string,
+  config: PluginConfig,
   path: string,
   init?: RequestInit,
 ): Promise<unknown> {
+  const backendUrl = config.backendUrl ?? DEFAULT_BACKEND_URL;
   const res = await fetch(`${backendUrl}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(config.serviceToken ? { Authorization: `Bearer ${config.serviceToken}` } : {}),
+      ...init?.headers,
+    },
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) {
@@ -62,7 +75,7 @@ export default defineToolPlugin({
         if (site_id) params.set("site_id", site_id);
         if (category) params.set("category", category);
         const qs = params.toString();
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/assets${qs ? `?${qs}` : ""}`);
+        return callBackend(config, `/assets${qs ? `?${qs}` : ""}`);
       },
     }),
 
@@ -74,7 +87,7 @@ export default defineToolPlugin({
         id: Type.String({ description: "The asset's UUID." }),
       }),
       async execute({ id }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/assets/${id}`);
+        return callBackend(config, `/assets/${id}`);
       },
     }),
 
@@ -91,7 +104,7 @@ export default defineToolPlugin({
         condition: Type.Optional(Type.String()),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/assets", {
+        return callBackend(config, "/assets", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -108,7 +121,7 @@ export default defineToolPlugin({
         verified_by: Type.String({ description: "The crew member UUID doing the verification." }),
       }),
       async execute({ id, verified_by }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/assets/${id}/verify`, {
+        return callBackend(config, `/assets/${id}/verify`, {
           method: "PATCH",
           body: JSON.stringify({ verified_by }),
         });
@@ -125,7 +138,7 @@ export default defineToolPlugin({
         status: Type.Union(ASSET_STATUSES_SETTABLE.map((s) => Type.Literal(s))),
       }),
       async execute({ id, status }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/assets/${id}/status`, {
+        return callBackend(config, `/assets/${id}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status }),
         });
@@ -142,7 +155,7 @@ export default defineToolPlugin({
       }),
       async execute({ stocking_type }, config) {
         const qs = stocking_type ? `?stocking_type=${stocking_type}` : "";
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/consumables${qs}`);
+        return callBackend(config, `/consumables${qs}`);
       },
     }),
 
@@ -156,7 +169,7 @@ export default defineToolPlugin({
         delta: Type.Number({ description: "Positive to add (restock), negative to subtract (usage)." }),
       }),
       async execute({ id, delta }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/consumables/${id}/quantity`, {
+        return callBackend(config, `/consumables/${id}/quantity`, {
           method: "PATCH",
           body: JSON.stringify({ delta }),
         });
@@ -175,7 +188,7 @@ export default defineToolPlugin({
       }),
       async execute({ type }, config) {
         const qs = type ? `?type=${type}` : "";
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/sites${qs}`);
+        return callBackend(config, `/sites${qs}`);
       },
     }),
 
@@ -187,7 +200,7 @@ export default defineToolPlugin({
         id: Type.String({ description: "The site's UUID." }),
       }),
       async execute({ id }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/sites/${id}`);
+        return callBackend(config, `/sites/${id}`);
       },
     }),
 
@@ -206,7 +219,7 @@ export default defineToolPlugin({
         geofence_radius_m: Type.Optional(Type.Integer()),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/sites", {
+        return callBackend(config, "/sites", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -222,7 +235,7 @@ export default defineToolPlugin({
         site_id: Type.String({ description: "The site's UUID." }),
       }),
       async execute({ site_id }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/sites/${site_id}/inventory`);
+        return callBackend(config, `/sites/${site_id}/inventory`);
       },
     }),
 
@@ -237,7 +250,7 @@ export default defineToolPlugin({
       }),
       async execute({ job_type_id }, config) {
         const qs = job_type_id ? `?job_type_id=${job_type_id}` : "";
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/loadouts${qs}`);
+        return callBackend(config, `/loadouts${qs}`);
       },
     }),
 
@@ -261,7 +274,7 @@ export default defineToolPlugin({
         ),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/loadouts", {
+        return callBackend(config, "/loadouts", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -278,10 +291,7 @@ export default defineToolPlugin({
         crew_size: Type.Integer({ description: "Number of crew members on this job." }),
       }),
       async execute({ id, crew_size }, config) {
-        return callBackend(
-          config.backendUrl ?? DEFAULT_BACKEND_URL,
-          `/loadouts/${id}/resolve?crew_size=${crew_size}`,
-        );
+        return callBackend(config, `/loadouts/${id}/resolve?crew_size=${crew_size}`);
       },
     }),
 
@@ -297,7 +307,7 @@ export default defineToolPlugin({
         expected_return_at: Type.Optional(Type.String({ description: "ISO datetime the asset is expected back." })),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/checkouts", {
+        return callBackend(config, "/checkouts", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -316,7 +326,7 @@ export default defineToolPlugin({
         photo_url: Type.Optional(Type.String()),
       }),
       async execute({ id, ...body }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/checkouts/${id}/return`, {
+        return callBackend(config, `/checkouts/${id}/return`, {
           method: "PATCH",
           body: JSON.stringify(body),
         });
@@ -329,7 +339,7 @@ export default defineToolPlugin({
       description: "List all checkouts past their expected_return_at that haven't been checked back in yet.",
       parameters: Type.Object({}),
       async execute(_params, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/checkouts/overdue");
+        return callBackend(config, "/checkouts/overdue");
       },
     }),
 
@@ -354,7 +364,7 @@ export default defineToolPlugin({
         ),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/orders", {
+        return callBackend(config, "/orders", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -379,7 +389,7 @@ export default defineToolPlugin({
         if (status) params.set("status", status);
         if (site_id) params.set("site_id", site_id);
         const qs = params.toString();
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/orders${qs ? `?${qs}` : ""}`);
+        return callBackend(config, `/orders${qs ? `?${qs}` : ""}`);
       },
     }),
 
@@ -395,7 +405,7 @@ export default defineToolPlugin({
         ),
       }),
       async execute({ id, status }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/orders/${id}/status`, {
+        return callBackend(config, `/orders/${id}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status }),
         });
@@ -415,7 +425,7 @@ export default defineToolPlugin({
         cost: Type.Optional(Type.Number()),
       }),
       async execute({ id, ...body }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/orders/${id}/compile-po`, {
+        return callBackend(config, `/orders/${id}/compile-po`, {
           method: "POST",
           body: JSON.stringify(body),
         });
@@ -434,7 +444,7 @@ export default defineToolPlugin({
         requested_by: Type.String({ description: "The crew member UUID requesting it." }),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/transfers", {
+        return callBackend(config, "/transfers", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -451,7 +461,7 @@ export default defineToolPlugin({
         status: Type.Union(["requested", "in_transit", "completed"].map((s) => Type.Literal(s))),
       }),
       async execute({ id, status }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/transfers/${id}/status`, {
+        return callBackend(config, `/transfers/${id}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status }),
         });
@@ -466,7 +476,7 @@ export default defineToolPlugin({
       description: "List vendors with their contact method and account info.",
       parameters: Type.Object({}),
       async execute(_params, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/vendors");
+        return callBackend(config, "/vendors");
       },
     }),
 
@@ -482,7 +492,7 @@ export default defineToolPlugin({
         lead_time_days: Type.Optional(Type.Integer()),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/vendors", {
+        return callBackend(config, "/vendors", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -499,7 +509,7 @@ export default defineToolPlugin({
         sent_to: Type.String(),
       }),
       async execute({ id, sent_to }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/purchase-orders/${id}/send`, {
+        return callBackend(config, `/purchase-orders/${id}/send`, {
           method: "POST",
           body: JSON.stringify({ sent_to }),
         });
@@ -515,7 +525,7 @@ export default defineToolPlugin({
         id: Type.String(),
       }),
       async execute({ id }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/purchase-orders/${id}/fulfilled`, {
+        return callBackend(config, `/purchase-orders/${id}/fulfilled`, {
           method: "PATCH",
         });
       },
@@ -547,7 +557,7 @@ export default defineToolPlugin({
         if (role) params.set("role", role);
         if (active !== undefined) params.set("active", String(active));
         const qs = params.toString();
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/crew-members${qs ? `?${qs}` : ""}`);
+        return callBackend(config, `/crew-members${qs ? `?${qs}` : ""}`);
       },
     }),
 
@@ -563,7 +573,7 @@ export default defineToolPlugin({
         ),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/crew-members", {
+        return callBackend(config, "/crew-members", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -584,7 +594,7 @@ export default defineToolPlugin({
         end_time: Type.Optional(Type.String()),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/shifts", {
+        return callBackend(config, "/shifts", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -608,7 +618,7 @@ export default defineToolPlugin({
         ),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/shifts/batch", {
+        return callBackend(config, "/shifts/batch", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -625,7 +635,7 @@ export default defineToolPlugin({
         decision: Type.Union([Type.Literal("confirm"), Type.Literal("decline")]),
       }),
       async execute({ id, decision }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/shifts/${id}/confirm`, {
+        return callBackend(config, `/shifts/${id}/confirm`, {
           method: "PATCH",
           body: JSON.stringify({ decision }),
         });
@@ -648,7 +658,7 @@ export default defineToolPlugin({
         if (site_id) params.set("site_id", site_id);
         if (crew_member_id) params.set("crew_member_id", crew_member_id);
         const qs = params.toString();
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/shifts${qs ? `?${qs}` : ""}`);
+        return callBackend(config, `/shifts${qs ? `?${qs}` : ""}`);
       },
     }),
 
@@ -666,7 +676,7 @@ export default defineToolPlugin({
         ),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/timeclock", {
+        return callBackend(config, "/timeclock", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -680,7 +690,7 @@ export default defineToolPlugin({
         "Get the live status of every active crew member — their last timeclock event, site, and timestamp. Use this to answer 'who's where right now' or 'is anyone still checked in'.",
       parameters: Type.Object({}),
       async execute(_params, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/crew/status");
+        return callBackend(config, "/crew/status");
       },
     }),
 
@@ -696,7 +706,7 @@ export default defineToolPlugin({
       }),
       async execute({ resolved }, config) {
         const qs = resolved !== undefined ? `?resolved=${resolved}` : "";
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/alerts${qs}`);
+        return callBackend(config, `/alerts${qs}`);
       },
     }),
 
@@ -709,7 +719,7 @@ export default defineToolPlugin({
         resolved_by: Type.String({ description: "The crew member UUID resolving it." }),
       }),
       async execute({ id, resolved_by }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/alerts/${id}/resolve`, {
+        return callBackend(config, `/alerts/${id}/resolve`, {
           method: "PATCH",
           body: JSON.stringify({ resolved_by }),
         });
@@ -729,7 +739,7 @@ export default defineToolPlugin({
       }),
       async execute(input, config) {
         const qs = new URLSearchParams(input as Record<string, string>).toString();
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/vehicles${qs ? `?${qs}` : ""}`);
+        return callBackend(config, `/vehicles${qs ? `?${qs}` : ""}`);
       },
     }),
 
@@ -742,7 +752,7 @@ export default defineToolPlugin({
         id: Type.String(),
       }),
       async execute({ id }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/vehicles/${id}`);
+        return callBackend(config, `/vehicles/${id}`);
       },
     }),
 
@@ -756,7 +766,7 @@ export default defineToolPlugin({
         current_mileage: Type.Optional(Type.Number()),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/vehicles", {
+        return callBackend(config, "/vehicles", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -775,7 +785,7 @@ export default defineToolPlugin({
         source: Type.Optional(Type.Union([Type.Literal("whatsapp_location"), Type.Literal("obd")])),
       }),
       async execute({ id, ...body }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/vehicles/${id}/telemetry`, {
+        return callBackend(config, `/vehicles/${id}/telemetry`, {
           method: "POST",
           body: JSON.stringify(body),
         });
@@ -794,7 +804,7 @@ export default defineToolPlugin({
         site_id: Type.Optional(Type.String()),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/trips", {
+        return callBackend(config, "/trips", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -809,7 +819,7 @@ export default defineToolPlugin({
         id: Type.String({ description: "The trip's UUID." }),
       }),
       async execute({ id }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/trips/${id}/end`, {
+        return callBackend(config, `/trips/${id}/end`, {
           method: "PATCH",
         });
       },
@@ -823,7 +833,7 @@ export default defineToolPlugin({
         id: Type.String({ description: "The vehicle's UUID." }),
       }),
       async execute({ id }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/vehicles/${id}/trips`);
+        return callBackend(config, `/vehicles/${id}/trips`);
       },
     }),
 
@@ -846,7 +856,7 @@ export default defineToolPlugin({
         expiry_date: Type.Optional(Type.String({ description: "ISO date." })),
       }),
       async execute(input, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, "/documents", {
+        return callBackend(config, "/documents", {
           method: "POST",
           body: JSON.stringify(input),
         });
@@ -871,7 +881,7 @@ export default defineToolPlugin({
         if (site_id) params.set("site_id", site_id);
         if (type) params.set("type", type);
         const qs = params.toString();
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/documents${qs ? `?${qs}` : ""}`);
+        return callBackend(config, `/documents${qs ? `?${qs}` : ""}`);
       },
     }),
 
@@ -884,7 +894,7 @@ export default defineToolPlugin({
         within_days: Type.Integer({ description: "Look-ahead window in days." }),
       }),
       async execute({ within_days }, config) {
-        return callBackend(config.backendUrl ?? DEFAULT_BACKEND_URL, `/documents/expiring?within_days=${within_days}`);
+        return callBackend(config, `/documents/expiring?within_days=${within_days}`);
       },
     }),
   ],
