@@ -12,7 +12,25 @@
   },
 
   "tools": {
-    "profile": "messaging"
+    "profile": "messaging",
+    "_comment": "The 'messaging' profile only allowlists core built-in tool ids (see OpenClaw's tool-catalog.js: messaging.allow = coreToolIds + 'bundle-mcp') — it does NOT automatically include plugin-provided tools. Without alsoAllow below, every fieldops-tools call is invisible to the model at the actual agent-turn/tool-resolution step, even though the plugin itself loads fine and shows up in `openclaw plugins list`. This was silent for most of the build because it only surfaces once a real model call succeeds (auth failures short-circuit before tool selection) — first caught 2026-08-12 once a real DeepSeek key was added and a digest cron job replied with real content but couldn't call any tools.",
+    "alsoAllow": [
+      "list_assets", "get_asset", "register_asset", "verify_asset", "update_asset_status",
+      "list_consumables", "adjust_consumable_quantity",
+      "list_sites", "get_site", "register_site", "get_site_inventory",
+      "list_loadouts", "create_loadout", "resolve_loadout",
+      "checkout_asset", "return_checkout", "list_overdue_checkouts",
+      "create_order", "list_orders", "update_order_status", "compile_purchase_order",
+      "request_transfer", "update_transfer_status",
+      "list_vendors", "add_vendor", "send_purchase_order", "mark_purchase_order_fulfilled",
+      "list_crew_members", "register_crew_member",
+      "assign_shift", "assign_shifts_batch", "confirm_shift", "list_shifts",
+      "log_timeclock_event", "get_crew_status",
+      "list_alerts", "resolve_alert",
+      "list_vehicles", "get_vehicle", "register_vehicle", "log_vehicle_location",
+      "start_trip", "end_trip", "list_vehicle_trips",
+      "log_document", "list_documents", "list_expiring_documents"
+    ]
   },
 
   "agents": {
@@ -41,12 +59,16 @@
   },
 
   "plugins": {
+    "_comment": "fieldops-tools loads from the repo path directly (plugins.load.paths) rather than a global `openclaw plugins install`, so editing the repo and restarting the gateway is enough — no reinstall step. Installing it a second time via `openclaw plugins install` creates a duplicate-id conflict (harmless-looking warning, but broke cron/isolated-session tool resolution in practice) — don't do both. fieldops-media, deepseek, and moonshot are separate ClawHub packages installed via `openclaw plugins install clawhub:@openclaw/<name>` / `openclaw plugins install ./plugins/fieldops-media`, tracked here for documentation only — this file doesn't reinstall them.",
     "load": {
       "paths": ["~/fieldops-system/openclaw/plugins/fieldops-tools"]
     },
     "entries": {
       "fieldops-tools": { "enabled": true },
-      "whatsapp": { "enabled": true }
+      "whatsapp": { "enabled": true },
+      "fieldops-media": { "enabled": true },
+      "deepseek": { "enabled": true },
+      "moonshot": { "enabled": true }
     }
   },
 
