@@ -19,7 +19,7 @@ Three `openclaw cron` jobs (not the per-agent heartbeat mechanism — see [agent
 |---|---|---|
 | `fieldops-digest-morning` | 6:00 AM America/Toronto | `list_shifts` (today), `list_alerts` (resolved=false) |
 | `fieldops-digest-midday` | 12:00 PM America/Toronto | `get_crew_status`, `list_alerts` (resolved=false) |
-| `fieldops-digest-evening` | 6:00 PM America/Toronto | `list_shifts` (today), `get_crew_status`, `list_overdue_checkouts`, `list_alerts` (resolved=false) |
+| `fieldops-digest-evening` | 6:00 PM America/Toronto | `list_shifts` (today), `get_crew_status`, `list_overdue_checkouts`, `list_alerts` (resolved=false), `list_expiring_documents` (within_days=30) |
 
 Verified via `openclaw cron run <id> --expect-final` that the scheduler correctly fires the agent turn end to end — it currently fails only at the model-call step (`model_not_found`/`No API key`), the same pre-existing blocker as the rest of the agent until real provider keys are added.
 
@@ -39,7 +39,9 @@ openclaw cron add --name fieldops-digest-midday --display-name "Midday Status Ch
 openclaw cron add --name fieldops-digest-evening --display-name "End-of-Day Wrap-up" \
   --agent fieldops --cron "0 18 * * *" --tz America/Toronto \
   --channel whatsapp --to "+18193196405" --announce \
-  --message "End-of-day wrap-up. Using list_shifts for today's date, get_crew_status, list_overdue_checkouts, and list_alerts (resolved=false), summarize who worked today, anything still checked out, and any unresolved issues. Keep it brief, no filler."
+  --message "End-of-day wrap-up. Using list_shifts for today's date, get_crew_status, list_overdue_checkouts, list_alerts (resolved=false), and list_expiring_documents (within_days=30), summarize who worked today, anything still checked out, any unresolved issues, and any insurance/permit/cert documents expiring in the next 30 days. Keep it brief, no filler."
 ```
+
+`list_expiring_documents` only got wired into the evening job, not morning/midday — it's a compliance/admin check, not something that needs repeating three times a day. Verified the underlying `GET /documents/expiring?within_days=30` endpoint still returns correctly (`200`, empty array — no test documents currently have an `expiry_date` set) via `openclaw cron edit` + a direct curl against the live backend; full digest content itself is still unverified pending real model keys, same blocker as everywhere else.
 
 **Production TODO (not built):** the owner wants these delivered to the crew group chat as well, plus a DM to a second recipient ("Nick") — needs Nick's phone number and the group's WhatsApp JID before that can be added (`--to` and `--channel`/`--account` accept only one destination per job; a second recipient means a second job per digest, or a future multi-destination delivery feature).
