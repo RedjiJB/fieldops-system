@@ -92,7 +92,13 @@
     "whatsapp": {
       "dmPolicy": "allowlist",
       "allowFrom": ["+1XXXXXXXXXX"],
-      "groupPolicy": "disabled"
+      "_comment_groupPolicy": "Group support (a shared dispatch group instead of/alongside 1:1 DMs) is real but not turned on yet -- see below for the config it needs once a real group exists. Leave 'disabled' until then.",
+      "groupPolicy": "disabled",
+      "_comment_group_rollout": "Once a WhatsApp group is created and the paired number is added to it: (1) set groupPolicy to 'allowlist', (2) groupAllowFrom needs every crew member's phone number who should be able to trigger the agent in the group -- this list is separate from the crew_members table and does NOT stay in sync automatically; update both whenever crew changes. (3) groups needs the real group JID, which isn't known until OpenClaw has seen a message from it -- send one test message first, then check gateway logs (--verbose) for 'from: <groupJid>'. requireMention: true is the recommended starting point (the agent only acts when pinged, rather than replying to every message in a work group) -- this can be flipped live later with '/activation always' sent as a plain message in the group by an allowlisted sender, no redeploy needed. See agent-workspace/AGENTS.md's 'Resolving who's messaging you' and 'confirm before you execute' sections for the per-sender safety rules a group requires that a 1:1 DM doesn't.",
+      "groupAllowFrom": ["+1XXXXXXXXXX"],
+      "groups": {
+        "REPLACE_WITH_REAL_GROUP_JID@g.us": { "requireMention": true }
+      }
     }
   }
 }
