@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, ORDER_STATUSES, type Alert, type Order, type Shift } from "../api/client";
+import { api, ORDER_STATUSES, type Alert, type Notification, type Order, type Shift } from "../api/client";
 
 function nextStatus(current: Order["status"]): Order["status"] | null {
   const idx = ORDER_STATUSES.indexOf(current);
@@ -20,14 +20,16 @@ export function OpsOverviewPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   function reload() {
-    Promise.all([api.shiftsToday(), api.unresolvedAlerts(), api.orders()])
-      .then(([s, a, o]) => {
+    Promise.all([api.shiftsToday(), api.unresolvedAlerts(), api.orders(), api.notifications()])
+      .then(([s, a, o, n]) => {
         setShifts(s);
         setAlerts(a);
         setOrders(o);
+        setNotifications(n);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load ops data"));
   }
@@ -53,6 +55,16 @@ export function OpsOverviewPage() {
       setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to advance order");
+    }
+  }
+
+  async function onAcknowledge(notification: Notification) {
+    if (!window.confirm("Acknowledge this notification?")) return;
+    try {
+      const updated = await api.acknowledgeNotification(notification.id);
+      setNotifications((prev) => prev.map((n) => (n.id === notification.id ? updated : n)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to acknowledge notification");
     }
   }
 
@@ -106,6 +118,25 @@ export function OpsOverviewPage() {
             </div>
           );
         })}
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={{ fontSize: 16 }}>Activity (last 24h)</h2>
+        {notifications.length === 0 && <p style={{ color: "#888" }}>Nothing logged in the last 24 hours.</p>}
+        {notifications.map((n) => (
+          <div key={n.id} style={rowStyle}>
+            <span>
+              {n.priority === "critical" && <strong style={{ color: "#c0392b" }}>CRITICAL </strong>}
+              {n.message}
+              <span style={{ color: "#888" }}> — {new Date(n.created_at).toLocaleString()}</span>
+              {n.acknowledged_at && <span style={{ color: "#888" }}> — acknowledged</span>}
+              {n.escalated_count > 0 && <span style={{ color: "#888" }}> — escalated x{n.escalated_count}</span>}
+            </span>
+            {n.priority === "critical" && !n.acknowledged_at && (
+              <button onClick={() => onAcknowledge(n)}>Acknowledge</button>
+            )}
+          </div>
+        ))}
       </section>
     </div>
   );

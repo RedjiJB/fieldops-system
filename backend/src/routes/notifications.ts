@@ -21,20 +21,27 @@ notificationsRouter.get(
   }),
 );
 
-// Used by the digest agent's list_notifications tool to pull routine
-// (never-pushed) events for a time window -- defaults to the last 24h.
+// Used by the digest agent's list_notifications tool (routine events) and
+// the dashboard activity feed (both priorities, when priority is omitted --
+// the only existing caller always passes priority=routine explicitly, so
+// this change is additive, not a behavior change for anything already live).
 notificationsRouter.get(
   "/notifications",
   asyncHandler(async (req, res) => {
-    const { priority, since } = req.query;
+    const { priority, since, acknowledged, whatsapp_message_id } = req.query;
     if (priority && !PRIORITIES.includes(priority as (typeof PRIORITIES)[number])) {
       throw new HttpError(400, `priority must be one of: ${PRIORITIES.join(", ")}`);
     }
     const conditions: string[] = [];
     const params: unknown[] = [];
 
-    conditions.push(`priority = $${params.push((priority as string) ?? "routine")}`);
-    conditions.push(`created_at >= $${params.push(since ? new Date(since as string) : new Date(Date.now() - 24 * 60 * 60 * 1000))}`);
+    if (priority) conditions.push(`priority = $${params.push(priority)}`);
+    conditions.push(
+      `created_at >= $${params.push(since ? new Date(since as string) : new Date(Date.now() - 24 * 60 * 60 * 1000))}`,
+    );
+    if (acknowledged === "false") conditions.push(`acknowledged_at IS NULL`);
+    else if (acknowledged === "true") conditions.push(`acknowledged_at IS NOT NULL`);
+    if (whatsapp_message_id) conditions.push(`whatsapp_message_id = $${params.push(whatsapp_message_id)}`);
 
     const result = await pool.query(
       `SELECT * FROM notifications WHERE ${conditions.join(" AND ")} ORDER BY created_at ASC`,
@@ -47,8 +54,75 @@ notificationsRouter.get(
 notificationsRouter.patch(
   "/notifications/:id/delivered",
   asyncHandler(async (req, res) => {
+    const { whatsapp_message_id } = req.body ?? {};
     const result = await pool.query(
-      `UPDATE notifications SET delivered_at = now() WHERE id = $1 RETURNING *`,
+      `UPDATE notifications
+       SET delivered_at = now(), whatsapp_message_id = COALESCE($2, whatsapp_message_id)
+       WHERE id = $1 RETURNING *`,
+      [req.params.id, whatsapp_message_id ?? null],
+    );
+    if (!result.rows[0]) throw new HttpError(404, "Notification not found");
+    res.json(result.rows[0]);
+  }),
+);
+
+// Acknowledgment ("a human has seen this and is on it") is deliberately
+// separate from alerts.resolved_at ("the problem is actually fixed") --
+// see AGENTS.md's "Acknowledging critical notifications". Dual auth path
+// mirrors alerts.ts's /resolve exactly.
+notificationsRouter.patch(
+  "/notifications/:id/acknowledge",
+  asyncHandler(async (req, res) => {
+    const existing = await pool.query("SELECT * FROM notifications WHERE id = $1", [req.params.id]);
+    if (!existing.rows[0]) throw new HttpError(404, "Notification not found");
+    if (existing.rows[0].acknowledged_at) throw new HttpError(400, "Notification already acknowledged");
+
+    if (req.auth?.type === "user") {
+      const result = await pool.query(
+        `UPDATE notifications SET acknowledged_at = now(), acknowledged_by_user_id = $2 WHERE id = $1 RETURNING *`,
+        [req.params.id, req.auth.userId],
+      );
+      res.json(result.rows[0]);
+      return;
+    }
+
+    const { acknowledged_by } = req.body;
+    if (!acknowledged_by) throw new HttpError(400, "acknowledged_by is required");
+    const result = await pool.query(
+      `UPDATE notifications SET acknowledged_at = now(), acknowledged_by = $2 WHERE id = $1 RETURNING *`,
+      [req.params.id, acknowledged_by],
+    );
+    res.json(result.rows[0]);
+  }),
+);
+
+const ESCALATION_THRESHOLD_MINUTES = 20;
+const MAX_ESCALATIONS = 3;
+
+// Polled by the same deliver-notifications.mjs run, right after the
+// first-push pass -- critical, delivered, still unacknowledged, and either
+// never escalated or last escalated long enough ago, capped so a genuinely
+// unreachable recipient doesn't get spammed forever.
+notificationsRouter.get(
+  "/notifications/escalation-candidates",
+  asyncHandler(async (_req, res) => {
+    const result = await pool.query(
+      `SELECT * FROM notifications
+       WHERE priority = 'critical' AND delivered_at IS NOT NULL AND acknowledged_at IS NULL
+         AND escalated_count < $1
+         AND COALESCE(last_escalated_at, delivered_at) < now() - ($2 || ' minutes')::interval
+       ORDER BY created_at ASC`,
+      [MAX_ESCALATIONS, ESCALATION_THRESHOLD_MINUTES],
+    );
+    res.json(result.rows);
+  }),
+);
+
+notificationsRouter.patch(
+  "/notifications/:id/escalate",
+  asyncHandler(async (req, res) => {
+    const result = await pool.query(
+      `UPDATE notifications SET escalated_count = escalated_count + 1, last_escalated_at = now() WHERE id = $1 RETURNING *`,
       [req.params.id],
     );
     if (!result.rows[0]) throw new HttpError(404, "Notification not found");

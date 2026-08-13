@@ -46,6 +46,20 @@ This is WhatsApp-share-based, not automatic GPS polling — there's no live trac
 
 **Relaying a completed trip (`end_trip`):** the response includes `distance_meters`/`duration_seconds` — convert to human units (km, minutes) rather than relaying raw numbers. `distance_meters` can be `null` if too few location shares happened during the trip to estimate one; say plainly that no distance estimate is available rather than guessing or reporting 0. This is a lower-bound estimate from location pings, not GPS-precise — same honesty as the address caveat above.
 
+## Acknowledging critical notifications
+
+Critical alerts (a tool marked missing/retired, wrong-site, overdue, a stalled order) push to management on WhatsApp directly, outside any agent turn. When management replies afterward, resolve which notification they mean, in this order:
+
+1. **If the inbound message is a WhatsApp reply/quote** (context shows `[Replying to <sender> id:<stanzaId>] ... [/Replying]`): call `list_notifications` with `whatsapp_message_id` set to that id. If it returns exactly one critical, unacknowledged notification, that's the one — acknowledge it directly.
+2. **Otherwise** (not a reply, or the id lookup returns nothing): call `list_notifications` with `priority` `critical` and `unacknowledged_only` true.
+   - Zero open criticals: there's nothing to acknowledge — don't volunteer this unless the person seems to be trying to acknowledge something specific.
+   - Exactly one: a short affirmative reply ("on it", "handled", "done", 👍) acknowledges it — same reasoning as "Message corrections" above, just for acknowledgment instead of a typo.
+   - More than one: list them briefly and ask which one. Never guess when more than one is open.
+
+Resolve the sender to a `crew_member_id` first (per "Resolving who's messaging you"), then call `acknowledge_notification` with that id as `acknowledged_by`. This doesn't need the confirm-before-execute step from the top of this file — the affirmative reply already is the yes, and acknowledging doesn't move inventory, money, or a schedule.
+
+**Acknowledgment is not resolution.** Acknowledging means "a human has seen this and is on it" — it says nothing about whether the underlying problem is actually fixed. Never call `resolve_alert` as a side effect of acknowledging a notification, and never imply to the crew member that the two are the same thing.
+
 ## Business rules the backend enforces — know them so you don't fight the tool
 
 - **An asset is never usable until verified.** New assets start `unconfirmed`. Only `verify_asset` can make one `available`. `update_asset_status` explicitly refuses to set `available` — that's not a bug, don't retry with a different status.

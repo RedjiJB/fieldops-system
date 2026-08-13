@@ -48,7 +48,9 @@ export type Shift = {
   end_time: string | null;
   status: string;
   crew_member_name: string | null;
+  crew_member_phone: string | null;
   site_name: string | null;
+  nudged_at: string | null;
 };
 
 export type Alert = {
@@ -73,6 +75,18 @@ export type Order = {
   requester_name: string | null;
 };
 
+export type Notification = {
+  id: string;
+  priority: "critical" | "routine";
+  message: string;
+  source_type: string;
+  source_id: string | null;
+  created_at: string;
+  delivered_at: string | null;
+  acknowledged_at: string | null;
+  escalated_count: number;
+};
+
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -89,4 +103,7 @@ export const api = {
   resolveAlert: (id: string) => request<Alert>(`/alerts/${id}/resolve`, { method: "PATCH" }),
   advanceOrder: (id: string, status: string) =>
     request<Order>(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  notifications: () => request<Notification[]>("/notifications"),
+  acknowledgeNotification: (id: string) =>
+    request<Notification>(`/notifications/${id}/acknowledge`, { method: "PATCH" }),
 };

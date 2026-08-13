@@ -210,7 +210,8 @@ CREATE TABLE shifts (
   date            DATE NOT NULL,
   start_time      TIME,
   end_time        TIME,
-  status          shift_status NOT NULL DEFAULT 'assigned'
+  status          shift_status NOT NULL DEFAULT 'assigned',
+  nudged_at       TIMESTAMPTZ -- set by openclaw/notifier/nudge-shifts.mjs once a confirm/decline reminder is sent, so a same-evening cron re-run doesn't double-nudge
 );
 
 CREATE TYPE timeclock_event AS ENUM ('in', 'break_start', 'break_end', 'out');
@@ -283,7 +284,7 @@ CREATE TABLE documents (
 The exceptions engine's output — see [EXCEPTION_HANDLING.md](EXCEPTION_HANDLING.md). This table doesn't own operational data; it watches for deviations elsewhere and raises flags.
 
 ```sql
-CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue');
+CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue', 'vehicle_dark');
 
 CREATE TABLE alerts (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -299,19 +300,27 @@ CREATE TABLE alerts (
 
 ## notifications
 
-A single event log feeding two consumers: `critical` rows get pushed to management on WhatsApp within a minute by `openclaw/notifier/`; `routine` rows are only ever pulled by the digest agent's `list_notifications` tool. `message` is pre-formatted, human-readable text set by whichever backend code inserted the row (asset status changes, newly-raised alerts, order status changes) — this table has no writer-facing REST endpoint, only reader/delivery endpoints (see [API.md](API.md)).
+A single event log feeding two consumers: `critical` rows get pushed to management on WhatsApp within a minute by `openclaw/notifier/`; `routine` rows are only ever pulled by the digest agent's `list_notifications` tool. `message` is pre-formatted, human-readable text set by whichever backend code inserted the row (asset status changes, newly-raised alerts, order status changes) — this table has no writer-facing REST endpoint, only reader/delivery/acknowledgment endpoints (see [API.md](API.md)).
+
+Acknowledgment (`acknowledged_at`/`acknowledged_by`/`acknowledged_by_user_id`) is deliberately separate from `alerts.resolved_at` — "a human has seen this and is on it" vs. "the underlying problem is actually fixed." Escalation (`escalated_count`/`last_escalated_at`) tracks re-sends of a critical notification nobody's acknowledged yet, capped at 3.
 
 ```sql
 CREATE TYPE notification_priority AS ENUM ('critical', 'routine');
 
 CREATE TABLE notifications (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  priority     notification_priority NOT NULL,
-  message      TEXT NOT NULL,
-  source_type  TEXT NOT NULL, -- 'asset' | 'alert' | 'order'
-  source_id    UUID, -- polymorphic, like alerts.related_record_id
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  delivered_at TIMESTAMPTZ -- only ever set for 'critical' rows; stays NULL forever for 'routine' ones
+  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  priority               notification_priority NOT NULL,
+  message                TEXT NOT NULL,
+  source_type            TEXT NOT NULL, -- 'asset' | 'alert' | 'order'
+  source_id              UUID, -- polymorphic, like alerts.related_record_id
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  delivered_at           TIMESTAMPTZ, -- only ever set for 'critical' rows; stays NULL forever for 'routine' ones
+  acknowledged_at        TIMESTAMPTZ,
+  acknowledged_by        UUID REFERENCES crew_members(id), -- set when acknowledged via WhatsApp/agent
+  acknowledged_by_user_id UUID REFERENCES users(id), -- set when acknowledged via the dashboard
+  whatsapp_message_id    TEXT, -- captured at delivery, for matching a later quote-reply back to this row (see AGENTS.md)
+  escalated_count        INTEGER NOT NULL DEFAULT 0,
+  last_escalated_at      TIMESTAMPTZ
 );
 ```
 

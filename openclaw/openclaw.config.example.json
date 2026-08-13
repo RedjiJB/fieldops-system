@@ -29,7 +29,8 @@
       "list_alerts", "resolve_alert",
       "list_vehicles", "get_vehicle", "register_vehicle", "log_vehicle_location",
       "start_trip", "end_trip", "list_vehicle_trips",
-      "log_document", "list_documents", "list_expiring_documents"
+      "log_document", "list_documents", "list_expiring_documents",
+      "list_notifications", "acknowledge_notification"
     ]
   },
 

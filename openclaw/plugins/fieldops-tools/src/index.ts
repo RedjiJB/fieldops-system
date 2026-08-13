@@ -700,7 +700,7 @@ export default defineToolPlugin({
       name: "list_alerts",
       label: "List Alerts",
       description:
-        "List exception alerts (idle, order_stalled, overdue, wrong_site), optionally filtered by resolved status. Use resolved=false to see what still needs attention.",
+        "List exception alerts (idle, order_stalled, overdue, wrong_site, vehicle_dark), optionally filtered by resolved status. Use resolved=false to see what still needs attention.",
       parameters: Type.Object({
         resolved: Type.Optional(Type.Boolean()),
       }),
@@ -902,15 +902,41 @@ export default defineToolPlugin({
       name: "list_notifications",
       label: "List Notifications",
       description:
-        "List routine (non-urgent) tool/order/alert events for a time window — new tools registered, verifications, maintenance, order status moves, idle-crew flags. Use this for digest/status-check summaries. Does NOT include critical events (missing tools, wrong-site, overdue, stalled orders) — those are already pushed to management directly the moment they happen, so surfacing them again here would be redundant.",
+        "List notification events for a time window. By default (no priority given) returns routine (non-urgent) events for digest/status-check summaries — new tools registered, verifications, maintenance, order status moves, idle-crew flags, vehicle-dark flags. Critical events (missing tools, wrong-site, overdue, stalled orders) are already pushed to management directly the moment they happen, so don't repeat them in a digest unless priority='critical' is explicitly requested — e.g. when resolving which open critical notification an acknowledgment reply refers to (set unacknowledged_only=true for that; see AGENTS.md's 'Acknowledging critical notifications'). whatsapp_message_id matches a specific notification by the WhatsApp message id this system sent it under, if the inbound message was a quoted reply to it.",
       parameters: Type.Object({
         since: Type.Optional(
           Type.String({ description: "ISO 8601 timestamp; defaults to the last 24 hours." }),
         ),
+        priority: Type.Optional(Type.Union([Type.Literal("critical"), Type.Literal("routine")])),
+        unacknowledged_only: Type.Optional(Type.Boolean()),
+        whatsapp_message_id: Type.Optional(
+          Type.String({ description: "The quoted message's id, if the inbound message was a WhatsApp reply." }),
+        ),
       }),
-      async execute({ since }, config) {
-        const qs = since ? `?priority=routine&since=${encodeURIComponent(since)}` : "?priority=routine";
-        return callBackend(config, `/notifications${qs}`);
+      async execute({ since, priority, unacknowledged_only, whatsapp_message_id }, config) {
+        const params = new URLSearchParams();
+        params.set("priority", priority ?? "routine");
+        params.set("since", since ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+        if (unacknowledged_only) params.set("acknowledged", "false");
+        if (whatsapp_message_id) params.set("whatsapp_message_id", whatsapp_message_id);
+        return callBackend(config, `/notifications?${params.toString()}`);
+      },
+    }),
+
+    tool({
+      name: "acknowledge_notification",
+      label: "Acknowledge Notification",
+      description:
+        "Mark a critical notification as seen/handled — distinct from resolve_alert, which means the underlying issue is actually fixed. Acknowledging does NOT resolve the alert; never call resolve_alert as a side effect of this. See AGENTS.md's 'Acknowledging critical notifications' for when to call this. Rejected if already acknowledged.",
+      parameters: Type.Object({
+        id: Type.String(),
+        acknowledged_by: Type.String({ description: "The crew member UUID acknowledging it." }),
+      }),
+      async execute({ id, acknowledged_by }, config) {
+        return callBackend(config, `/notifications/${id}/acknowledge`, {
+          method: "PATCH",
+          body: JSON.stringify({ acknowledged_by }),
+        });
       },
     }),
   ],

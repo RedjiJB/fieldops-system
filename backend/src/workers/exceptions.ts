@@ -13,6 +13,7 @@ const ALERT_MESSAGES: Record<string, string> = {
   order_stalled: "🚨 An order has been sitting unconfirmed for over 24 hours.",
   wrong_site: "🚨 A vehicle is outside its expected site's geofence.",
   idle: "A crew member has been on-shift 2+ hours with no recorded site activity.",
+  vehicle_dark: "A vehicle was reporting location today and has since gone quiet for 3+ hours.",
 };
 
 // Orders sitting in 'requested' longer than this without advancing get flagged.
@@ -23,6 +24,11 @@ const IDLE_HOURS = 2;
 // Vehicle telemetry older than this is treated as stale, not evidence of
 // a current wrong-site arrival.
 const STALE_TELEMETRY_MINUTES = 60;
+// Telemetry is WhatsApp-share-driven and historically sparse (6 shares
+// across 10 weeks of real chat history) -- 3h of silence only means
+// something if the vehicle was actually reporting earlier that same shift,
+// not for a vehicle that simply never shares. See checkVehicleDark below.
+const VEHICLE_DARK_HOURS = 3;
 
 // NOTE: 'delay' and 'loadout_gap' alert types are intentionally not raised
 // yet. 'delay' would need an "expected travel time" concept that doesn't
@@ -161,6 +167,42 @@ async function checkWrongSite(client: PoolClient): Promise<void> {
   }
 }
 
+async function checkVehicleDark(client: PoolClient): Promise<void> {
+  // Only fires when the vehicle's latest telemetry point is stale AND an
+  // earlier point exists within the preceding 24h -- "was reporting, now
+  // silent", not "never reports" (see VEHICLE_DARK_HOURS comment above).
+  // A vehicle with zero telemetry ever is correctly excluded by the JOIN
+  // LATERAL requiring at least one point to exist.
+  const result = await client.query(
+    `SELECT v.id AS vehicle_id, sh.site_id
+     FROM vehicles v
+     JOIN shifts sh ON sh.crew_member_id = v.assigned_crew_id
+       AND sh.date = CURRENT_DATE AND sh.status = 'confirmed'
+     JOIN LATERAL (
+       SELECT timestamp FROM vehicle_telemetry
+       WHERE vehicle_id = v.id
+       ORDER BY timestamp DESC
+       LIMIT 1
+     ) latest ON true
+     WHERE v.assigned_crew_id IS NOT NULL
+       AND latest.timestamp < now() - ($1 || ' hours')::interval
+       AND EXISTS (
+         -- Rolling 24h window, not "same calendar day" -- sh.date::timestamptz
+         -- compares against UTC midnight regardless of the crew's actual
+         -- timezone, which broke this check every evening once local time
+         -- crossed into UTC's next day (caught via live testing on the Pi).
+         SELECT 1 FROM vehicle_telemetry vt
+         WHERE vt.vehicle_id = v.id
+           AND vt.timestamp < latest.timestamp
+           AND vt.timestamp >= latest.timestamp - interval '24 hours'
+       )`,
+    [VEHICLE_DARK_HOURS],
+  );
+  for (const row of result.rows) {
+    await raiseAlert(client, "vehicle_dark", row.site_id, row.vehicle_id);
+  }
+}
+
 export async function runExceptionChecks(): Promise<void> {
   const client = await pool.connect();
   try {
@@ -168,6 +210,7 @@ export async function runExceptionChecks(): Promise<void> {
     await checkStalledOrders(client);
     await checkIdleCrew(client);
     await checkWrongSite(client);
+    await checkVehicleDark(client);
   } finally {
     client.release();
   }

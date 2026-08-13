@@ -114,10 +114,12 @@ shiftsRouter.patch(
   }),
 );
 
+const SHIFT_STATUSES = ["assigned", "confirmed", "no_show", "declined"] as const;
+
 shiftsRouter.get(
   "/shifts",
   asyncHandler(async (req, res) => {
-    const { date, site_id, crew_member_id } = req.query;
+    const { date, site_id, crew_member_id, status } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
 
@@ -133,12 +135,21 @@ shiftsRouter.get(
       params.push(crew_member_id);
       conditions.push(`sh.crew_member_id = $${params.length}`);
     }
+    if (status) {
+      if (!SHIFT_STATUSES.includes(status as (typeof SHIFT_STATUSES)[number])) {
+        throw new HttpError(400, `status must be one of: ${SHIFT_STATUSES.join(", ")}`);
+      }
+      params.push(status);
+      conditions.push(`sh.status = $${params.length}`);
+    }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    // Joined names for the dashboard's ops overview — same reasoning as
-    // GET /orders. Purely additive for the agent's list_shifts tool.
+    // Joined names/phone for the dashboard's ops overview and
+    // openclaw/notifier/nudge-shifts.mjs (needs a target phone to nudge
+    // directly) — same reasoning as GET /orders. Purely additive for the
+    // agent's list_shifts tool.
     const result = await pool.query(
-      `SELECT sh.*, s.name AS site_name, cm.name AS crew_member_name
+      `SELECT sh.*, s.name AS site_name, cm.name AS crew_member_name, cm.phone AS crew_member_phone
        FROM shifts sh
        LEFT JOIN sites s ON s.id = sh.site_id
        LEFT JOIN crew_members cm ON cm.id = sh.crew_member_id
@@ -147,6 +158,19 @@ shiftsRouter.get(
       params,
     );
     res.json(result.rows);
+  }),
+);
+
+// Set by nudge-shifts.mjs after a successful send, so a same-evening cron
+// re-run doesn't double-message the same crew member.
+shiftsRouter.patch(
+  "/shifts/:id/nudged",
+  asyncHandler(async (req, res) => {
+    const result = await pool.query(`UPDATE shifts SET nudged_at = now() WHERE id = $1 RETURNING *`, [
+      req.params.id,
+    ]);
+    if (!result.rows[0]) throw new HttpError(404, "Shift not found");
+    res.json(result.rows[0]);
   }),
 );
 

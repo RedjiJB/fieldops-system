@@ -68,7 +68,8 @@
       "log_document",
       "list_documents",
       "list_expiring_documents",
-      "list_notifications"
+      "list_notifications",
+      "acknowledge_notification"
     ]
   }
 }

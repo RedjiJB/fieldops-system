@@ -80,7 +80,8 @@ Surfaced by a real gap: nothing in the original spec could look up or register a
 | `POST` | `/shifts` | Assign a shift (crew, site, date, time) |
 | `POST` | `/shifts/batch` | Assign several shifts at once, all-or-nothing — matches the real dispatch pattern of one message assigning multiple people to multiple sites |
 | `PATCH` | `/shifts/:id/confirm` | Crew confirms or declines |
-| `GET` | `/shifts?date=&site_id=&crew_member_id=` | List shifts |
+| `GET` | `/shifts?date=&site_id=&crew_member_id=&status=` | List shifts — includes `crew_member_phone`, used by `openclaw/notifier/nudge-shifts.mjs` to message a specific crew member directly |
+| `PATCH` | `/shifts/:id/nudged` | Marks a shift-confirmation reminder sent — called by the nudge script after a successful send, so a same-evening re-run doesn't double-nudge |
 | `POST` | `/timeclock` | Log a check-in/break/check-out event |
 | `GET` | `/crew/status` | Live status for every active crew member (site, last event, geofence match) — powers the team-wide map view |
 
@@ -126,5 +127,8 @@ A single event log feeding two different consumers — see [ARCHITECTURE.md](ARC
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/notifications/pending` | `critical` priority, undelivered — polled every minute by `openclaw/notifier/` and pushed to WhatsApp the moment they're found |
-| `GET` | `/notifications?priority=routine&since=` | `routine` priority for a time window (defaults to last 24h) — pulled by the digest agent's `list_notifications` tool, never pushed |
-| `PATCH` | `/notifications/:id/delivered` | Marks a `critical` row delivered — called by the notifier script after a successful send |
+| `GET` | `/notifications?priority=&since=&acknowledged=&whatsapp_message_id=` | Filtered list. `priority` omitted returns both (the dashboard activity feed); the `list_notifications` tool always passes `priority=routine` explicitly unless resolving an acknowledgment. |
+| `PATCH` | `/notifications/:id/delivered` | Marks a `critical` row delivered; accepts optional `whatsapp_message_id` to capture the sent message's id |
+| `PATCH` | `/notifications/:id/acknowledge` | "Seen, on it" — separate from resolving the underlying alert. Dashboard session sets `acknowledged_by_user_id`; agent/service-token path requires `acknowledged_by` (crew member id) in the body. 400 if already acknowledged. |
+| `GET` | `/notifications/escalation-candidates` | Critical, delivered, unacknowledged for 20+ minutes, escalated fewer than 3 times — polled by the notifier's second pass |
+| `PATCH` | `/notifications/:id/escalate` | Increments `escalated_count`, sets `last_escalated_at` — called by the notifier after a re-send |

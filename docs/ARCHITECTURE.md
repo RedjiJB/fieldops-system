@@ -54,7 +54,11 @@ openclaw message send --channel whatsapp     (direct send, no LLM call)
 Management's WhatsApp
 ```
 
-See `openclaw/notifier/README.md` for the delivery script and cron job, and [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#notifications) for the table.
+If a critical notification is delivered but nobody acknowledges it within 20 minutes, the same script's second pass re-sends it (capped at 3 escalations) — see `GET /notifications/escalation-candidates`. Acknowledgment itself happens from a WhatsApp reply, resolved by the agent via `list_notifications`/`acknowledge_notification` (see `AGENTS.md`'s "Acknowledging critical notifications"), or from the dashboard's activity feed — either way it's tracked entirely on the `notifications` row and deliberately never touches `alerts.resolved_at`: "seen, on it" and "actually fixed" are different states.
+
+A second, separate script (`openclaw/notifier/nudge-shifts.mjs`, its own daily cron job) follows the same "poll the backend, push via `openclaw message send`" shape but targets a crew member directly rather than management — reminding them to confirm tomorrow's shift the evening before, rather than waiting for them to forget.
+
+See `openclaw/notifier/README.md` for both scripts and their cron jobs, and [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#notifications) for the table.
 
 ## Hosting (POC)
 

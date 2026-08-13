@@ -30,30 +30,57 @@ if (!MANAGEMENT_WHATSAPP_NUMBER) {
 async function backendFetch(path, init) {
   const res = await fetch(`${BACKEND_URL}${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${AGENT_SERVICE_TOKEN}`, ...init?.headers },
+    headers: { Authorization: `Bearer ${AGENT_SERVICE_TOKEN}`, "Content-Type": "application/json", ...init?.headers },
   });
   if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}: ${await res.text()}`);
   return res.json();
 }
 
+// The exact JSON field name for a sent message's id is unconfirmed as of
+// this script -- the WhatsApp channel plugin's source isn't installed
+// locally to check. Try known candidates and degrade to null silently if
+// none match; a null whatsapp_message_id just means the id-based
+// acknowledgment path falls back to the heuristic one (see AGENTS.md).
+function sendWhatsApp(target, message) {
+  const output = execFileSync(
+    OPENCLAW_BIN,
+    ["message", "send", "--channel", "whatsapp", "--target", target, "--message", message, "--json"],
+    { stdio: "pipe" },
+  ).toString();
+  try {
+    const parsed = JSON.parse(output);
+    return parsed.messageId ?? parsed.id ?? parsed.payload?.result?.messageId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   const pending = await backendFetch("/notifications/pending");
-  if (pending.length === 0) return;
-
   for (const notification of pending) {
     try {
-      execFileSync(
-        OPENCLAW_BIN,
-        ["message", "send", "--channel", "whatsapp", "--target", MANAGEMENT_WHATSAPP_NUMBER, "--message", notification.message],
-        { stdio: "pipe" },
-      );
-      await backendFetch(`/notifications/${notification.id}/delivered`, { method: "PATCH" });
+      const whatsappMessageId = sendWhatsApp(MANAGEMENT_WHATSAPP_NUMBER, notification.message);
+      await backendFetch(`/notifications/${notification.id}/delivered`, {
+        method: "PATCH",
+        body: JSON.stringify({ whatsapp_message_id: whatsappMessageId }),
+      });
       console.log(`Delivered notification ${notification.id}: ${notification.message}`);
     } catch (err) {
       // Leave undelivered for retry on the next poll -- one failed send
       // (e.g. WhatsApp momentarily down) shouldn't block the rest of the
       // batch or need any extra retry bookkeeping.
       console.error(`Failed to deliver notification ${notification.id}:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  const escalations = await backendFetch("/notifications/escalation-candidates");
+  for (const notification of escalations) {
+    try {
+      sendWhatsApp(MANAGEMENT_WHATSAPP_NUMBER, `⏰ Still needs attention: ${notification.message}`);
+      await backendFetch(`/notifications/${notification.id}/escalate`, { method: "PATCH" });
+      console.log(`Escalated notification ${notification.id} (count now ${notification.escalated_count + 1})`);
+    } catch (err) {
+      console.error(`Failed to escalate notification ${notification.id}:`, err instanceof Error ? err.message : err);
     }
   }
 }
