@@ -108,6 +108,54 @@ ordersRouter.get(
   }),
 );
 
+ordersRouter.get(
+  "/orders/:id",
+  asyncHandler(async (req, res) => {
+    const orderResult = await pool.query(
+      `SELECT o.*, s.name AS site_name, cm.name AS requester_name
+       FROM orders o
+       LEFT JOIN sites s ON s.id = o.site_id
+       LEFT JOIN crew_members cm ON cm.id = o.requester_id
+       WHERE o.id = $1`,
+      [req.params.id],
+    );
+    const order = orderResult.rows[0];
+    if (!order) throw new HttpError(404, "Order not found");
+
+    const itemsResult = await pool.query(
+      `SELECT oi.*, COALESCE(a.name, c.name) AS item_name
+       FROM order_items oi
+       LEFT JOIN assets a ON oi.asset_id = a.id
+       LEFT JOIN consumables c ON oi.consumable_id = c.id
+       WHERE oi.order_id = $1
+       ORDER BY oi.id`,
+      [req.params.id],
+    );
+
+    res.json({ ...order, items: itemsResult.rows });
+  }),
+);
+
+// Not admin-gated -- material cost is operational cost data, same as
+// purchase_orders.cost, not wage/cash-handling data.
+ordersRouter.patch(
+  "/order-items/:id",
+  asyncHandler(async (req, res) => {
+    const { unit_cost } = req.body;
+    if (unit_cost === undefined || unit_cost === null) {
+      throw new HttpError(400, "unit_cost is required");
+    }
+    if (unit_cost < 0) throw new HttpError(400, "unit_cost cannot be negative");
+
+    const result = await pool.query(
+      `UPDATE order_items SET unit_cost = $2 WHERE id = $1 RETURNING *`,
+      [req.params.id, unit_cost],
+    );
+    if (!result.rows[0]) throw new HttpError(404, "Order item not found");
+    res.json(result.rows[0]);
+  }),
+);
+
 ordersRouter.patch(
   "/orders/:id/status",
   asyncHandler(async (req, res) => {

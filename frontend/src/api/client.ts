@@ -90,6 +90,18 @@ export type Order = {
   requester_name: string | null;
 };
 
+export type OrderItem = {
+  id: string;
+  order_id: string;
+  asset_id: string | null;
+  consumable_id: string | null;
+  quantity: number;
+  unit_cost: number | null;
+  item_name: string | null;
+};
+
+export type OrderDetail = Order & { items: OrderItem[] };
+
 export type Notification = {
   id: string;
   priority: "critical" | "routine";
@@ -285,6 +297,45 @@ export type ReconciliationRow = {
   difference: number | null;
 };
 
+export const INSTRUMENT_TYPES = ["company_card", "petty_cash"] as const;
+
+export type MoneyInstrument = {
+  id: string;
+  type: (typeof INSTRUMENT_TYPES)[number];
+  label: string;
+  balance: number | null;
+  active: boolean;
+  current_holder_name: string | null;
+};
+
+export const SPEND_METHODS = ["cash", "company_card", "personal_reimbursed"] as const;
+export const SPEND_CATEGORIES = ["material", "fuel", "mileage", "receipt", "other"] as const;
+export const SPEND_STATUSES = ["pending", "approved", "rejected"] as const;
+
+export type SpendRecord = {
+  id: string;
+  category: (typeof SPEND_CATEGORIES)[number];
+  method: (typeof SPEND_METHODS)[number];
+  status: (typeof SPEND_STATUSES)[number];
+  amount: number | null;
+  distance_km: number | null;
+  rate_per_km: number | null;
+  description: string | null;
+  document_id: string | null;
+  document_filename: string | null;
+  instrument_id: string | null;
+  instrument_label: string | null;
+  crew_member_id: string | null;
+  crew_member_name: string | null;
+  submitted_by_user_id: string;
+  submitted_by_name: string;
+  occurred_at: string;
+  reviewed_by_user_id: string | null;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+};
+
 export const ACTIVITY_EVENT_TYPES = [
   "job_started",
   "job_completed",
@@ -339,6 +390,9 @@ export const api = {
   shiftsToday: () => request<Shift[]>(`/shifts?date=${todayIso()}`),
   unresolvedAlerts: () => request<Alert[]>("/alerts?resolved=false"),
   orders: () => request<Order[]>("/orders"),
+  orderDetail: (id: string) => request<OrderDetail>(`/orders/${id}`),
+  updateOrderItem: (id: string, unitCost: number) =>
+    request<OrderItem>(`/order-items/${id}`, { method: "PATCH", body: JSON.stringify({ unit_cost: unitCost }) }),
   resolveAlert: (id: string) => request<Alert>(`/alerts/${id}/resolve`, { method: "PATCH" }),
   advanceOrder: (id: string, status: string) =>
     request<Order>(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
@@ -474,4 +528,55 @@ export const api = {
     const qs = params.toString();
     return request<ReconciliationRow[]>(`/payroll/reconciliation${qs ? `?${qs}` : ""}`);
   },
+  moneyInstruments: () => request<MoneyInstrument[]>("/money-instruments"),
+  createMoneyInstrument: (body: { type: MoneyInstrument["type"]; label: string }) =>
+    request<MoneyInstrument>("/money-instruments", { method: "POST", body: JSON.stringify(body) }),
+  assignMoneyInstrument: (id: string, heldBy: string) =>
+    request<unknown>(`/money-instruments/${id}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ held_by: heldBy }),
+    }),
+  adjustMoneyInstrumentBalance: (id: string, delta: number) =>
+    request<MoneyInstrument>(`/money-instruments/${id}/balance`, {
+      method: "PATCH",
+      body: JSON.stringify({ delta }),
+    }),
+  createSpendRecord: (body: {
+    category: SpendRecord["category"];
+    method: SpendRecord["method"];
+    amount?: number;
+    distance_km?: number;
+    description?: string;
+    document_id?: string;
+    instrument_id?: string;
+    crew_member_id?: string;
+    occurred_at?: string;
+  }) => request<SpendRecord>("/spend-records", { method: "POST", body: JSON.stringify(body) }),
+  spendRecords: (
+    filters: {
+      category?: string;
+      method?: string;
+      status?: string;
+      crew_member_id?: string;
+      date_from?: string;
+      date_to?: string;
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (filters.category) params.set("category", filters.category);
+    if (filters.method) params.set("method", filters.method);
+    if (filters.status) params.set("status", filters.status);
+    if (filters.crew_member_id) params.set("crew_member_id", filters.crew_member_id);
+    if (filters.date_from) params.set("date_from", filters.date_from);
+    if (filters.date_to) params.set("date_to", filters.date_to);
+    const qs = params.toString();
+    return request<SpendRecord[]>(`/spend-records${qs ? `?${qs}` : ""}`);
+  },
+  approveSpendRecord: (id: string, ratePerKm?: number) =>
+    request<SpendRecord>(`/spend-records/${id}/approve`, {
+      method: "PATCH",
+      body: JSON.stringify(ratePerKm !== undefined ? { rate_per_km: ratePerKm } : {}),
+    }),
+  rejectSpendRecord: (id: string) =>
+    request<SpendRecord>(`/spend-records/${id}/reject`, { method: "PATCH" }),
 };

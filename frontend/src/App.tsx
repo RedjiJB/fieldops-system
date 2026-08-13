@@ -11,6 +11,7 @@ import { OpsOverviewPage } from "./pages/OpsOverviewPage";
 import { PayrollPage } from "./pages/PayrollPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SitesPage } from "./pages/SitesPage";
+import { SpendingPage } from "./pages/SpendingPage";
 import { TimesheetsPage } from "./pages/TimesheetsPage";
 import { UsersPage } from "./pages/UsersPage";
 import { VehicleHistoryPage } from "./pages/VehicleHistoryPage";
@@ -30,7 +31,8 @@ type Tab =
   | "activity"
   | "reports"
   | "timesheets"
-  | "payroll";
+  | "payroll"
+  | "spending";
 
 function Dashboard() {
   const { user, logout } = useAuth();
@@ -96,6 +98,11 @@ function Dashboard() {
                 Payroll
               </button>
             )}
+            {user?.role === "admin" && (
+              <button onClick={() => setTab("spending")} disabled={tab === "spending"}>
+                Spending
+              </button>
+            )}
           </nav>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -117,6 +124,7 @@ function Dashboard() {
       {tab === "reports" && <ReportsPage />}
       {tab === "timesheets" && <TimesheetsPage />}
       {tab === "payroll" && <PayrollPage />}
+      {tab === "spending" && <SpendingPage />}
     </div>
   );
 }

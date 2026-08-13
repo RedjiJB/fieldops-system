@@ -53,3 +53,20 @@ consumablesRouter.patch(
     res.json(result.rows[0]);
   }),
 );
+
+// Real transaction-time prices, not a static unit_cost -- feeds future
+// job-costing/period-close reporting. No frontend view built for this yet.
+consumablesRouter.get(
+  "/consumables/:id/price-history",
+  asyncHandler(async (req, res) => {
+    const result = await pool.query(
+      `SELECT oi.id AS order_item_id, oi.order_id, oi.quantity, oi.unit_cost, o.created_at AS order_date
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE oi.consumable_id = $1 AND oi.unit_cost IS NOT NULL
+       ORDER BY o.created_at DESC`,
+      [req.params.id],
+    );
+    res.json(result.rows);
+  }),
+);

@@ -1,10 +1,68 @@
 import { useEffect, useState } from "react";
-import { api, ORDER_STATUSES, type Alert, type Notification, type Order, type Shift } from "../api/client";
+import { api, ORDER_STATUSES, type Alert, type Notification, type Order, type OrderDetail, type Shift } from "../api/client";
 
 function nextStatus(current: Order["status"]): Order["status"] | null {
   const idx = ORDER_STATUSES.indexOf(current);
   if (idx === -1 || idx === ORDER_STATUSES.length - 1) return null;
   return ORDER_STATUSES[idx + 1];
+}
+
+function OrderItemsPanel({ orderId }: { orderId: string }) {
+  const [detail, setDetail] = useState<OrderDetail | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .orderDetail(orderId)
+      .then((d) => {
+        setDetail(d);
+        setDrafts(Object.fromEntries(d.items.map((it) => [it.id, it.unit_cost === null ? "" : String(it.unit_cost)])));
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load order items"));
+  }, [orderId]);
+
+  async function save(itemId: string) {
+    const raw = drafts[itemId];
+    const value = Number(raw);
+    if (raw.trim() === "" || Number.isNaN(value) || value < 0) {
+      setError("unit_cost must be a non-negative number");
+      return;
+    }
+    try {
+      const updated = await api.updateOrderItem(itemId, value);
+      setDetail((prev) => (prev ? { ...prev, items: prev.items.map((it) => (it.id === itemId ? updated : it)) } : prev));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save unit cost");
+    }
+  }
+
+  if (!detail) return <p style={{ color: "#888", fontSize: 13 }}>Loading items…</p>;
+
+  return (
+    <div style={{ padding: "8px 0 8px 16px" }}>
+      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 6 }}>{error}</div>}
+      {detail.items.length === 0 && <p style={{ color: "#888", fontSize: 13 }}>No items on this order.</p>}
+      {detail.items.map((item) => (
+        <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 13 }}>
+          <span style={{ flex: 1 }}>
+            {item.item_name ?? "Unknown item"} — qty {item.quantity}
+          </span>
+          <span>unit cost</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={drafts[item.id] ?? ""}
+            onChange={(e) => setDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+            style={{ width: 80 }}
+          />
+          <button onClick={() => save(item.id)}>Save</button>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const sectionStyle = { padding: 16, borderBottom: "1px solid #eee" };
@@ -21,6 +79,7 @@ export function OpsOverviewPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function reload() {
@@ -105,16 +164,26 @@ export function OpsOverviewPage() {
         {orders.length === 0 && <p style={{ color: "#888" }}>No orders.</p>}
         {orders.map((o) => {
           const next = nextStatus(o.status);
+          const expanded = expandedOrderId === o.id;
           return (
-            <div key={o.id} style={rowStyle}>
-              <span>
-                <strong>{o.site_name ?? "Unknown site"}</strong>
-                <span style={{ color: "#888" }}>
-                  {" "}
-                  — requested by {o.requester_name ?? "Unknown"} — <em>{o.status}</em>
+            <div key={o.id}>
+              <div style={rowStyle}>
+                <span>
+                  <button
+                    onClick={() => setExpandedOrderId(expanded ? null : o.id)}
+                    style={{ marginRight: 8 }}
+                  >
+                    {expanded ? "▾" : "▸"}
+                  </button>
+                  <strong>{o.site_name ?? "Unknown site"}</strong>
+                  <span style={{ color: "#888" }}>
+                    {" "}
+                    — requested by {o.requester_name ?? "Unknown"} — <em>{o.status}</em>
+                  </span>
                 </span>
-              </span>
-              {next && <button onClick={() => onAdvance(o)}>Advance to: {next}</button>}
+                {next && <button onClick={() => onAdvance(o)}>Advance to: {next}</button>}
+              </div>
+              {expanded && <OrderItemsPanel orderId={o.id} />}
             </div>
           );
         })}

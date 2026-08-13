@@ -39,6 +39,23 @@ Wage/cash data — every route here is `admin`-only, both reads and writes (unli
 | `GET` | `/payouts?crew_member_id=&date_from=&date_to=` | List payouts, joined with crew member and recording-admin names, newest first |
 | `GET` | `/payroll/reconciliation?crew_member_id=&date_from=&date_to=` | Computed hours (`fetchSessionsInRange`, `backend/src/lib/timeclock.ts`) × `hourly_rate`, against `payouts` summed in the same range. One row per crew member with activity in range — `amount_owed`/`difference` are `null` (not `0`) when no rate is set; `incomplete_sessions` counts sessions excluded from the hours total, never folded in as complete |
 
+## Spending
+
+Money-handling data — every route here is `admin`-only, both reads and writes, same rule as Payroll above. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#spending). No agent-facing route for the same reason as Payroll: waits on the two-party confirm-before-execute redesign.
+
+Company card purchases, petty cash spend, mileage claims, and reimbursable receipts share one `spend_records` table (`method`: `cash` / `company_card` / `personal_reimbursed`; `category`: `material` / `fuel` / `mileage` / `receipt` / `other`) rather than four bespoke ones. `category = 'mileage'` requires `method = 'personal_reimbursed'`, `distance_km` set, and `amount` omitted at submission — `amount` is computed at approval as `distance_km × rate_per_km`. Every other category requires `amount` at submission and no `distance_km`. `status` starts `'pending'` only for `method = 'personal_reimbursed'` (a claim that needs sign-off before it's trusted); everything else starts `'approved'` immediately (it's a record of money already spent, not a request).
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/money-instruments` | `{type: 'company_card' \| 'petty_cash', label}` |
+| `GET` | `/money-instruments` | List, joined with current holder name |
+| `POST` | `/money-instruments/:id/assign` | `{held_by}` — closes any open custody row, opens a new one |
+| `PATCH` | `/money-instruments/:id/balance` | `{delta}` — 400 if `type !== 'petty_cash'`; hand-adjusted, same convention as `consumables.quantity_on_hand` |
+| `POST` | `/spend-records` | See validation rules above |
+| `GET` | `/spend-records?category=&method=&status=&crew_member_id=&date_from=&date_to=` | Joined with crew/submitter/reviewer names, document filename, instrument label |
+| `PATCH` | `/spend-records/:id/approve` | `{rate_per_km?}` — required (and used to compute `amount`) only when `category = 'mileage'`; 400 if not `pending` |
+| `PATCH` | `/spend-records/:id/reject` | 400 if not `pending` |
+
 ## Assets & Inventory
 
 | Method | Path | Description |
@@ -50,6 +67,7 @@ Wage/cash data — every route here is `admin`-only, both reads and writes (unli
 | `PATCH` | `/assets/:id/status` | Update status (missing, in_maintenance, retired, etc.) |
 | `GET` | `/consumables?stocking_type=` | List consumables, with on-hand quantities where applicable |
 | `PATCH` | `/consumables/:id/quantity` | Adjust on-hand quantity (crew-reported restock/usage) |
+| `GET` | `/consumables/:id/price-history` | Real transaction-time `unit_cost` values from `order_items`, newest first — feeds future job-costing/reporting, no dedicated frontend view yet |
 | `GET` | `/sites?type=` | List/filter sites — surfaced as missing the same way crew-members was: nothing could register a site at all before this |
 | `GET` | `/sites/:id` | Site detail |
 | `POST` | `/sites` | Register a new site (job_site, depot, vendor, or shop) |
@@ -71,7 +89,9 @@ Wage/cash data — every route here is `admin`-only, both reads and writes (unli
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/orders` | Create an order (site, date needed, items, spec notes) |
-| `GET` | `/orders?status=&site_id=` | List/filter orders |
+| `GET` | `/orders?status=&site_id=` | List/filter orders — doesn't include line items |
+| `GET` | `/orders/:id` | Order detail including `items`, each joined to its asset/consumable name |
+| `PATCH` | `/order-items/:id` | Set `{unit_cost}` — the real price paid for this specific transaction, not admin-gated (operational cost data, same as `purchase_orders.cost`) |
 | `PATCH` | `/orders/:id/status` | Advance order status |
 | `POST` | `/orders/:id/compile-po` | Compile order into a purchase order draft (items, quantities, specs) for routing to `info@` or a picker |
 | `POST` | `/transfers` | Request a direct site-to-site equipment transfer |

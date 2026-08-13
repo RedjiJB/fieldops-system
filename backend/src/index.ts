@@ -18,6 +18,7 @@ import { payrollRouter } from "./routes/payroll.js";
 import { reportsRouter } from "./routes/reports.js";
 import { shiftsRouter } from "./routes/shifts.js";
 import { sitesRouter } from "./routes/sites.js";
+import { spendingRouter } from "./routes/spending.js";
 import { timesheetsRouter } from "./routes/timesheets.js";
 import { usersRouter } from "./routes/users.js";
 import { vehiclesRouter } from "./routes/vehicles.js";
@@ -61,6 +62,7 @@ app.use("/api/v1", usersRouter);
 app.use("/api/v1", activityRouter);
 app.use("/api/v1", reportsRouter);
 app.use("/api/v1", timesheetsRouter);
+app.use("/api/v1", spendingRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {

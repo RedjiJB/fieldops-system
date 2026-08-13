@@ -150,7 +150,8 @@ CREATE TABLE order_items (
   order_id      UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   asset_id      UUID REFERENCES assets(id),
   consumable_id UUID REFERENCES consumables(id),
-  quantity      NUMERIC NOT NULL
+  quantity      NUMERIC NOT NULL,
+  unit_cost     NUMERIC -- added in 0042; the real price paid for this specific transaction, not a static per-consumable field -- see API.md's GET /consumables/:id/price-history
 );
 
 CREATE TABLE checkouts (
@@ -403,6 +404,56 @@ CREATE TABLE payouts (
   note                 TEXT,
   recorded_by_user_id  UUID NOT NULL REFERENCES users(id), -- always a dashboard admin, no dual-path actor -- see above
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+## Spending
+
+Money-handling data, admin-only end to end like Payroll above — no agent-facing route for the same reason (waits on the two-party confirm-before-execute redesign). Added in `0042_spend.sql`. Company card purchases, petty cash spend, mileage claims, and reimbursable receipts are all the same underlying shape (an amount, who, when, how it was paid, and — sometimes — management's approval), so they share one `spend_records` table with a `method`/`category` pair rather than four bespoke tables. Material cost (`order_items.unit_cost`, above) is deliberately *not* part of this — it's a property of an existing order line item flowing through the ordering/PO pipeline, not a standalone spend event.
+
+`money_instruments` + `money_instrument_custody` track company cards and petty cash floats — who currently has one, and the history of who's held it. `balance` is a directly hand-adjusted running number (`PATCH /money-instruments/:id/balance`, `{delta}`), same "null/unused" and manual-adjustment convention as `consumables.quantity_on_hand` — nothing in `spend_records` auto-decrements it.
+
+```sql
+CREATE TABLE money_instruments (
+  id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type    TEXT NOT NULL CHECK (type IN ('company_card', 'petty_cash')),
+  label   TEXT NOT NULL,
+  balance NUMERIC, -- petty_cash only; null/unused for company_card
+  active  BOOLEAN NOT NULL DEFAULT true
+);
+
+CREATE TABLE money_instrument_custody (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instrument_id        UUID NOT NULL REFERENCES money_instruments(id),
+  held_by              UUID NOT NULL REFERENCES crew_members(id),
+  started_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ended_at             TIMESTAMPTZ, -- null = current holder
+  assigned_by_user_id  UUID NOT NULL REFERENCES users(id)
+);
+
+-- status defaults 'approved' -- most rows are a record of money already
+-- spent with a card or float, not a request. method = 'personal_reimbursed'
+-- starts 'pending' instead: a mileage claim's amount isn't known until a
+-- rate is set at approval, and a reimbursable receipt is a claim that needs
+-- sign-off before being trusted, per this session's "crew claims need
+-- independent verification" principle.
+CREATE TABLE spend_records (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category              TEXT NOT NULL, -- app-validated: material, fuel, mileage, receipt, other
+  method                TEXT NOT NULL CHECK (method IN ('cash', 'company_card', 'personal_reimbursed')),
+  status                TEXT NOT NULL DEFAULT 'approved' CHECK (status IN ('pending', 'approved', 'rejected')),
+  amount                NUMERIC CHECK (amount IS NULL OR amount >= 0), -- null only while a pending mileage claim awaits a rate
+  distance_km           NUMERIC CHECK (distance_km IS NULL OR distance_km >= 0), -- mileage only
+  rate_per_km           NUMERIC CHECK (rate_per_km IS NULL OR rate_per_km >= 0), -- set at approval, mileage only
+  description           TEXT,
+  document_id           UUID REFERENCES documents(id), -- optional linked receipt photo
+  instrument_id         UUID REFERENCES money_instruments(id),
+  crew_member_id        UUID REFERENCES crew_members(id),
+  submitted_by_user_id  UUID NOT NULL REFERENCES users(id), -- always a dashboard admin, no dual-path actor
+  occurred_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reviewed_by_user_id   UUID REFERENCES users(id),
+  reviewed_at           TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
