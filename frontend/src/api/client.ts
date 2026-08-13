@@ -166,6 +166,44 @@ export type Site = {
   active_end: string | null;
 };
 
+export type JobType = { id: string; name: string };
+
+// Mirrors backend/src/routes/consumables.ts's STOCKING_TYPES.
+export const STOCKING_TYPES = ["stocked", "per_job_delivery"] as const;
+
+export type Consumable = {
+  id: string;
+  name: string;
+  stocking_type: (typeof STOCKING_TYPES)[number];
+  quantity_on_hand: number | null;
+  last_verified_at: string | null;
+};
+
+export type Loadout = {
+  id: string;
+  name: string;
+  job_type_id: string | null;
+};
+
+export type LoadoutItem = {
+  id: string;
+  loadout_id: string;
+  asset_id: string | null;
+  consumable_id: string | null;
+  quantity: number;
+  scales_with_crew: boolean;
+  item_name: string;
+};
+
+export type LoadoutDetail = Loadout & { items: LoadoutItem[] };
+
+export type NewLoadoutItem = {
+  asset_id?: string;
+  consumable_id?: string;
+  quantity: number;
+  scales_with_crew?: boolean;
+};
+
 export type Document = {
   id: string;
   site_id: string | null;
@@ -234,4 +272,28 @@ export const api = {
   updateCrewMember: (id: string, patch: Partial<CrewMember>) =>
     request<CrewMember>(`/crew-members/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   vehicleTrips: (vehicleId: string) => request<Trip[]>(`/vehicles/${vehicleId}/trips`),
+  jobTypes: () => request<JobType[]>("/job-types"),
+  consumables: (filters: { stocking_type?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.stocking_type) params.set("stocking_type", filters.stocking_type);
+    const qs = params.toString();
+    return request<Consumable[]>(`/consumables${qs ? `?${qs}` : ""}`);
+  },
+  loadouts: (filters: { job_type_id?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.job_type_id) params.set("job_type_id", filters.job_type_id);
+    const qs = params.toString();
+    return request<Loadout[]>(`/loadouts${qs ? `?${qs}` : ""}`);
+  },
+  loadout: (id: string) => request<LoadoutDetail>(`/loadouts/${id}`),
+  createLoadout: (body: { name: string; job_type_id?: string | null; items: NewLoadoutItem[] }) =>
+    request<LoadoutDetail>("/loadouts", { method: "POST", body: JSON.stringify(body) }),
+  updateLoadout: (id: string, patch: Partial<Pick<Loadout, "name" | "job_type_id">>) =>
+    request<Loadout>(`/loadouts/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  deleteLoadout: (id: string) => request<void>(`/loadouts/${id}`, { method: "DELETE" }),
+  addLoadoutItem: (loadoutId: string, item: NewLoadoutItem) =>
+    request<LoadoutItem>(`/loadouts/${loadoutId}/items`, { method: "POST", body: JSON.stringify(item) }),
+  updateLoadoutItem: (id: string, patch: { quantity?: number; scales_with_crew?: boolean }) =>
+    request<LoadoutItem>(`/loadout-items/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  deleteLoadoutItem: (id: string) => request<void>(`/loadout-items/${id}`, { method: "DELETE" }),
 };
