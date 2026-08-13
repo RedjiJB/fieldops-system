@@ -10,7 +10,7 @@ Crew / Management phone (WhatsApp)
 OpenClaw gateway (self-hosted, WhatsApp channel, QR-paired)
         ↕
 Agent (DeepSeek → Kimi → OpenAI → Gemini → Claude fallback chain — tool-use enabled)
-   ── Speech-to-text (voice notes) ── OCR (receipts/tickets)
+   ── Speech-to-text (voice notes, live via OpenAI gpt-4o-transcribe) ── OCR (receipts/tickets, not yet built)
         ↕
 Backend API (REST)
         ↕

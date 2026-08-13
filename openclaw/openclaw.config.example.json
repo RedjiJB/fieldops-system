@@ -31,7 +31,14 @@
       "start_trip", "end_trip", "list_vehicle_trips",
       "log_document", "list_documents", "list_expiring_documents",
       "list_notifications", "acknowledge_notification", "report_safety_incident"
-    ]
+    ],
+    "media": {
+      "_comment": "Turns on inbound voice-note transcription -- OpenClaw downloads the audio, transcribes it, and replaces the message body with the transcript before the reply pipeline runs (see docs/ARCHITECTURE.md). Neither DeepSeek nor Anthropic/Claude (the two funded providers) can transcribe audio, hence OpenAI here specifically -- it's also the next fallback slot in agents.list[].model.fallbacks below, so this key does double duty. No API key in this file -- run `openclaw models auth login --provider openai` to add one.",
+      "audio": {
+        "enabled": true,
+        "models": [{ "provider": "openai", "model": "gpt-4o-transcribe" }]
+      }
+    }
   },
 
   "agents": {
