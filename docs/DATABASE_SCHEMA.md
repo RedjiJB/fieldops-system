@@ -195,6 +195,7 @@ CREATE TYPE po_status AS ENUM ('compiled', 'sent_to_office', 'forwarded_by_offic
 CREATE TABLE purchase_orders (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   vendor_id  UUID REFERENCES vendors(id),
+  order_id   UUID REFERENCES orders(id), -- which order this was compiled from; nullable, added in 0037, pre-migration rows have none
   status     po_status NOT NULL DEFAULT 'compiled',
   cost       NUMERIC,
   eta        DATE,

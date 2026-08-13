@@ -13,6 +13,15 @@ vendorsRouter.get(
   }),
 );
 
+vendorsRouter.get(
+  "/vendors/:id",
+  asyncHandler(async (req, res) => {
+    const result = await pool.query("SELECT * FROM vendors WHERE id = $1", [req.params.id]);
+    if (!result.rows[0]) throw new HttpError(404, "Vendor not found");
+    res.json(result.rows[0]);
+  }),
+);
+
 vendorsRouter.post(
   "/vendors",
   asyncHandler(async (req, res) => {
@@ -32,6 +41,89 @@ vendorsRouter.post(
       ],
     );
     res.status(201).json(result.rows[0]);
+  }),
+);
+
+// Partial update -- same shape as every other PATCH this session.
+vendorsRouter.patch(
+  "/vendors/:id",
+  asyncHandler(async (req, res) => {
+    const { name, contact_method, contact_address, account_number, lead_time_days } = req.body;
+    const result = await pool.query(
+      `UPDATE vendors
+       SET name = COALESCE($2, name),
+           contact_method = COALESCE($3, contact_method),
+           contact_address = COALESCE($4, contact_address),
+           account_number = COALESCE($5, account_number),
+           lead_time_days = COALESCE($6, lead_time_days)
+       WHERE id = $1
+       RETURNING *`,
+      [
+        req.params.id,
+        name ?? null,
+        contact_method ?? null,
+        contact_address ?? null,
+        account_number ?? null,
+        lead_time_days ?? null,
+      ],
+    );
+    if (!result.rows[0]) throw new HttpError(404, "Vendor not found");
+    res.json(result.rows[0]);
+  }),
+);
+
+// List, joined to vendor name and (nullable, pre-migration POs won't have
+// one) the order's site -- lets the dashboard show "who asked for this".
+vendorsRouter.get(
+  "/purchase-orders",
+  asyncHandler(async (req, res) => {
+    const { status, vendor_id } = req.query;
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    if (status) {
+      params.push(status);
+      conditions.push(`po.status = $${params.length}`);
+    }
+    if (vendor_id) {
+      params.push(vendor_id);
+      conditions.push(`po.vendor_id = $${params.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const result = await pool.query(
+      `SELECT po.*, v.name AS vendor_name, o.site_id, s.name AS site_name
+       FROM purchase_orders po
+       LEFT JOIN vendors v ON v.id = po.vendor_id
+       LEFT JOIN orders o ON o.id = po.order_id
+       LEFT JOIN sites s ON s.id = o.site_id
+       ${where}
+       ORDER BY po.created_at DESC`,
+      params,
+    );
+    res.json(result.rows);
+  }),
+);
+
+vendorsRouter.get(
+  "/purchase-orders/:id",
+  asyncHandler(async (req, res) => {
+    const poResult = await pool.query(
+      `SELECT po.*, v.name AS vendor_name, o.site_id, s.name AS site_name
+       FROM purchase_orders po
+       LEFT JOIN vendors v ON v.id = po.vendor_id
+       LEFT JOIN orders o ON o.id = po.order_id
+       LEFT JOIN sites s ON s.id = o.site_id
+       WHERE po.id = $1`,
+      [req.params.id],
+    );
+    const po = poResult.rows[0];
+    if (!po) throw new HttpError(404, "Purchase order not found");
+
+    const itemsResult = await pool.query(
+      "SELECT * FROM purchase_order_items WHERE purchase_order_id = $1 ORDER BY description",
+      [req.params.id],
+    );
+    res.json({ ...po, items: itemsResult.rows });
   }),
 );
 

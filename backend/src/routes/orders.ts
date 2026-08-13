@@ -164,10 +164,10 @@ ordersRouter.post(
     try {
       await client.query("BEGIN");
       const poResult = await client.query(
-        `INSERT INTO purchase_orders (vendor_id, cost, eta, sent_to)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO purchase_orders (vendor_id, cost, eta, sent_to, order_id)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING *`,
-        [vendor_id, cost ?? null, eta ?? null, sent_to],
+        [vendor_id, cost ?? null, eta ?? null, sent_to, req.params.id],
       );
       const po = poResult.rows[0];
 

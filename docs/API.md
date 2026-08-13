@@ -59,7 +59,11 @@ Dashboard accounts are created via `npm run create-user` (interactive CLI, run b
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/vendors` | List vendors with contact method + account info |
+| `GET` | `/vendors/:id` | Get a single vendor |
 | `POST` | `/vendors` | Add a vendor |
+| `PATCH` | `/vendors/:id` | Partial update of a vendor's fields |
+| `GET` | `/purchase-orders` | List purchase orders, joined to vendor name and (if compiled from an order) the requesting site; filter by `status`/`vendor_id` |
+| `GET` | `/purchase-orders/:id` | Get a single purchase order with its line items |
 | `POST` | `/purchase-orders/:id/send` | Send compiled PO info to `info@` or a specified picker contact — no direct vendor contact |
 | `PATCH` | `/purchase-orders/:id/fulfilled` | Mark fulfilled once a receipt photo is logged |
 

@@ -204,6 +204,41 @@ export type NewLoadoutItem = {
   scales_with_crew?: boolean;
 };
 
+export type Vendor = {
+  id: string;
+  name: string;
+  contact_method: string | null;
+  contact_address: string | null;
+  account_number: string | null;
+  lead_time_days: number | null;
+};
+
+// Mirrors backend/src/routes/vendors.ts's po_status enum.
+export const PO_STATUSES = ["compiled", "sent_to_office", "forwarded_by_office", "fulfilled"] as const;
+
+export type PurchaseOrderItem = {
+  id: string;
+  purchase_order_id: string;
+  description: string;
+  quantity: number | null;
+};
+
+export type PurchaseOrder = {
+  id: string;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  order_id: string | null;
+  site_id: string | null;
+  site_name: string | null;
+  status: (typeof PO_STATUSES)[number];
+  cost: number | null;
+  eta: string | null;
+  sent_to: string | null;
+  created_at: string;
+};
+
+export type PurchaseOrderDetail = PurchaseOrder & { items: PurchaseOrderItem[] };
+
 export type Document = {
   id: string;
   site_id: string | null;
@@ -296,4 +331,25 @@ export const api = {
   updateLoadoutItem: (id: string, patch: { quantity?: number; scales_with_crew?: boolean }) =>
     request<LoadoutItem>(`/loadout-items/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   deleteLoadoutItem: (id: string) => request<void>(`/loadout-items/${id}`, { method: "DELETE" }),
+  vendors: () => request<Vendor[]>("/vendors"),
+  vendor: (id: string) => request<Vendor>(`/vendors/${id}`),
+  createVendor: (body: Omit<Vendor, "id">) =>
+    request<Vendor>("/vendors", { method: "POST", body: JSON.stringify(body) }),
+  updateVendor: (id: string, patch: Partial<Omit<Vendor, "id">>) =>
+    request<Vendor>(`/vendors/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  purchaseOrders: (filters: { status?: string; vendor_id?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.status) params.set("status", filters.status);
+    if (filters.vendor_id) params.set("vendor_id", filters.vendor_id);
+    const qs = params.toString();
+    return request<PurchaseOrder[]>(`/purchase-orders${qs ? `?${qs}` : ""}`);
+  },
+  purchaseOrder: (id: string) => request<PurchaseOrderDetail>(`/purchase-orders/${id}`),
+  sendPurchaseOrder: (id: string, sentTo: string) =>
+    request<PurchaseOrder>(`/purchase-orders/${id}/send`, {
+      method: "POST",
+      body: JSON.stringify({ sent_to: sentTo }),
+    }),
+  markPurchaseOrderFulfilled: (id: string) =>
+    request<PurchaseOrder>(`/purchase-orders/${id}/fulfilled`, { method: "PATCH" }),
 };
