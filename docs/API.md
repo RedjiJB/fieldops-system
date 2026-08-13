@@ -51,7 +51,7 @@ Dashboard account management — distinct from `crew_members` (the WhatsApp/agen
 | `POST` | `/loadouts` | Create a template (from a management/crew-lead session, or auto-captured from a first-time job) |
 | `GET` | `/loadouts/:id/resolve?crew_size=` | Resolve a template into an actual item list, scaling per-crew-member quantities |
 | `POST` | `/checkouts` | Check out an asset against an order |
-| `PATCH` | `/checkouts/:id/return` | Check an asset back in, optionally with damage flag + photo |
+| `PATCH` | `/checkouts/:id/return` | Check an asset back in, optionally with damage flag + photo. Records who: a dashboard session sets it from auth, otherwise `returned_by` (crew member id) is required in the body |
 | `GET` | `/checkouts/overdue` | Assets past expected return, not yet checked in |
 
 ## Orders
@@ -108,8 +108,16 @@ Surfaced by a real gap: nothing in the original spec could look up or register a
 |---|---|---|
 | `POST` | `/jobs` | Create a job (`site_id`, `date`, optional `job_type_id`) |
 | `GET` | `/jobs?date=&site_id=&status=` | List jobs, joined with site/job type names |
-| `PATCH` | `/jobs/:id/status` | Forward-only: `not_started → in_progress → complete`. Manual only — auto-transition on geofence arrival is future work |
+| `PATCH` | `/jobs/:id/status` | Forward-only: `not_started → in_progress → complete`. Manual only — auto-transition on geofence arrival is future work. Records who: a dashboard session sets it from auth, otherwise `changed_by` (crew member id) is required in the body |
 | `GET` | `/job-types` | List known job types (existed since `0003_job_types.sql`, never had an endpoint until now) |
+
+## Activity Log
+
+A read-only, cross-table feed of state changes that already carry a recorded actor — distinct from `/notifications` (the priority-tiered delivery feed `OpsOverviewPage`'s "Activity" section shows). `orders`/`purchase_orders` transitions have no actor column yet, so they don't appear here.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/activity?event_type=&since=&limit=` | Unioned feed: job started/completed, checkout created/returned, asset verified, alert resolved, notification acknowledged, document uploaded. Sorted newest first, `limit` defaults to 100 |
 
 ## Vehicles & Location
 

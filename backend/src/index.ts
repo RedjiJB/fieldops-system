@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { type ErrorRequestHandler } from "express";
 import { pool } from "./db/pool.js";
 import { HttpError } from "./lib/httpError.js";
+import { activityRouter } from "./routes/activity.js";
 import { alertsRouter } from "./routes/alerts.js";
 import { assetsRouter } from "./routes/assets.js";
 import { authRouter } from "./routes/auth.js";
@@ -49,6 +50,7 @@ app.use("/api/v1", crewMembersRouter);
 app.use("/api/v1", notificationsRouter);
 app.use("/api/v1", jobsRouter);
 app.use("/api/v1", usersRouter);
+app.use("/api/v1", activityRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {

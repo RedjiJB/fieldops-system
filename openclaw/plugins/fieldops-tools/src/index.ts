@@ -321,6 +321,7 @@ export default defineToolPlugin({
         "Check an asset back in. If damage_flag is true, the asset goes to 'in_maintenance' instead of straight back to 'available' — always ask about damage before calling this if it wasn't already mentioned.",
       parameters: Type.Object({
         id: Type.String({ description: "The checkout's UUID (not the asset's)." }),
+        returned_by: Type.String({ description: "The crew member UUID returning it." }),
         damage_flag: Type.Optional(Type.Boolean()),
         damage_note: Type.Optional(Type.String()),
         photo_url: Type.Optional(Type.String()),

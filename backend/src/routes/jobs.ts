@@ -82,12 +82,32 @@ jobsRouter.patch(
     // future work (needs real check-in geofence verification first, which
     // doesn't exist yet either).
     const timestampColumn = status === "in_progress" ? "started_at" : status === "complete" ? "completed_at" : null;
-    const result = timestampColumn
-      ? await pool.query(`UPDATE jobs SET status = $2, ${timestampColumn} = now() WHERE id = $1 RETURNING *`, [
-          req.params.id,
-          status,
-        ])
-      : await pool.query(`UPDATE jobs SET status = $2 WHERE id = $1 RETURNING *`, [req.params.id, status]);
+    const actorColumn = status === "in_progress" ? "started_by" : status === "complete" ? "completed_by" : null;
+    const actorUserColumn =
+      status === "in_progress" ? "started_by_user_id" : status === "complete" ? "completed_by_user_id" : null;
+
+    // Same dual-path actor convention as alerts.ts's /resolve -- a dashboard
+    // session supplies the actor from auth; the agent passes changed_by.
+    let actorId: string | null = null;
+    let actorUserId: string | null = null;
+    if (req.auth?.type === "user") {
+      actorUserId = req.auth.userId;
+    } else {
+      const { changed_by } = req.body;
+      if (!changed_by) throw new HttpError(400, "changed_by is required");
+      actorId = changed_by;
+    }
+
+    const result =
+      timestampColumn && actorColumn && actorUserColumn
+        ? await pool.query(
+            `UPDATE jobs
+             SET status = $2, ${timestampColumn} = now(), ${actorColumn} = $3, ${actorUserColumn} = $4
+             WHERE id = $1
+             RETURNING *`,
+            [req.params.id, status, actorId, actorUserId],
+          )
+        : await pool.query(`UPDATE jobs SET status = $2 WHERE id = $1 RETURNING *`, [req.params.id, status]);
     res.json(result.rows[0]);
   }),
 );

@@ -247,6 +247,24 @@ export type User = {
   created_at: string;
 };
 
+export const ACTIVITY_EVENT_TYPES = [
+  "job_started",
+  "job_completed",
+  "checkout_created",
+  "checkout_returned",
+  "asset_verified",
+  "alert_resolved",
+  "notification_acknowledged",
+  "document_uploaded",
+] as const;
+
+export type ActivityEvent = {
+  event_type: (typeof ACTIVITY_EVENT_TYPES)[number];
+  occurred_at: string;
+  actor_name: string | null;
+  description: string;
+};
+
 export type Document = {
   id: string;
   site_id: string | null;
@@ -367,4 +385,12 @@ export const api = {
     request<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   setUserPassword: (id: string, newPassword: string) =>
     request<User>(`/users/${id}/password`, { method: "PATCH", body: JSON.stringify({ new_password: newPassword }) }),
+  activity: (filters: { event_type?: string; since?: string; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.event_type) params.set("event_type", filters.event_type);
+    if (filters.since) params.set("since", filters.since);
+    if (filters.limit) params.set("limit", String(filters.limit));
+    const qs = params.toString();
+    return request<ActivityEvent[]>(`/activity${qs ? `?${qs}` : ""}`);
+  },
 };

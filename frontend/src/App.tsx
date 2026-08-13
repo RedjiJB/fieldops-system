@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { AssetsPage } from "./pages/AssetsPage";
 import { CrewPage } from "./pages/CrewPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
@@ -22,7 +23,8 @@ type Tab =
   | "vehicles"
   | "loadouts"
   | "vendors"
-  | "users";
+  | "users"
+  | "activity";
 
 function Dashboard() {
   const { user, logout } = useAuth();
@@ -72,6 +74,9 @@ function Dashboard() {
             <button onClick={() => setTab("users")} disabled={tab === "users"}>
               Users
             </button>
+            <button onClick={() => setTab("activity")} disabled={tab === "activity"}>
+              Activity
+            </button>
           </nav>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -89,6 +94,7 @@ function Dashboard() {
       {tab === "loadouts" && <LoadoutsPage />}
       {tab === "vendors" && <VendorsPage />}
       {tab === "users" && <UsersPage />}
+      {tab === "activity" && <ActivityLogPage />}
     </div>
   );
 }

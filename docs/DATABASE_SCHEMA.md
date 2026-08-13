@@ -119,7 +119,11 @@ CREATE TABLE jobs (
   date         DATE NOT NULL,
   status       job_status NOT NULL DEFAULT 'not_started', -- manual transitions only; auto-transition on geofence arrival is future work
   started_at   TIMESTAMPTZ,
+  started_by            UUID REFERENCES crew_members(id), -- added in 0039; mutually exclusive with started_by_user_id
+  started_by_user_id    UUID REFERENCES users(id),
   completed_at TIMESTAMPTZ,
+  completed_by          UUID REFERENCES crew_members(id), -- added in 0039; mutually exclusive with completed_by_user_id
+  completed_by_user_id  UUID REFERENCES users(id),
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
@@ -159,7 +163,9 @@ CREATE TABLE checkouts (
   checked_in_at      TIMESTAMPTZ,
   damage_flag        BOOLEAN NOT NULL DEFAULT false,
   damage_note        TEXT,
-  photo_url          TEXT
+  photo_url          TEXT,
+  returned_by         UUID REFERENCES crew_members(id), -- added in 0039; mutually exclusive with returned_by_user_id
+  returned_by_user_id UUID REFERENCES users(id)
 );
 
 -- Equipment moving job-to-job directly, without passing back through a depot

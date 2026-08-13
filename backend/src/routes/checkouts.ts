@@ -57,6 +57,18 @@ checkoutsRouter.patch(
   asyncHandler(async (req, res) => {
     const { damage_flag, damage_note, photo_url } = req.body;
 
+    // Same dual-path actor convention as alerts.ts's /resolve -- a dashboard
+    // session supplies the actor from auth; the agent passes returned_by.
+    let returnedBy: string | null = null;
+    let returnedByUserId: string | null = null;
+    if (req.auth?.type === "user") {
+      returnedByUserId = req.auth.userId;
+    } else {
+      const { returned_by } = req.body;
+      if (!returned_by) throw new HttpError(400, "returned_by is required");
+      returnedBy = returned_by;
+    }
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -70,10 +82,11 @@ checkoutsRouter.patch(
 
       const checkoutResult = await client.query(
         `UPDATE checkouts
-         SET checked_in_at = now(), damage_flag = $2, damage_note = $3, photo_url = $4
+         SET checked_in_at = now(), damage_flag = $2, damage_note = $3, photo_url = $4,
+             returned_by = $5, returned_by_user_id = $6
          WHERE id = $1
          RETURNING *`,
-        [req.params.id, !!damage_flag, damage_note ?? null, photo_url ?? null],
+        [req.params.id, !!damage_flag, damage_note ?? null, photo_url ?? null, returnedBy, returnedByUserId],
       );
 
       // A damaged return goes to maintenance instead of straight back to available.
