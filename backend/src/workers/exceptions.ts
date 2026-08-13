@@ -2,11 +2,12 @@ import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { haversineDistanceMeters } from "../lib/geo.js";
 import { insertNotification } from "../lib/notify.js";
+import { fetchDailyForecast } from "../lib/weather.js";
 
-// wrong_site/overdue/order_stalled are genuine exceptions worth an instant
-// push to management; idle is explicitly a "rough proxy" prone to false
-// positives (see checkIdleCrew below) -- routine, digest-only.
-const CRITICAL_ALERT_TYPES = new Set(["wrong_site", "overdue", "order_stalled"]);
+// wrong_site/overdue/order_stalled/delay/weather are genuine exceptions
+// worth an instant push to management; idle and vehicle_dark are explicitly
+// noisier proxies (see their check functions below) -- routine, digest-only.
+const CRITICAL_ALERT_TYPES = new Set(["wrong_site", "overdue", "order_stalled", "delay", "weather"]);
 
 const ALERT_MESSAGES: Record<string, string> = {
   overdue: "🚨 A checked-out asset is overdue for return.",
@@ -29,13 +30,21 @@ const STALE_TELEMETRY_MINUTES = 60;
 // something if the vehicle was actually reporting earlier that same shift,
 // not for a vehicle that simply never shares. See checkVehicleDark below.
 const VEHICLE_DARK_HOURS = 3;
+// How late a confirmed shift's start time can pass with no check-in before
+// it's flagged -- see checkDelayedArrivals below.
+const DELAY_BUFFER_MINUTES = 30;
+// Forecast thresholds for a job site with a confirmed shift today -- see
+// checkWeather below.
+const RAIN_PROBABILITY_THRESHOLD = 70;
+const WIND_SPEED_THRESHOLD_KMH = 40;
 
-// NOTE: 'delay' and 'loadout_gap' alert types are intentionally not raised
-// yet. 'delay' would need an "expected travel time" concept that doesn't
-// exist anywhere in the schema. 'loadout_gap' would need a link from a
-// shift to a job type/loadout, which doesn't exist either — see the
+// NOTE: 'loadout_gap' is intentionally not raised yet -- it needs a link
+// from a shift to a job type/loadout, which doesn't exist — see the
 // documents.job_id comment in DATABASE_SCHEMA.md, which already flags a
 // "jobs" concept as deferred rather than something to improvise around here.
+// 'delay' below is a simpler, honest version of the original design (which
+// wanted real travel-time-vs-actual comparison) -- see
+// docs/EXCEPTION_HANDLING.md.
 
 async function alertAlreadyOpen(
   client: PoolClient,
@@ -54,6 +63,7 @@ async function raiseAlert(
   type: string,
   siteId: string | null,
   relatedRecordId: string,
+  message?: string,
 ): Promise<void> {
   if (await alertAlreadyOpen(client, type, relatedRecordId)) return;
   await client.query(`INSERT INTO alerts (type, site_id, related_record_id) VALUES ($1, $2, $3)`, [
@@ -64,7 +74,7 @@ async function raiseAlert(
   await insertNotification(
     client,
     CRITICAL_ALERT_TYPES.has(type) ? "critical" : "routine",
-    ALERT_MESSAGES[type] ?? `Alert raised: ${type}.`,
+    message ?? ALERT_MESSAGES[type] ?? `Alert raised: ${type}.`,
     "alert",
     relatedRecordId,
   );
@@ -203,6 +213,89 @@ async function checkVehicleDark(client: PoolClient): Promise<void> {
   }
 }
 
+async function checkDelayedArrivals(client: PoolClient): Promise<void> {
+  // Simpler than the original design's "actual transit time vs. expected"
+  // concept (still not buildable -- no site-to-site duration data exists).
+  // This instead catches a confirmed shift whose scheduled start has passed,
+  // with no check-in recorded, which is the same real problem ("crew isn't
+  // where they're supposed to be, on time") without needing travel-time
+  // modeling. Relies on the DB's timezone being set correctly (see
+  // 0032_database_timezone.sql) so "now() > sh.date + sh.start_time" means
+  // what it looks like it means, not a UTC-vs-local mismatch.
+  const result = await client.query(
+    `SELECT sh.id AS shift_id, sh.site_id, sh.start_time,
+            cm.name AS crew_member_name, s.name AS site_name
+     FROM shifts sh
+     JOIN crew_members cm ON cm.id = sh.crew_member_id
+     JOIN sites s ON s.id = sh.site_id
+     WHERE sh.date = CURRENT_DATE AND sh.status = 'confirmed' AND sh.start_time IS NOT NULL
+       AND now() > (sh.date + sh.start_time + ($1 || ' minutes')::interval)
+       AND NOT EXISTS (
+         SELECT 1 FROM timeclock_entries t
+         WHERE t.crew_member_id = sh.crew_member_id
+           AND t.event_type = 'in'
+           AND t.timestamp >= sh.date::timestamp
+       )`,
+    [DELAY_BUFFER_MINUTES],
+  );
+  for (const row of result.rows) {
+    await raiseAlert(
+      client,
+      "delay",
+      row.site_id,
+      row.shift_id,
+      `🚨 ${row.crew_member_name} hasn't checked in — shift at ${row.site_name} started at ${row.start_time}.`,
+    );
+  }
+}
+
+async function checkWeather(client: PoolClient): Promise<void> {
+  const result = await client.query(`
+    SELECT DISTINCT s.id AS site_id, s.name AS site_name, s.center_lat, s.center_lng
+    FROM sites s
+    JOIN shifts sh ON sh.site_id = s.id AND sh.date = CURRENT_DATE AND sh.status = 'confirmed'
+    WHERE s.type = 'job_site' AND s.center_lat IS NOT NULL AND s.center_lng IS NOT NULL
+  `);
+
+  for (const row of result.rows) {
+    // A weather alert is only ever about today's forecast -- auto-resolve a
+    // still-open one from a prior day first, so raiseAlert's normal dedup
+    // (any unresolved alert of this type/record) doesn't mistake yesterday's
+    // stale flag for today's already being raised.
+    await client.query(
+      `UPDATE alerts SET resolved_at = now()
+       WHERE type = 'weather' AND related_record_id = $1 AND resolved_at IS NULL AND raised_at::date < CURRENT_DATE`,
+      [row.site_id],
+    );
+
+    // Stop re-checking once today's alert has already been raised for this
+    // site -- not a strict once-a-day cache (a clear-forecast site gets
+    // re-checked every tick), just avoids redundant calls once we already
+    // know and have alerted on today's answer.
+    const alreadyRaisedToday = await client.query(
+      `SELECT 1 FROM alerts WHERE type = 'weather' AND related_record_id = $1 AND raised_at::date = CURRENT_DATE LIMIT 1`,
+      [row.site_id],
+    );
+    if ((alreadyRaisedToday.rowCount ?? 0) > 0) continue;
+
+    const forecast = await fetchDailyForecast(row.center_lat, row.center_lng);
+    if (!forecast) continue;
+
+    if (
+      forecast.precipitationProbabilityMax >= RAIN_PROBABILITY_THRESHOLD ||
+      forecast.windSpeedMaxKmh >= WIND_SPEED_THRESHOLD_KMH
+    ) {
+      await raiseAlert(
+        client,
+        "weather",
+        row.site_id,
+        row.site_id,
+        `🌧️ Weather flag for ${row.site_name} today — ${forecast.precipitationProbabilityMax}% rain chance, up to ${Math.round(forecast.windSpeedMaxKmh)} km/h wind.`,
+      );
+    }
+  }
+}
+
 export async function runExceptionChecks(): Promise<void> {
   const client = await pool.connect();
   try {
@@ -211,6 +304,8 @@ export async function runExceptionChecks(): Promise<void> {
     await checkIdleCrew(client);
     await checkWrongSite(client);
     await checkVehicleDark(client);
+    await checkDelayedArrivals(client);
+    await checkWeather(client);
   } finally {
     client.release();
   }

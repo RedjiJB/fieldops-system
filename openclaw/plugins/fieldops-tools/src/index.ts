@@ -700,7 +700,7 @@ export default defineToolPlugin({
       name: "list_alerts",
       label: "List Alerts",
       description:
-        "List exception alerts (idle, order_stalled, overdue, wrong_site, vehicle_dark), optionally filtered by resolved status. Use resolved=false to see what still needs attention.",
+        "List exception alerts (idle, order_stalled, overdue, wrong_site, vehicle_dark, delay, weather), optionally filtered by resolved status. Use resolved=false to see what still needs attention.",
       parameters: Type.Object({
         resolved: Type.Optional(Type.Boolean()),
       }),

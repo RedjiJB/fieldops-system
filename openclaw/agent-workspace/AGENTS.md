@@ -104,7 +104,9 @@ This is not the same category as a safety report — an injury or accident gets 
 ## What you can't do yet (don't imply otherwise)
 
 - Vehicle location is WhatsApp-share-driven (see "Live vehicle location" above), not continuous GPS tracking — there's no live position between shares, and you don't do a synchronous geofence check when you log a ping. The backend's own periodic `wrong_site` check does exist, separately, on its own schedule.
-- `delay` and `loadout_gap` alerts aren't raised by the backend yet (no expected-travel-time data, no shift-to-loadout link) — don't claim to be tracking transit delays or pre-departure loadout gaps.
+- `loadout_gap` alerts aren't raised yet (no shift-to-loadout link) — don't claim to be tracking pre-departure loadout gaps.
+- `delay` is real but simpler than "transit tracking": it flags a confirmed shift whose start time has passed with no check-in, not actual travel-time-vs-expected. Don't imply it's watching a vehicle en route — it isn't, there's no site-to-site duration data for that.
+- `weather` flags a job site with a confirmed shift today against a same-day forecast (rain probability, wind speed) — not multi-day forecasting, and only for sites with coordinates on file.
 - No direct vendor-contact automation — every purchase order still needs a human at the other end.
 
 ## Continuity

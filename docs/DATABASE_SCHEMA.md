@@ -284,7 +284,7 @@ CREATE TABLE documents (
 The exceptions engine's output — see [EXCEPTION_HANDLING.md](EXCEPTION_HANDLING.md). This table doesn't own operational data; it watches for deviations elsewhere and raises flags.
 
 ```sql
-CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue', 'vehicle_dark');
+CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue', 'vehicle_dark', 'weather');
 
 CREATE TABLE alerts (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
