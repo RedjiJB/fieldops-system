@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type User } from "../api/client";
+import { api, USER_ROLES, type User } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 const sectionStyle = { padding: 16 };
 const rowStyle = {
@@ -16,6 +17,7 @@ function NewUserForm({ onCreated }: { onCreated: (u: User) => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<User["role"]>("staff");
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
@@ -28,11 +30,12 @@ function NewUserForm({ onCreated }: { onCreated: (u: User) => void }) {
       return;
     }
     try {
-      const created = await api.createUser({ name, email, password });
+      const created = await api.createUser({ name, email, password, role });
       onCreated(created);
       setName("");
       setEmail("");
       setPassword("");
+      setRole("staff");
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create user");
@@ -49,6 +52,13 @@ function NewUserForm({ onCreated }: { onCreated: (u: User) => void }) {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
+      <select value={role} onChange={(e) => setRole(e.target.value as User["role"])}>
+        {USER_ROLES.map((r) => (
+          <option key={r} value={r}>
+            {r}
+          </option>
+        ))}
+      </select>
       <button onClick={submit}>+ New user</button>
       {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
     </div>
@@ -96,10 +106,14 @@ function ResetPasswordInline({ user }: { user: User }) {
 }
 
 export function UsersPage() {
+  const { user: me } = useAuth();
+  const isAdmin = me?.role === "admin";
+
   const [users, setUsers] = useState<User[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
+  const [draftRole, setDraftRole] = useState<User["role"]>("staff");
   const [error, setError] = useState<string | null>(null);
 
   function reload() {
@@ -112,11 +126,12 @@ export function UsersPage() {
     setEditingId(u.id);
     setDraftName(u.name);
     setDraftEmail(u.email);
+    setDraftRole(u.role);
   }
 
   async function saveEdit(u: User) {
     try {
-      const updated = await api.updateUser(u.id, { name: draftName, email: draftEmail });
+      const updated = await api.updateUser(u.id, { name: draftName, email: draftEmail, role: draftRole });
       setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, ...updated } : x)));
       setEditingId(null);
     } catch (err) {
@@ -140,19 +155,26 @@ export function UsersPage() {
       <section style={sectionStyle}>
         <h2 style={{ fontSize: 16 }}>Users</h2>
         <p style={{ color: "#888", fontSize: 13 }}>
-          Dashboard login accounts — every account currently has the same access, there are no roles yet.
+          Dashboard login accounts. {isAdmin ? "Admins manage accounts; staff have view-only access here." : "View only — ask an admin to make changes."}
         </p>
         {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
-        <NewUserForm onCreated={(u) => setUsers((prev) => [...prev, u])} />
+        {isAdmin && <NewUserForm onCreated={(u) => setUsers((prev) => [...prev, u])} />}
 
         {users.length === 0 && <p style={{ color: "#888" }}>No users on file.</p>}
         {users.map((u) => (
           <div key={u.id} style={rowStyle}>
-            {editingId === u.id ? (
+            {isAdmin && editingId === u.id ? (
               <span style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, flexWrap: "wrap" as const }}>
                 <input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="Name" />
                 <input value={draftEmail} onChange={(e) => setDraftEmail(e.target.value)} placeholder="Email" />
+                <select value={draftRole} onChange={(e) => setDraftRole(e.target.value as User["role"])}>
+                  {USER_ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
                 <button onClick={() => saveEdit(u)}>Save</button>
                 <button onClick={() => setEditingId(null)}>Cancel</button>
               </span>
@@ -162,15 +184,17 @@ export function UsersPage() {
                   <strong style={{ opacity: u.active ? 1 : 0.5 }}>{u.name}</strong>
                   <span style={{ color: "#888" }}>
                     {" "}
-                    — {u.email}
+                    — {u.email} — {u.role}
                     {!u.active ? " — inactive" : ""}
                   </span>
                 </span>
-                <span style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => startEdit(u)}>Edit</button>
-                  <ResetPasswordInline user={u} />
-                  <button onClick={() => toggleActive(u)}>{u.active ? "Deactivate" : "Reactivate"}</button>
-                </span>
+                {isAdmin && (
+                  <span style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => startEdit(u)}>Edit</button>
+                    <ResetPasswordInline user={u} />
+                    <button onClick={() => toggleActive(u)}>{u.active ? "Deactivate" : "Reactivate"}</button>
+                  </span>
+                )}
               </>
             )}
           </div>

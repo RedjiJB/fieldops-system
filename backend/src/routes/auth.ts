@@ -31,7 +31,7 @@ authRouter.post(
     const { email, password } = req.body;
     if (!email || !password) throw new HttpError(400, "email and password are required");
 
-    const result = await pool.query("SELECT id, email, name, password_hash FROM users WHERE email = $1", [
+    const result = await pool.query("SELECT id, email, name, role, password_hash FROM users WHERE email = $1", [
       email,
     ]);
     const user = result.rows[0];
@@ -51,7 +51,7 @@ authRouter.post(
         maxAge: SESSION_COOKIE_MAX_AGE_SECONDS,
       }),
     );
-    res.json({ id: user.id, email: user.email, name: user.name });
+    res.json({ id: user.id, email: user.email, name: user.name, role: user.role });
   }),
 );
 
@@ -75,6 +75,6 @@ authRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     if (req.auth?.type !== "user") throw new HttpError(401, "Authentication required");
-    res.json({ id: req.auth.userId, email: req.auth.email, name: req.auth.name });
+    res.json({ id: req.auth.userId, email: req.auth.email, name: req.auth.name, role: req.auth.role });
   }),
 );

@@ -21,7 +21,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export type Me = { id: string; email: string; name: string };
+// Mirrors backend/src/routes/users.ts's USER_ROLES.
+export const USER_ROLES = ["admin", "staff"] as const;
+
+export type Me = { id: string; email: string; name: string; role: (typeof USER_ROLES)[number] };
 
 export type VehicleLocation = {
   id: string;
@@ -243,6 +246,7 @@ export type User = {
   id: string;
   email: string;
   name: string;
+  role: (typeof USER_ROLES)[number];
   active: boolean;
   created_at: string;
 };
@@ -379,9 +383,9 @@ export const api = {
   markPurchaseOrderFulfilled: (id: string) =>
     request<PurchaseOrder>(`/purchase-orders/${id}/fulfilled`, { method: "PATCH" }),
   users: () => request<User[]>("/users"),
-  createUser: (body: { name: string; email: string; password: string }) =>
+  createUser: (body: { name: string; email: string; password: string; role?: User["role"] }) =>
     request<User>("/users", { method: "POST", body: JSON.stringify(body) }),
-  updateUser: (id: string, patch: Partial<Pick<User, "name" | "email" | "active">>) =>
+  updateUser: (id: string, patch: Partial<Pick<User, "name" | "email" | "active" | "role">>) =>
     request<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   setUserPassword: (id: string, newPassword: string) =>
     request<User>(`/users/${id}/password`, { method: "PATCH", body: JSON.stringify({ new_password: newPassword }) }),

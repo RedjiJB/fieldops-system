@@ -355,7 +355,7 @@ CREATE TABLE notifications (
 
 ## Dashboard auth
 
-`users`/`sessions` back the web dashboard's login — entirely separate from `crew_members`, which is the WhatsApp/agent-side identity model. No `role` column on `users` yet; every dashboard account sees the same thing (map view only, in v1).
+`users`/`sessions` back the web dashboard's login — entirely separate from `crew_members`, which is the WhatsApp/agent-side identity model. `role` (added in 0040) gates account management specifically (see API.md's Users section) — nothing else in the dashboard checks role yet, since nothing else sensitive exists there today.
 
 ```sql
 CREATE TABLE users (
@@ -364,8 +364,8 @@ CREATE TABLE users (
   name          TEXT NOT NULL,
   password_hash TEXT NOT NULL,
   active        BOOLEAN NOT NULL DEFAULT true, -- added in 0038; deactivated accounts keep their row (FKs from alerts/notifications)
+  role          TEXT NOT NULL DEFAULT 'admin', -- added in 0040; 'admin' | 'staff', app-validated not a Postgres enum (matches crew_members.role convention)
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-  -- still no role/permission column -- every logged-in user has identical access (see API.md's Users section)
 );
 
 -- token_hash stores sha256(raw token), never the raw token — same principle

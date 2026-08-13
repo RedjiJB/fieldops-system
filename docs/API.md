@@ -18,14 +18,14 @@ Dashboard accounts can also now be created/managed from the dashboard itself (se
 
 ## Users
 
-Dashboard account management — distinct from `crew_members` (the WhatsApp/agent-facing table). All routes require a dashboard session (the service token is rejected with 403 — the agent has no business managing dashboard accounts). No role/permission tiers exist yet; every logged-in user can manage every account, including creating new ones and resetting others' passwords. No `DELETE` — accounts are deactivated (`active = false`), never removed, to avoid orphaning `alerts.resolved_by_user_id`/`notifications.acknowledged_by_user_id`.
+Dashboard account management — distinct from `crew_members` (the WhatsApp/agent-facing table). All routes require a dashboard session (the service token is rejected with 403 — the agent has no business managing dashboard accounts). Two roles exist (`admin`/`staff`, added 0040): `GET /users` is open to any dashboard session; every mutating route is `admin`-only. This is the only place role is checked today — nothing else in the dashboard is role-gated yet, since nothing else sensitive exists there. No `DELETE` — accounts are deactivated (`active = false`), never removed, to avoid orphaning `alerts.resolved_by_user_id`/`notifications.acknowledged_by_user_id`.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/users` | List accounts (never returns `password_hash`) |
-| `POST` | `/users` | Create an account — `{name, email, password}`, password ≥ 8 chars |
-| `PATCH` | `/users/:id` | Partial update of `name`/`email`/`active` — a user can't deactivate themselves |
-| `PATCH` | `/users/:id/password` | Reset a password — `{new_password}`, ≥ 8 chars, no current-password check |
+| `GET` | `/users` | List accounts (never returns `password_hash`); any dashboard session |
+| `POST` | `/users` | Create an account — `{name, email, password, role?}`, password ≥ 8 chars, `role` defaults to `staff`; **admin only** |
+| `PATCH` | `/users/:id` | Partial update of `name`/`email`/`active`/`role` — a user can't deactivate themselves; **admin only**, including self-edits |
+| `PATCH` | `/users/:id/password` | Reset a password — `{new_password}`, ≥ 8 chars, no current-password check; **admin only** |
 
 ## Assets & Inventory
 

@@ -23,6 +23,6 @@ export const requireAuth = asyncHandler(async (req, _res, next) => {
   const user = sessionToken ? await findSessionUser(sessionToken) : null;
   if (!user) throw new HttpError(401, "Authentication required");
 
-  req.auth = { type: "user", userId: user.id, email: user.email, name: user.name };
+  req.auth = { type: "user", userId: user.id, email: user.email, name: user.name, role: user.role };
   next();
 });

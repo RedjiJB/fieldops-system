@@ -73,9 +73,11 @@ function Dashboard() {
             <button onClick={() => setTab("vendors")} disabled={tab === "vendors"}>
               Vendors
             </button>
-            <button onClick={() => setTab("users")} disabled={tab === "users"}>
-              Users
-            </button>
+            {user?.role === "admin" && (
+              <button onClick={() => setTab("users")} disabled={tab === "users"}>
+                Users
+              </button>
+            )}
             <button onClick={() => setTab("activity")} disabled={tab === "activity"}>
               Activity
             </button>

@@ -8,6 +8,7 @@ import { hashPassword } from "../lib/password.js";
 export const usersRouter = Router();
 
 const MIN_PASSWORD_LENGTH = 8;
+const USER_ROLES = ["admin", "staff"] as const;
 
 // Dashboard account management is for dashboard users, not the WhatsApp
 // agent -- the service token has no business here.
@@ -16,11 +17,21 @@ function requireDashboardUser(req: Request) {
   return req.auth;
 }
 
+// Account management itself is the one thing concretely sensitive today --
+// everything else a "staff" role would need gating for (wages, cash) doesn't
+// exist yet. GET stays open to any dashboard session (read-only, no reason
+// to hide who has an account); every mutating route here is admin-only.
+function requireAdmin(req: Request) {
+  const auth = requireDashboardUser(req);
+  if (auth.role !== "admin") throw new HttpError(403, "Only an admin can manage accounts");
+  return auth;
+}
+
 usersRouter.get(
   "/users",
   asyncHandler(async (req, res) => {
     requireDashboardUser(req);
-    const result = await pool.query("SELECT id, email, name, active, created_at FROM users ORDER BY name");
+    const result = await pool.query("SELECT id, email, name, role, active, created_at FROM users ORDER BY name");
     res.json(result.rows);
   }),
 );
@@ -28,54 +39,61 @@ usersRouter.get(
 usersRouter.post(
   "/users",
   asyncHandler(async (req, res) => {
-    requireDashboardUser(req);
-    const { name, email, password } = req.body;
+    requireAdmin(req);
+    const { name, email, password, role } = req.body;
     if (!name || !email || !password) throw new HttpError(400, "name, email, and password are required");
     if (password.length < MIN_PASSWORD_LENGTH) {
       throw new HttpError(400, `password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     }
+    if (role !== undefined && !USER_ROLES.includes(role)) {
+      throw new HttpError(400, `role must be one of: ${USER_ROLES.join(", ")}`);
+    }
 
     const passwordHash = await hashPassword(password);
     const result = await pool.query(
-      `INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3)
-       RETURNING id, email, name, active, created_at`,
-      [name, email, passwordHash],
+      `INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4)
+       RETURNING id, email, name, role, active, created_at`,
+      [name, email, passwordHash, role ?? "staff"],
     );
     res.status(201).json(result.rows[0]);
   }),
 );
 
-// Partial update -- same shape as every other PATCH this session. No email
-// re-verification step exists yet, so changing email here takes effect
-// immediately for the next login.
+// Partial update -- same shape as every other PATCH this session, admin-only
+// for every field including self-edits (deliberately simple first pass; no
+// "edit your own name" exception). No email re-verification step exists
+// yet, so changing email here takes effect immediately for the next login.
 usersRouter.patch(
   "/users/:id",
   asyncHandler(async (req, res) => {
-    const auth = requireDashboardUser(req);
-    const { name, email, active } = req.body;
+    const auth = requireAdmin(req);
+    const { name, email, active, role } = req.body;
     if (active === false && auth.userId === req.params.id) {
       throw new HttpError(400, "You can't deactivate your own account");
+    }
+    if (role !== undefined && !USER_ROLES.includes(role)) {
+      throw new HttpError(400, `role must be one of: ${USER_ROLES.join(", ")}`);
     }
 
     const result = await pool.query(
       `UPDATE users
-       SET name = COALESCE($2, name), email = COALESCE($3, email), active = COALESCE($4, active)
+       SET name = COALESCE($2, name), email = COALESCE($3, email), active = COALESCE($4, active), role = COALESCE($5, role)
        WHERE id = $1
-       RETURNING id, email, name, active, created_at`,
-      [req.params.id, name ?? null, email ?? null, active ?? null],
+       RETURNING id, email, name, role, active, created_at`,
+      [req.params.id, name ?? null, email ?? null, active ?? null, role ?? null],
     );
     if (!result.rows[0]) throw new HttpError(404, "User not found");
     res.json(result.rows[0]);
   }),
 );
 
-// No current-password re-verification -- there's no role/permission tiering
-// yet to distinguish "reset my own" from "reset someone else's" (see
-// ARCHITECTURE.md's users notes); this is a placeholder until that exists.
+// No current-password re-verification -- admin-only now closes the gap the
+// old placeholder comment here used to flag ("reset my own" vs "reset
+// someone else's" needed role tiering to distinguish; it now exists).
 usersRouter.patch(
   "/users/:id/password",
   asyncHandler(async (req, res) => {
-    requireDashboardUser(req);
+    requireAdmin(req);
     const { new_password } = req.body;
     if (!new_password || new_password.length < MIN_PASSWORD_LENGTH) {
       throw new HttpError(400, `new_password must be at least ${MIN_PASSWORD_LENGTH} characters`);
@@ -83,7 +101,7 @@ usersRouter.patch(
 
     const passwordHash = await hashPassword(new_password);
     const result = await pool.query(
-      `UPDATE users SET password_hash = $2 WHERE id = $1 RETURNING id, email, name, active, created_at`,
+      `UPDATE users SET password_hash = $2 WHERE id = $1 RETURNING id, email, name, role, active, created_at`,
       [req.params.id, passwordHash],
     );
     if (!result.rows[0]) throw new HttpError(404, "User not found");
