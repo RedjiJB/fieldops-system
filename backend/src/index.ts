@@ -14,6 +14,7 @@ import { jobsRouter } from "./routes/jobs.js";
 import { loadoutsRouter } from "./routes/loadouts.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { ordersRouter } from "./routes/orders.js";
+import { payrollRouter } from "./routes/payroll.js";
 import { reportsRouter } from "./routes/reports.js";
 import { shiftsRouter } from "./routes/shifts.js";
 import { sitesRouter } from "./routes/sites.js";
@@ -48,6 +49,11 @@ app.use("/api/v1", shiftsRouter);
 app.use("/api/v1", alertsRouter);
 app.use("/api/v1", vehiclesRouter);
 app.use("/api/v1", documentsRouter);
+// payrollRouter must be mounted before crewMembersRouter -- its
+// GET/PATCH /crew-members/pay-profiles(/:id) routes would otherwise be
+// shadowed by crewMembersRouter's GET /crew-members/:id, which greedily
+// matches "pay-profiles" as an :id and 400s on the invalid UUID.
+app.use("/api/v1", payrollRouter);
 app.use("/api/v1", crewMembersRouter);
 app.use("/api/v1", notificationsRouter);
 app.use("/api/v1", jobsRouter);
@@ -75,6 +81,13 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     // Postgres unique_violation (e.g. a phone/qr_tag_id that's already registered)
     if (err.code === "23505") {
       res.status(409).json({ error: "A record with that unique value already exists" });
+      return;
+    }
+    // Postgres check_violation (e.g. a negative amount/rate) -- app-level
+    // validation should catch this first, but the DB constraint is the
+    // backstop, so it still needs a clean 400 rather than a raw 500.
+    if (err.code === "23514") {
+      res.status(400).json({ error: "Value violates a database constraint" });
       return;
     }
   }

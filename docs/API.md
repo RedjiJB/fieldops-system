@@ -18,7 +18,7 @@ Dashboard accounts can also now be created/managed from the dashboard itself (se
 
 ## Users
 
-Dashboard account management — distinct from `crew_members` (the WhatsApp/agent-facing table). All routes require a dashboard session (the service token is rejected with 403 — the agent has no business managing dashboard accounts). Two roles exist (`admin`/`staff`, added 0040): `GET /users` is open to any dashboard session; every mutating route is `admin`-only. This is the only place role is checked today — nothing else in the dashboard is role-gated yet, since nothing else sensitive exists there. No `DELETE` — accounts are deactivated (`active = false`), never removed, to avoid orphaning `alerts.resolved_by_user_id`/`notifications.acknowledged_by_user_id`.
+Dashboard account management — distinct from `crew_members` (the WhatsApp/agent-facing table). All routes require a dashboard session (the service token is rejected with 403 — the agent has no business managing dashboard accounts). Two roles exist (`admin`/`staff`, added 0040): `GET /users` is open to any dashboard session; every mutating route is `admin`-only. `requireDashboardUser`/`requireAdmin` (`backend/src/lib/roles.ts`) are the shared guards — also used by Payroll below, the other role-gated surface. No `DELETE` — accounts are deactivated (`active = false`), never removed, to avoid orphaning `alerts.resolved_by_user_id`/`notifications.acknowledged_by_user_id`.
 
 | Method | Path | Description |
 |---|---|---|
@@ -26,6 +26,17 @@ Dashboard account management — distinct from `crew_members` (the WhatsApp/agen
 | `POST` | `/users` | Create an account — `{name, email, password, role?}`, password ≥ 8 chars, `role` defaults to `staff`; **admin only** |
 | `PATCH` | `/users/:id` | Partial update of `name`/`email`/`active`/`role` — a user can't deactivate themselves; **admin only**, including self-edits |
 | `PATCH` | `/users/:id/password` | Reset a password — `{new_password}`, ≥ 8 chars, no current-password check; **admin only** |
+
+## Payroll
+
+Wage/cash data — every route here is `admin`-only, both reads and writes (unlike Users above, there's no open `GET`). See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#payroll) for the two tables this covers. No agent-facing route: this is dashboard-only by design until the two-party confirm-before-execute redesign exists to gate money-affecting agent actions (see ARCHITECTURE.md's confirm-before-execute section).
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/crew-members/pay-profiles` | Every crew member joined with their pay profile — `{pay_type: 'payroll', hourly_rate: null}` for anyone with no row yet |
+| `PATCH` | `/crew-members/:id/pay-profile` | Upsert `{pay_type?, hourly_rate?}` — creates the profile on first write |
+| `POST` | `/payouts` | Record an amount actually paid out — `{crew_member_id, amount, paid_at?, note?}`, `amount` must be > 0, `recorded_by_user_id` set from the admin session (no dual-path actor — see above) |
+| `GET` | `/payouts?crew_member_id=&date_from=&date_to=` | List payouts, joined with crew member and recording-admin names, newest first |
 
 ## Assets & Inventory
 

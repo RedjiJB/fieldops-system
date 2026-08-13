@@ -355,7 +355,7 @@ CREATE TABLE notifications (
 
 ## Dashboard auth
 
-`users`/`sessions` back the web dashboard's login — entirely separate from `crew_members`, which is the WhatsApp/agent-side identity model. `role` (added in 0040) gates account management specifically (see API.md's Users section) — nothing else in the dashboard checks role yet, since nothing else sensitive exists there today.
+`users`/`sessions` back the web dashboard's login — entirely separate from `crew_members`, which is the WhatsApp/agent-side identity model. `role` (added in 0040) gates account management (see API.md's Users section) and, as of 0041, the Payroll routes below — the two admin-only surfaces that exist so far. `requireDashboardUser`/`requireAdmin` (`backend/src/lib/roles.ts`) are the single shared implementation both route files call.
 
 ```sql
 CREATE TABLE users (
@@ -375,6 +375,32 @@ CREATE TABLE sessions (
   user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL
+);
+```
+
+## Payroll
+
+Wage/cash data, admin-only end to end (see API.md's Payroll section). Added in `0041_payroll.sql`. `crew_pay_profiles` establishes *what someone is paid*; `payouts` records *what they were actually paid*, independently — the two are not reconciled against computed timesheet hours yet (a separate, not-yet-built backlog item). No agent-facing route exists for either table: recording money paid to someone is exactly the kind of mutating action the (not-yet-built) two-party confirm-before-execute redesign is meant to gate, so this stays dashboard-only until that exists.
+
+```sql
+CREATE TABLE crew_pay_profiles (
+  crew_member_id  UUID PRIMARY KEY REFERENCES crew_members(id),
+  pay_type        TEXT NOT NULL DEFAULT 'payroll' CHECK (pay_type IN ('payroll', 'cash')),
+  hourly_rate     NUMERIC CHECK (hourly_rate IS NULL OR hourly_rate >= 0),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- No row means "not set yet" (defaults: payroll, no rate) -- a crew member
+-- doesn't get one created at signup; PATCH /crew-members/:id/pay-profile
+-- upserts on first write.
+CREATE TABLE payouts (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  crew_member_id       UUID NOT NULL REFERENCES crew_members(id),
+  amount               NUMERIC NOT NULL CHECK (amount > 0),
+  paid_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  note                 TEXT,
+  recorded_by_user_id  UUID NOT NULL REFERENCES users(id), -- always a dashboard admin, no dual-path actor -- see above
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 

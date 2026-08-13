@@ -251,6 +251,28 @@ export type User = {
   created_at: string;
 };
 
+export const PAY_TYPES = ["payroll", "cash"] as const;
+
+export type PayProfile = {
+  crew_member_id: string;
+  crew_member_name: string;
+  pay_type: (typeof PAY_TYPES)[number];
+  hourly_rate: number | null;
+  updated_at: string | null;
+};
+
+export type Payout = {
+  id: string;
+  crew_member_id: string;
+  crew_member_name: string;
+  amount: number;
+  paid_at: string;
+  note: string | null;
+  recorded_by_user_id: string;
+  recorded_by_name: string;
+  created_at: string;
+};
+
 export const ACTIVITY_EVENT_TYPES = [
   "job_started",
   "job_completed",
@@ -415,5 +437,21 @@ export const api = {
     if (filters.date_to) params.set("date_to", filters.date_to);
     const qs = params.toString();
     return request<TimeclockSession[]>(`/timesheets/sessions${qs ? `?${qs}` : ""}`);
+  },
+  payProfiles: () => request<PayProfile[]>("/crew-members/pay-profiles"),
+  updatePayProfile: (crewMemberId: string, patch: { pay_type?: PayProfile["pay_type"]; hourly_rate?: number | null }) =>
+    request<Omit<PayProfile, "crew_member_name">>(`/crew-members/${crewMemberId}/pay-profile`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  createPayout: (body: { crew_member_id: string; amount: number; paid_at?: string; note?: string }) =>
+    request<Payout>("/payouts", { method: "POST", body: JSON.stringify(body) }),
+  payouts: (filters: { crew_member_id?: string; date_from?: string; date_to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.crew_member_id) params.set("crew_member_id", filters.crew_member_id);
+    if (filters.date_from) params.set("date_from", filters.date_from);
+    if (filters.date_to) params.set("date_to", filters.date_to);
+    const qs = params.toString();
+    return request<Payout[]>(`/payouts${qs ? `?${qs}` : ""}`);
   },
 };

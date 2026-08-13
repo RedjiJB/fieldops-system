@@ -1,31 +1,14 @@
-import type { Request } from "express";
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
 import { hashPassword } from "../lib/password.js";
+import { requireAdmin, requireDashboardUser } from "../lib/roles.js";
 
 export const usersRouter = Router();
 
 const MIN_PASSWORD_LENGTH = 8;
 const USER_ROLES = ["admin", "staff"] as const;
-
-// Dashboard account management is for dashboard users, not the WhatsApp
-// agent -- the service token has no business here.
-function requireDashboardUser(req: Request) {
-  if (req.auth?.type !== "user") throw new HttpError(403, "Only a dashboard user can manage accounts");
-  return req.auth;
-}
-
-// Account management itself is the one thing concretely sensitive today --
-// everything else a "staff" role would need gating for (wages, cash) doesn't
-// exist yet. GET stays open to any dashboard session (read-only, no reason
-// to hide who has an account); every mutating route here is admin-only.
-function requireAdmin(req: Request) {
-  const auth = requireDashboardUser(req);
-  if (auth.role !== "admin") throw new HttpError(403, "Only an admin can manage accounts");
-  return auth;
-}
 
 usersRouter.get(
   "/users",
