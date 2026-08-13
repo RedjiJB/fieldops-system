@@ -39,6 +39,18 @@ export type Vehicle = {
   latest_location: VehicleLocation | null;
 };
 
+export type Trip = {
+  id: string;
+  vehicle_id: string;
+  driver_id: string;
+  purpose_tag: string | null;
+  site_id: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  distance_meters: number | null;
+  duration_seconds: number | null;
+};
+
 export type Shift = {
   id: string;
   crew_member_id: string;
@@ -124,6 +136,36 @@ export const DOCUMENT_TYPES = [
   "insurance_cert",
 ] as const;
 
+// Mirrors backend/src/routes/crewMembers.ts's CREW_ROLES.
+export const CREW_ROLES = ["crew", "crew_lead", "yard", "management"] as const;
+
+export type CrewMember = {
+  id: string;
+  name: string;
+  phone: string;
+  role: (typeof CREW_ROLES)[number];
+  active: boolean;
+  created_at: string;
+};
+
+// Mirrors backend/src/routes/sites.ts's SITE_TYPES.
+export const SITE_TYPES = ["job_site", "depot", "vendor", "shop"] as const;
+
+export type Site = {
+  id: string;
+  name: string;
+  type: (typeof SITE_TYPES)[number];
+  address: string | null;
+  access_instructions: string | null;
+  access_hours: string | null;
+  center_lat: number | null;
+  center_lng: number | null;
+  geofence_radius_m: number | null;
+  geofence_polygon: unknown | null;
+  active_start: string | null;
+  active_end: string | null;
+};
+
 export type Document = {
   id: string;
   site_id: string | null;
@@ -174,5 +216,22 @@ export const api = {
   },
   expiringDocuments: (withinDays: number) =>
     request<Document[]>(`/documents/expiring?within_days=${withinDays}`),
-  sites: () => request<{ id: string; name: string }[]>("/sites"),
+  sites: (filters: { type?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.type) params.set("type", filters.type);
+    const qs = params.toString();
+    return request<Site[]>(`/sites${qs ? `?${qs}` : ""}`);
+  },
+  updateSite: (id: string, patch: Partial<Site>) =>
+    request<Site>(`/sites/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  crewMembers: (filters: { role?: string; active?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.role) params.set("role", filters.role);
+    if (filters.active) params.set("active", filters.active);
+    const qs = params.toString();
+    return request<CrewMember[]>(`/crew-members${qs ? `?${qs}` : ""}`);
+  },
+  updateCrewMember: (id: string, patch: Partial<CrewMember>) =>
+    request<CrewMember>(`/crew-members/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  vehicleTrips: (vehicleId: string) => request<Trip[]>(`/vehicles/${vehicleId}/trips`),
 };

@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AssetsPage } from "./pages/AssetsPage";
+import { CrewPage } from "./pages/CrewPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MapPage } from "./pages/MapPage";
 import { OpsOverviewPage } from "./pages/OpsOverviewPage";
+import { SitesPage } from "./pages/SitesPage";
+import { VehicleHistoryPage } from "./pages/VehicleHistoryPage";
 
-type Tab = "map" | "ops" | "assets" | "documents";
+type Tab = "map" | "ops" | "assets" | "documents" | "crew" | "sites" | "vehicles";
 
 function Dashboard() {
   const { user, logout } = useAuth();
@@ -38,6 +41,15 @@ function Dashboard() {
             <button onClick={() => setTab("documents")} disabled={tab === "documents"}>
               Documents
             </button>
+            <button onClick={() => setTab("crew")} disabled={tab === "crew"}>
+              Crew
+            </button>
+            <button onClick={() => setTab("sites")} disabled={tab === "sites"}>
+              Sites
+            </button>
+            <button onClick={() => setTab("vehicles")} disabled={tab === "vehicles"}>
+              Vehicles
+            </button>
           </nav>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -49,6 +61,9 @@ function Dashboard() {
       {tab === "ops" && <OpsOverviewPage />}
       {tab === "assets" && <AssetsPage />}
       {tab === "documents" && <DocumentsPage />}
+      {tab === "crew" && <CrewPage />}
+      {tab === "sites" && <SitesPage />}
+      {tab === "vehicles" && <VehicleHistoryPage />}
     </div>
   );
 }

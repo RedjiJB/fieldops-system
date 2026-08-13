@@ -65,3 +65,26 @@ crewMembersRouter.post(
     res.status(201).json(result.rows[0]);
   }),
 );
+
+// Partial update -- only fields present in the body change. No dashboard
+// page existed before this that needed to edit a crew member at all
+// (assign/register was always the whole operation).
+crewMembersRouter.patch(
+  "/crew-members/:id",
+  asyncHandler(async (req, res) => {
+    const { name, role, active } = req.body;
+    if (role !== undefined && !CREW_ROLES.includes(role)) {
+      throw new HttpError(400, `role must be one of: ${CREW_ROLES.join(", ")}`);
+    }
+
+    const result = await pool.query(
+      `UPDATE crew_members
+       SET name = COALESCE($2, name), role = COALESCE($3, role), active = COALESCE($4, active)
+       WHERE id = $1
+       RETURNING *`,
+      [req.params.id, name ?? null, role ?? null, active ?? null],
+    );
+    if (!result.rows[0]) throw new HttpError(404, "Crew member not found");
+    res.json(result.rows[0]);
+  }),
+);
