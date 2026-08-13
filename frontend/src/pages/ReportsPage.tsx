@@ -7,6 +7,7 @@ const REPORT_TYPES = [
   { value: "jobs", label: "Jobs", path: "/api/v1/reports/jobs.csv" },
   { value: "checkouts", label: "Checkouts", path: "/api/v1/reports/checkouts.csv" },
   { value: "purchase-orders", label: "Purchase Orders", path: "/api/v1/reports/purchase-orders.csv" },
+  { value: "timesheets", label: "Timesheets", path: "/api/v1/reports/timesheets.csv" },
 ] as const;
 
 export function ReportsPage() {
@@ -28,8 +29,8 @@ export function ReportsPage() {
       <section style={sectionStyle}>
         <h2 style={{ fontSize: 16 }}>Reports</h2>
         <p style={{ color: "#888", fontSize: 13 }}>
-          CSV exports of history that already tracks who did what. Hours/payroll summaries aren't built yet — the
-          underlying timeclock data only stores individual clock events, not paired shifts.
+          CSV exports of history that already tracks who did what, including computed timesheet sessions. Pay rates,
+          correction workflows, and pay periods aren't handled here yet.
         </p>
 
         <div style={filterBarStyle}>

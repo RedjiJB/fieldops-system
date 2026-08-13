@@ -269,6 +269,17 @@ export type ActivityEvent = {
   description: string;
 };
 
+export type TimeclockSession = {
+  crew_member_id: string;
+  started_at: string;
+  ended_at: string | null;
+  break_seconds: number;
+  net_seconds: number | null;
+  site_ids: string[];
+  geofence_verified: boolean;
+  incomplete: boolean;
+};
+
 export type Document = {
   id: string;
   site_id: string | null;
@@ -396,5 +407,13 @@ export const api = {
     if (filters.limit) params.set("limit", String(filters.limit));
     const qs = params.toString();
     return request<ActivityEvent[]>(`/activity${qs ? `?${qs}` : ""}`);
+  },
+  timeclockSessions: (filters: { crew_member_id?: string; date_from?: string; date_to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.crew_member_id) params.set("crew_member_id", filters.crew_member_id);
+    if (filters.date_from) params.set("date_from", filters.date_from);
+    if (filters.date_to) params.set("date_to", filters.date_to);
+    const qs = params.toString();
+    return request<TimeclockSession[]>(`/timesheets/sessions${qs ? `?${qs}` : ""}`);
   },
 };

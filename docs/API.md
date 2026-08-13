@@ -119,6 +119,25 @@ A read-only, cross-table feed of state changes that already carry a recorded act
 |---|---|---|
 | `GET` | `/activity?event_type=&since=&limit=` | Unioned feed: job started/completed, checkout created/returned, asset verified, alert resolved, notification acknowledged, document uploaded. Sorted newest first, `limit` defaults to 100 |
 
+## Reports & Exports
+
+CSV downloads, all filterable by `date_from`/`date_to` (widened internally where needed so a record spanning the boundary isn't cut off, then trimmed back to the requested range). Served with `Content-Disposition: attachment` for direct browser download from `ReportsPage.tsx`.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/reports/jobs.csv?date_from=&date_to=&site_id=` | Jobs with started/completed actor names |
+| `GET` | `/reports/checkouts.csv?date_from=&date_to=&asset_id=` | Checkouts with checked-out-by/returned-by names and damage flags |
+| `GET` | `/reports/purchase-orders.csv?date_from=&date_to=&vendor_id=` | Purchase orders with vendor/site names, cost, ETA |
+| `GET` | `/reports/timesheets.csv?date_from=&date_to=&crew_member_id=` | Computed timeclock sessions (see below) — incomplete sessions export with a blank hours column and `Status = incomplete`, never a guessed number |
+
+## Timesheets
+
+Pairs raw `timeclock_entries` events (`in`/`break_start`/`break_end`/`out`) into sessions — see [`backend/src/lib/timeclock.ts`](../backend/src/lib/timeclock.ts)'s `computeSessions`. A session is `in → (break_start → break_end)* → out`; multiple sessions per day and multiple breaks per session are both legal. There's no `shift_id` FK on `timeclock_entries`, so sessions aren't linked to a specific `shifts` row — they're computed purely from the event stream. A dangling `in`/`break_start` with no following `out` comes back flagged `incomplete: true` with `ended_at`/`net_seconds` both `null`, never an estimated close time. Deliberately out of scope: applying a pay rate, a correction workflow for incomplete sessions, and any pay-period concept (a date-range filter covers "this week"/"this pay period" without one).
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/timesheets/sessions?crew_member_id=&date_from=&date_to=` | Computed sessions in range, incomplete ones included (flagged, not filtered out) |
+
 ## Vehicles & Location
 
 Surfaced by the same gap crew-members/sites had: nothing could look up or register a vehicle at all until the live-location feature needed to resolve "which vehicle does this crew member drive" from a WhatsApp location share.
