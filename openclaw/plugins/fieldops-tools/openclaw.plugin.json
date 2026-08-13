@@ -69,7 +69,8 @@
       "list_documents",
       "list_expiring_documents",
       "list_notifications",
-      "acknowledge_notification"
+      "acknowledge_notification",
+      "report_safety_incident"
     ]
   }
 }

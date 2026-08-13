@@ -132,3 +132,4 @@ A single event log feeding two different consumers — see [ARCHITECTURE.md](ARC
 | `PATCH` | `/notifications/:id/acknowledge` | "Seen, on it" — separate from resolving the underlying alert. Dashboard session sets `acknowledged_by_user_id`; agent/service-token path requires `acknowledged_by` (crew member id) in the body. 400 if already acknowledged. |
 | `GET` | `/notifications/escalation-candidates` | Critical, delivered, unacknowledged for 20+ minutes, escalated fewer than 3 times — polled by the notifier's second pass |
 | `PATCH` | `/notifications/:id/escalate` | Increments `escalated_count`, sets `last_escalated_at` — called by the notifier after a re-send |
+| `POST` | `/notifications/safety-report` | The one notification authored directly from a conversation rather than derived from backend state — always `critical`. `{message, crew_member_id?}`. See [ARCHITECTURE.md](ARCHITECTURE.md) and `AGENTS.md`'s "Safety and emergencies". |

@@ -939,5 +939,22 @@ export default defineToolPlugin({
         });
       },
     }),
+
+    tool({
+      name: "report_safety_incident",
+      label: "Report Safety Incident",
+      description:
+        "Push an instant critical alert to management for an injury, on-site accident, or immediate physical danger. See AGENTS.md's 'Safety and emergencies' — this overrides confirm-before-execute (no confirmation needed, call it immediately) and is separate from telling the sender to call 911, which you do in your own reply, not through this tool.",
+      parameters: Type.Object({
+        message: Type.String({ description: "Brief summary of what was reported." }),
+        crew_member_id: Type.Optional(Type.String({ description: "The reporting crew member's UUID, if resolved." })),
+      }),
+      async execute({ message, crew_member_id }, config) {
+        return callBackend(config, "/notifications/safety-report", {
+          method: "POST",
+          body: JSON.stringify({ message, crew_member_id }),
+        });
+      },
+    }),
   ],
 });

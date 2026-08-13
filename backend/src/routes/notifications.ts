@@ -2,6 +2,7 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
+import { insertNotification } from "../lib/notify.js";
 
 export const notificationsRouter = Router();
 
@@ -127,5 +128,20 @@ notificationsRouter.patch(
     );
     if (!result.rows[0]) throw new HttpError(404, "Notification not found");
     res.json(result.rows[0]);
+  }),
+);
+
+// The one place a notification is authored directly from a conversation
+// rather than derived from backend state -- every other notification comes
+// from a route/worker observing a real data change. Always critical: there's
+// no ambiguity to weigh for a safety report the way there is for, say, an
+// idle-crew flag. See AGENTS.md's "Safety and emergencies".
+notificationsRouter.post(
+  "/notifications/safety-report",
+  asyncHandler(async (req, res) => {
+    const { message, crew_member_id } = req.body;
+    if (!message) throw new HttpError(400, "message is required");
+    await insertNotification(pool, "critical", `🚨 SAFETY: ${message}`, "safety_report", crew_member_id ?? null);
+    res.status(201).json({ ok: true });
   }),
 );
