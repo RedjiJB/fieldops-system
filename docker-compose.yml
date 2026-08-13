@@ -40,9 +40,15 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel --no-autoupdate run
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    # TEMPORARY: Quick Tunnel mode (no domain registered yet) -- prints a
+    # random *.trycloudflare.com URL to `docker compose logs cloudflared`
+    # on every start; the URL changes on every restart, and there's no
+    # login/access control on it. Once a real domain exists, switch back:
+    # command: tunnel --no-autoupdate run
+    # environment: [TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}]
+    # ...and add a public hostname in the Cloudflare Zero Trust dashboard
+    # instead of relying on the printed URL. See DEPLOYMENT.md.
+    command: tunnel --no-autoupdate --url http://frontend:80
 
 volumes:
   pgdata:

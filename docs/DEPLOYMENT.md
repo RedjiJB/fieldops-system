@@ -8,12 +8,19 @@
 
 ## Networking — Cloudflare Tunnel
 
-The Pi isn't exposed to the internet by default, and WhatsApp messages need to reach OpenClaw's gateway. **Do not port-forward your home router.** Use Cloudflare Tunnel instead — it makes an outbound connection from the Pi to Cloudflare, which then routes traffic back through it. Nothing on the home network accepts inbound connections directly.
+The Pi isn't exposed to the internet by default. **Do not port-forward your home router.** Use Cloudflare Tunnel instead — it makes an outbound connection from the Pi to Cloudflare, which then routes traffic back through it. Nothing on the home network accepts inbound connections directly.
 
-1. Create a Cloudflare account and a tunnel (`cloudflared tunnel create fieldops`)
-2. Point a subdomain at the tunnel
-3. Get a tunnel token, set it as `CLOUDFLARE_TUNNEL_TOKEN` in `.env`
-4. The `cloudflared` service in `docker-compose.yml` handles the rest
+This is only needed to expose the **web dashboard** to a browser off the local network. WhatsApp itself doesn't need it — the `whatsapp` channel connects outbound from the Pi (the same way WhatsApp Web works), not via an inbound webhook, so it works with no tunnel at all.
+
+**With a domain** (the real setup — a stable, permanent URL):
+1. Add the domain to your Cloudflare account (any registrar is fine, as long as DNS is delegated to Cloudflare)
+2. Create a tunnel: Cloudflare dashboard → Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared
+3. Add a public hostname on the tunnel: subdomain (e.g. `dashboard`), your domain, type HTTP, URL `frontend:80` (the compose service name/port, not `localhost`)
+4. Copy the tunnel token from setup, set it as `CLOUDFLARE_TUNNEL_TOKEN` in `.env`
+5. In `docker-compose.yml`'s `cloudflared` service: `command: tunnel --no-autoupdate run`, `environment: [TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}]`
+6. `docker compose up -d cloudflared`
+
+**Without a domain yet** (Quick Tunnel — what this repo currently ships with): `docker-compose.yml`'s `cloudflared` service runs `tunnel --no-autoupdate --url http://frontend:80` instead, no token needed. Cloudflare generates a random `https://<random-words>.trycloudflare.com` URL, printed to `docker compose logs cloudflared` on every start. Real tradeoffs, not just a formality: the URL **changes on every container restart** (Pi reboot, `docker compose restart`, anything), and there's no login/access control on the tunnel itself beyond the dashboard's own auth — anyone with the URL who guesses/finds it reaches the login page. Fine as a stopgap for one person checking a map, not something to hand out to a crew. Switch to the domain-based setup above once a domain exists — the swap is just the `command`/`environment` block in `docker-compose.yml`.
 
 ## Setup
 
