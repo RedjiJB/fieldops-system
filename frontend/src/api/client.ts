@@ -239,6 +239,14 @@ export type PurchaseOrder = {
 
 export type PurchaseOrderDetail = PurchaseOrder & { items: PurchaseOrderItem[] };
 
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+};
+
 export type Document = {
   id: string;
   site_id: string | null;
@@ -352,4 +360,11 @@ export const api = {
     }),
   markPurchaseOrderFulfilled: (id: string) =>
     request<PurchaseOrder>(`/purchase-orders/${id}/fulfilled`, { method: "PATCH" }),
+  users: () => request<User[]>("/users"),
+  createUser: (body: { name: string; email: string; password: string }) =>
+    request<User>("/users", { method: "POST", body: JSON.stringify(body) }),
+  updateUser: (id: string, patch: Partial<Pick<User, "name" | "email" | "active">>) =>
+    request<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  setUserPassword: (id: string, newPassword: string) =>
+    request<User>(`/users/${id}/password`, { method: "PATCH", body: JSON.stringify({ new_password: newPassword }) }),
 };

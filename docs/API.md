@@ -14,7 +14,18 @@ Every `/api/v1/*` route requires authentication except `POST /auth/login` — ei
 | `POST` | `/auth/logout` | Deletes the current session, clears the cookie. |
 | `GET` | `/auth/me` | Current dashboard user, or 401. |
 
-Dashboard accounts are created via `npm run create-user` (interactive CLI, run by a human on the Pi) — there is no public register endpoint.
+Dashboard accounts can also now be created/managed from the dashboard itself (see Users below) — the CLI script still works but is no longer the only way.
+
+## Users
+
+Dashboard account management — distinct from `crew_members` (the WhatsApp/agent-facing table). All routes require a dashboard session (the service token is rejected with 403 — the agent has no business managing dashboard accounts). No role/permission tiers exist yet; every logged-in user can manage every account, including creating new ones and resetting others' passwords. No `DELETE` — accounts are deactivated (`active = false`), never removed, to avoid orphaning `alerts.resolved_by_user_id`/`notifications.acknowledged_by_user_id`.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/users` | List accounts (never returns `password_hash`) |
+| `POST` | `/users` | Create an account — `{name, email, password}`, password ≥ 8 chars |
+| `PATCH` | `/users/:id` | Partial update of `name`/`email`/`active` — a user can't deactivate themselves |
+| `PATCH` | `/users/:id/password` | Reset a password — `{new_password}`, ≥ 8 chars, no current-password check |
 
 ## Assets & Inventory
 

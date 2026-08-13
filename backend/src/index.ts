@@ -15,6 +15,7 @@ import { notificationsRouter } from "./routes/notifications.js";
 import { ordersRouter } from "./routes/orders.js";
 import { shiftsRouter } from "./routes/shifts.js";
 import { sitesRouter } from "./routes/sites.js";
+import { usersRouter } from "./routes/users.js";
 import { vehiclesRouter } from "./routes/vehicles.js";
 import { vendorsRouter } from "./routes/vendors.js";
 import { startExceptionsWorker } from "./workers/exceptions.js";
@@ -47,6 +48,7 @@ app.use("/api/v1", documentsRouter);
 app.use("/api/v1", crewMembersRouter);
 app.use("/api/v1", notificationsRouter);
 app.use("/api/v1", jobsRouter);
+app.use("/api/v1", usersRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {

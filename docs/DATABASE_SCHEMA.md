@@ -357,7 +357,9 @@ CREATE TABLE users (
   email         TEXT UNIQUE NOT NULL,
   name          TEXT NOT NULL,
   password_hash TEXT NOT NULL,
+  active        BOOLEAN NOT NULL DEFAULT true, -- added in 0038; deactivated accounts keep their row (FKs from alerts/notifications)
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  -- still no role/permission column -- every logged-in user has identical access (see API.md's Users section)
 );
 
 -- token_hash stores sha256(raw token), never the raw token — same principle

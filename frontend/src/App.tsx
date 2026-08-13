@@ -8,10 +8,21 @@ import { LoginPage } from "./pages/LoginPage";
 import { MapPage } from "./pages/MapPage";
 import { OpsOverviewPage } from "./pages/OpsOverviewPage";
 import { SitesPage } from "./pages/SitesPage";
+import { UsersPage } from "./pages/UsersPage";
 import { VehicleHistoryPage } from "./pages/VehicleHistoryPage";
 import { VendorsPage } from "./pages/VendorsPage";
 
-type Tab = "map" | "ops" | "assets" | "documents" | "crew" | "sites" | "vehicles" | "loadouts" | "vendors";
+type Tab =
+  | "map"
+  | "ops"
+  | "assets"
+  | "documents"
+  | "crew"
+  | "sites"
+  | "vehicles"
+  | "loadouts"
+  | "vendors"
+  | "users";
 
 function Dashboard() {
   const { user, logout } = useAuth();
@@ -58,6 +69,9 @@ function Dashboard() {
             <button onClick={() => setTab("vendors")} disabled={tab === "vendors"}>
               Vendors
             </button>
+            <button onClick={() => setTab("users")} disabled={tab === "users"}>
+              Users
+            </button>
           </nav>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -74,6 +88,7 @@ function Dashboard() {
       {tab === "vehicles" && <VehicleHistoryPage />}
       {tab === "loadouts" && <LoadoutsPage />}
       {tab === "vendors" && <VendorsPage />}
+      {tab === "users" && <UsersPage />}
     </div>
   );
 }
