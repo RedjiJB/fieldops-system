@@ -2,14 +2,9 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { toCsv } from "../lib/csv.js";
-import { computeSessions } from "../lib/timeclock.js";
+import { fetchSessionsInRange } from "../lib/timeclock.js";
 
 export const reportsRouter = Router();
-
-// Same padding rationale as GET /timesheets/sessions -- a session that
-// started before date_from or ends after date_to still needs its full
-// event set to pair correctly.
-const TIMESHEET_RANGE_PAD_DAYS = 2;
 
 // pg returns TIMESTAMPTZ/DATE columns as JS Date objects, whose default
 // String() is the verbose "Thu Aug 13 2026 ... GMT+0000 (...)" form -- not
@@ -133,41 +128,11 @@ reportsRouter.get(
   "/reports/timesheets.csv",
   asyncHandler(async (req, res) => {
     const { date_from, date_to, crew_member_id } = req.query;
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-
-    if (crew_member_id) {
-      params.push(crew_member_id);
-      conditions.push(`crew_member_id = $${params.length}`);
-    }
-    if (date_from) {
-      params.push(date_from);
-      conditions.push(`timestamp >= $${params.length}::date - interval '${TIMESHEET_RANGE_PAD_DAYS} days'`);
-    }
-    if (date_to) {
-      params.push(date_to);
-      conditions.push(`timestamp < ($${params.length}::date + interval '${TIMESHEET_RANGE_PAD_DAYS + 1} days')`);
-    }
-
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    const result = await pool.query(
-      `SELECT crew_member_id, event_type, site_id, timestamp, geofence_verified
-       FROM timeclock_entries
-       ${where}
-       ORDER BY crew_member_id, timestamp`,
-      params,
-    );
-
-    let sessions = computeSessions(result.rows);
-
-    if (date_from) {
-      const from = new Date(`${date_from}T00:00:00.000Z`).getTime();
-      sessions = sessions.filter((s) => (s.ended_at ? new Date(s.ended_at).getTime() : Infinity) >= from);
-    }
-    if (date_to) {
-      const to = new Date(`${date_to}T23:59:59.999Z`).getTime();
-      sessions = sessions.filter((s) => new Date(s.started_at).getTime() <= to);
-    }
+    const sessions = await fetchSessionsInRange(pool, {
+      crew_member_id: crew_member_id as string | undefined,
+      date_from: date_from as string | undefined,
+      date_to: date_to as string | undefined,
+    });
 
     const crewIds = [...new Set(sessions.map((s) => s.crew_member_id))];
     const namesResult = crewIds.length

@@ -273,6 +273,18 @@ export type Payout = {
   created_at: string;
 };
 
+export type ReconciliationRow = {
+  crew_member_id: string;
+  crew_member_name: string;
+  pay_type: (typeof PAY_TYPES)[number];
+  hourly_rate: number | null;
+  completed_hours: number;
+  incomplete_sessions: number;
+  amount_owed: number | null;
+  amount_paid: number;
+  difference: number | null;
+};
+
 export const ACTIVITY_EVENT_TYPES = [
   "job_started",
   "job_completed",
@@ -453,5 +465,13 @@ export const api = {
     if (filters.date_to) params.set("date_to", filters.date_to);
     const qs = params.toString();
     return request<Payout[]>(`/payouts${qs ? `?${qs}` : ""}`);
+  },
+  payrollReconciliation: (filters: { crew_member_id?: string; date_from?: string; date_to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.crew_member_id) params.set("crew_member_id", filters.crew_member_id);
+    if (filters.date_from) params.set("date_from", filters.date_from);
+    if (filters.date_to) params.set("date_to", filters.date_to);
+    const qs = params.toString();
+    return request<ReconciliationRow[]>(`/payroll/reconciliation${qs ? `?${qs}` : ""}`);
   },
 };

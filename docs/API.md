@@ -37,6 +37,7 @@ Wage/cash data — every route here is `admin`-only, both reads and writes (unli
 | `PATCH` | `/crew-members/:id/pay-profile` | Upsert `{pay_type?, hourly_rate?}` — creates the profile on first write |
 | `POST` | `/payouts` | Record an amount actually paid out — `{crew_member_id, amount, paid_at?, note?}`, `amount` must be > 0, `recorded_by_user_id` set from the admin session (no dual-path actor — see above) |
 | `GET` | `/payouts?crew_member_id=&date_from=&date_to=` | List payouts, joined with crew member and recording-admin names, newest first |
+| `GET` | `/payroll/reconciliation?crew_member_id=&date_from=&date_to=` | Computed hours (`fetchSessionsInRange`, `backend/src/lib/timeclock.ts`) × `hourly_rate`, against `payouts` summed in the same range. One row per crew member with activity in range — `amount_owed`/`difference` are `null` (not `0`) when no rate is set; `incomplete_sessions` counts sessions excluded from the hours total, never folded in as complete |
 
 ## Assets & Inventory
 

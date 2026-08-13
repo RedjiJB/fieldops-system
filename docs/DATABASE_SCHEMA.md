@@ -380,7 +380,9 @@ CREATE TABLE sessions (
 
 ## Payroll
 
-Wage/cash data, admin-only end to end (see API.md's Payroll section). Added in `0041_payroll.sql`. `crew_pay_profiles` establishes *what someone is paid*; `payouts` records *what they were actually paid*, independently — the two are not reconciled against computed timesheet hours yet (a separate, not-yet-built backlog item). No agent-facing route exists for either table: recording money paid to someone is exactly the kind of mutating action the (not-yet-built) two-party confirm-before-execute redesign is meant to gate, so this stays dashboard-only until that exists.
+Wage/cash data, admin-only end to end (see API.md's Payroll section). Added in `0041_payroll.sql`. `crew_pay_profiles` establishes *what someone is paid*; `payouts` records *what they were actually paid*, independently. No agent-facing route exists for either table: recording money paid to someone is exactly the kind of mutating action the (not-yet-built) two-party confirm-before-execute redesign is meant to gate, so this stays dashboard-only until that exists.
+
+`GET /payroll/reconciliation` compares the two — it's a computed view, not a stored table: completed timesheet hours (`fetchSessionsInRange`, `backend/src/lib/timeclock.ts`) × `crew_pay_profiles.hourly_rate`, against `payouts` summed over the same range. Nothing here persists; every call recomputes from `timeclock_entries`, `crew_pay_profiles`, and `payouts` directly.
 
 ```sql
 CREATE TABLE crew_pay_profiles (

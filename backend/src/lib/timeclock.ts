@@ -1,3 +1,5 @@
+import type { Pool, PoolClient } from "pg";
+
 export type TimeclockEventType = "in" | "break_start" | "break_end" | "out";
 
 export type TimeclockEntryRow = {
@@ -104,4 +106,60 @@ export function computeSessions(rows: TimeclockEntryRow[]): TimeclockSession[] {
   }
 
   return sessions.sort((a, b) => toMs(a.started_at) - toMs(b.started_at));
+}
+
+// Same query surface as lib/notify.ts's Queryable -- works with the shared
+// pool or a transaction client.
+type Queryable = Pick<Pool | PoolClient, "query">;
+
+const RANGE_PAD_DAYS = 2;
+
+// Fetches timeclock_entries widened past the requested range (a session
+// that started before date_from or ends after date_to still needs its full
+// event set to pair correctly), computes sessions, then trims back to what
+// was actually requested. Was inlined separately in GET /timesheets/sessions
+// and GET /reports/timesheets.csv until a third caller (reconciliation)
+// made that a real duplicate, not just a coincidence.
+export async function fetchSessionsInRange(
+  db: Queryable,
+  filters: { crew_member_id?: string; date_from?: string; date_to?: string },
+): Promise<TimeclockSession[]> {
+  const { crew_member_id, date_from, date_to } = filters;
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (crew_member_id) {
+    params.push(crew_member_id);
+    conditions.push(`crew_member_id = $${params.length}`);
+  }
+  if (date_from) {
+    params.push(date_from);
+    conditions.push(`timestamp >= $${params.length}::date - interval '${RANGE_PAD_DAYS} days'`);
+  }
+  if (date_to) {
+    params.push(date_to);
+    conditions.push(`timestamp < ($${params.length}::date + interval '${RANGE_PAD_DAYS + 1} days')`);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const result = await db.query(
+    `SELECT crew_member_id, event_type, site_id, timestamp, geofence_verified
+     FROM timeclock_entries
+     ${where}
+     ORDER BY crew_member_id, timestamp`,
+    params,
+  );
+
+  let sessions = computeSessions(result.rows);
+
+  if (date_from) {
+    const from = new Date(`${date_from}T00:00:00.000Z`).getTime();
+    sessions = sessions.filter((s) => (s.ended_at ? new Date(s.ended_at).getTime() : Infinity) >= from);
+  }
+  if (date_to) {
+    const to = new Date(`${date_to}T23:59:59.999Z`).getTime();
+    sessions = sessions.filter((s) => new Date(s.started_at).getTime() <= to);
+  }
+
+  return sessions;
 }

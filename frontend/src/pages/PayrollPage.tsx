@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, PAY_TYPES, type PayProfile, type Payout } from "../api/client";
+import { api, PAY_TYPES, type PayProfile, type Payout, type ReconciliationRow } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 const sectionStyle = { padding: 16 };
@@ -11,6 +11,12 @@ const rowStyle = {
   padding: "8px 0",
   borderBottom: "1px solid #f0f0f0",
 };
+const thStyle = { textAlign: "left" as const, padding: "6px 10px", fontSize: 13, color: "#888", borderBottom: "1px solid #ddd" };
+const tdStyle = { padding: "6px 10px", fontSize: 13, borderBottom: "1px solid #f0f0f0" };
+
+function formatMoney(value: number | null): string {
+  return value === null ? "—" : `$${value.toFixed(2)}`;
+}
 
 function PayProfileRow({ profile, onSaved }: { profile: PayProfile; onSaved: (p: PayProfile) => void }) {
   const [payType, setPayType] = useState(profile.pay_type);
@@ -141,6 +147,10 @@ export function PayrollPage() {
   const [payoutCrewFilter, setPayoutCrewFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [reconciliation, setReconciliation] = useState<ReconciliationRow[]>([]);
+  const [reconCrewFilter, setReconCrewFilter] = useState("");
+  const [reconDateFrom, setReconDateFrom] = useState("");
+  const [reconDateTo, setReconDateTo] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function reloadProfiles() {
@@ -158,6 +168,17 @@ export function PayrollPage() {
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load payouts"));
   }
 
+  function reloadReconciliation() {
+    api
+      .payrollReconciliation({
+        crew_member_id: reconCrewFilter || undefined,
+        date_from: reconDateFrom || undefined,
+        date_to: reconDateTo || undefined,
+      })
+      .then(setReconciliation)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load reconciliation"));
+  }
+
   useEffect(() => {
     if (isAdmin) reloadProfiles();
   }, [isAdmin]);
@@ -165,6 +186,10 @@ export function PayrollPage() {
   useEffect(() => {
     if (isAdmin) reloadPayouts();
   }, [isAdmin, payoutCrewFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (isAdmin) reloadReconciliation();
+  }, [isAdmin, reconCrewFilter, reconDateFrom, reconDateTo]);
 
   if (!isAdmin) {
     return (
@@ -201,8 +226,8 @@ export function PayrollPage() {
       <section style={sectionStyle}>
         <h2 style={{ fontSize: 16 }}>Payouts</h2>
         <p style={{ color: "#888", fontSize: 13 }}>
-          A record that an amount was actually paid out — independent of computed hours. This doesn't reconcile
-          against timesheets yet.
+          A record that an amount was actually paid out — independent of computed hours. See Reconciliation below for
+          how this compares against computed timesheet hours.
         </p>
 
         <NewPayoutForm profiles={profiles} onCreated={(p) => setPayouts((prev) => [p, ...prev])} />
@@ -237,6 +262,69 @@ export function PayrollPage() {
             </span>
           </div>
         ))}
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={{ fontSize: 16 }}>Reconciliation</h2>
+        <p style={{ color: "#888", fontSize: 13 }}>
+          Computed hours × hourly rate, against what's actually been paid out. "No rate set" means owed can't be
+          computed — never shown as $0. Sessions with no clock-out are counted separately and excluded from hours,
+          never treated as complete.
+        </p>
+
+        <div style={filterBarStyle}>
+          <select value={reconCrewFilter} onChange={(e) => setReconCrewFilter(e.target.value)}>
+            <option value="">All crew</option>
+            {profiles.map((p) => (
+              <option key={p.crew_member_id} value={p.crew_member_id}>
+                {p.crew_member_name}
+              </option>
+            ))}
+          </select>
+          <label style={{ fontSize: 13 }}>
+            From <input type="date" value={reconDateFrom} onChange={(e) => setReconDateFrom(e.target.value)} />
+          </label>
+          <label style={{ fontSize: 13 }}>
+            To <input type="date" value={reconDateTo} onChange={(e) => setReconDateTo(e.target.value)} />
+          </label>
+        </div>
+
+        {reconciliation.length === 0 ? (
+          <p style={{ color: "#888" }}>No activity matches these filters.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ borderCollapse: "collapse", width: "100%" }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Crew member</th>
+                  <th style={thStyle}>Pay type</th>
+                  <th style={thStyle}>Hours</th>
+                  <th style={thStyle}>Incomplete sessions</th>
+                  <th style={thStyle}>Owed</th>
+                  <th style={thStyle}>Paid</th>
+                  <th style={thStyle}>Difference</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reconciliation.map((r) => (
+                  <tr key={r.crew_member_id}>
+                    <td style={tdStyle}>{r.crew_member_name}</td>
+                    <td style={tdStyle}>{r.pay_type}</td>
+                    <td style={tdStyle}>{r.completed_hours.toFixed(2)}</td>
+                    <td style={{ ...tdStyle, color: r.incomplete_sessions > 0 ? "#c9902f" : undefined }}>
+                      {r.incomplete_sessions > 0 ? r.incomplete_sessions : "—"}
+                    </td>
+                    <td style={tdStyle}>{r.hourly_rate === null ? "no rate set" : formatMoney(r.amount_owed)}</td>
+                    <td style={tdStyle}>{formatMoney(r.amount_paid)}</td>
+                    <td style={{ ...tdStyle, color: r.difference !== null && r.difference !== 0 ? "#c0392b" : undefined }}>
+                      {r.difference === null ? "—" : formatMoney(r.difference)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );
