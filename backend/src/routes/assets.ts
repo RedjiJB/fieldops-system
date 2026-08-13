@@ -37,20 +37,28 @@ assetsRouter.get(
         throw new HttpError(400, `Invalid status. Must be one of: ${ASSET_STATUSES.join(", ")}`);
       }
       params.push(status);
-      conditions.push(`status = $${params.length}`);
+      conditions.push(`a.status = $${params.length}`);
     }
     if (site_id) {
       params.push(site_id);
-      conditions.push(`current_site_id = $${params.length}`);
+      conditions.push(`a.current_site_id = $${params.length}`);
     }
     if (category) {
       params.push(category);
-      conditions.push(`category = $${params.length}`);
+      conditions.push(`a.category = $${params.length}`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    // Joined names for the dashboard's asset browser — raw UUIDs aren't
+    // useful on a management screen. Purely additive, same reasoning as
+    // GET /orders/GET /shifts gaining joined names earlier.
     const result = await pool.query(
-      `SELECT * FROM assets ${where} ORDER BY created_at DESC`,
+      `SELECT a.*, s.name AS current_site_name, cm.name AS current_holder_name
+       FROM assets a
+       LEFT JOIN sites s ON s.id = a.current_site_id
+       LEFT JOIN crew_members cm ON cm.id = a.current_holder
+       ${where}
+       ORDER BY a.created_at DESC`,
       params,
     );
     res.json(result.rows);

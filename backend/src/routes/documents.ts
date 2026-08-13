@@ -164,19 +164,25 @@ documentsRouter.get(
 
     if (site_id) {
       params.push(site_id);
-      conditions.push(`site_id = $${params.length}`);
+      conditions.push(`d.site_id = $${params.length}`);
     }
     if (type) {
       if (!DOCUMENT_TYPES.includes(type as (typeof DOCUMENT_TYPES)[number])) {
         throw new HttpError(400, `type must be one of: ${DOCUMENT_TYPES.join(", ")}`);
       }
       params.push(type);
-      conditions.push(`type = $${params.length}`);
+      conditions.push(`d.type = $${params.length}`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    // Joined site name for the dashboard's documents/compliance view — same
+    // reasoning as the assets browser's joined names.
     const result = await pool.query(
-      `SELECT * FROM documents ${where} ORDER BY uploaded_at DESC`,
+      `SELECT d.*, s.name AS site_name
+       FROM documents d
+       LEFT JOIN sites s ON s.id = d.site_id
+       ${where}
+       ORDER BY d.uploaded_at DESC`,
       params,
     );
     res.json(result.rows);
@@ -194,10 +200,12 @@ documentsRouter.get(
     // Includes anything already past its expiry, not just upcoming — an
     // expired insurance cert is more urgent than one expiring next week.
     const result = await pool.query(
-      `SELECT * FROM documents
-       WHERE expiry_date IS NOT NULL
-         AND expiry_date <= CURRENT_DATE + ($1 || ' days')::interval
-       ORDER BY expiry_date`,
+      `SELECT d.*, s.name AS site_name
+       FROM documents d
+       LEFT JOIN sites s ON s.id = d.site_id
+       WHERE d.expiry_date IS NOT NULL
+         AND d.expiry_date <= CURRENT_DATE + ($1 || ' days')::interval
+       ORDER BY d.expiry_date`,
       [withinDays],
     );
     res.json(result.rows);

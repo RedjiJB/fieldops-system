@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AssetsPage } from "./pages/AssetsPage";
+import { DocumentsPage } from "./pages/DocumentsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MapPage } from "./pages/MapPage";
 import { OpsOverviewPage } from "./pages/OpsOverviewPage";
 
-type Tab = "map" | "ops";
+type Tab = "map" | "ops" | "assets" | "documents";
 
 function Dashboard() {
   const { user, logout } = useAuth();
@@ -30,6 +32,12 @@ function Dashboard() {
             <button onClick={() => setTab("ops")} disabled={tab === "ops"}>
               Ops
             </button>
+            <button onClick={() => setTab("assets")} disabled={tab === "assets"}>
+              Assets
+            </button>
+            <button onClick={() => setTab("documents")} disabled={tab === "documents"}>
+              Documents
+            </button>
           </nav>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -37,7 +45,10 @@ function Dashboard() {
           <button onClick={() => logout()}>Log out</button>
         </div>
       </header>
-      {tab === "map" ? <MapPage /> : <OpsOverviewPage />}
+      {tab === "map" && <MapPage />}
+      {tab === "ops" && <OpsOverviewPage />}
+      {tab === "assets" && <AssetsPage />}
+      {tab === "documents" && <DocumentsPage />}
     </div>
   );
 }

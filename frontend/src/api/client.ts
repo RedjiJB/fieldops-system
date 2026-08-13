@@ -87,6 +87,55 @@ export type Notification = {
   escalated_count: number;
 };
 
+// Mirrors backend/src/routes/assets.ts's ASSET_STATUSES. 'available' is
+// excluded from DIRECTLY_SETTABLE_STATUSES backend-side (only /verify can
+// reach it) -- the dashboard never offers it as a status-change target,
+// same reason it never offers a "Verify" action at all (see AssetsPage.tsx).
+export const ASSET_STATUSES = [
+  "available",
+  "checked_out",
+  "missing",
+  "in_maintenance",
+  "unconfirmed",
+  "retired",
+] as const;
+export const ASSET_DIRECTLY_SETTABLE_STATUSES = ASSET_STATUSES.filter((s) => s !== "available");
+
+export type Asset = {
+  id: string;
+  name: string;
+  category: string;
+  qr_tag_id: string;
+  status: (typeof ASSET_STATUSES)[number];
+  current_site_id: string | null;
+  current_site_name: string | null;
+  current_holder: string | null;
+  current_holder_name: string | null;
+  last_verified_at: string | null;
+  created_at: string;
+};
+
+export const DOCUMENT_TYPES = [
+  "contract",
+  "permit",
+  "photo",
+  "receipt",
+  "disposal_ticket",
+  "insurance_cert",
+] as const;
+
+export type Document = {
+  id: string;
+  site_id: string | null;
+  site_name: string | null;
+  type: (typeof DOCUMENT_TYPES)[number];
+  filename: string;
+  mime_type: string | null;
+  uploaded_at: string;
+  tags: string[] | null;
+  expiry_date: string | null;
+};
+
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -106,4 +155,24 @@ export const api = {
   notifications: () => request<Notification[]>("/notifications"),
   acknowledgeNotification: (id: string) =>
     request<Notification>(`/notifications/${id}/acknowledge`, { method: "PATCH" }),
+  assets: (filters: { status?: string; site_id?: string; category?: string }) => {
+    const params = new URLSearchParams();
+    if (filters.status) params.set("status", filters.status);
+    if (filters.site_id) params.set("site_id", filters.site_id);
+    if (filters.category) params.set("category", filters.category);
+    const qs = params.toString();
+    return request<Asset[]>(`/assets${qs ? `?${qs}` : ""}`);
+  },
+  updateAssetStatus: (id: string, status: string) =>
+    request<Asset>(`/assets/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  documents: (filters: { site_id?: string; type?: string }) => {
+    const params = new URLSearchParams();
+    if (filters.site_id) params.set("site_id", filters.site_id);
+    if (filters.type) params.set("type", filters.type);
+    const qs = params.toString();
+    return request<Document[]>(`/documents${qs ? `?${qs}` : ""}`);
+  },
+  expiringDocuments: (withinDays: number) =>
+    request<Document[]>(`/documents/expiring?within_days=${withinDays}`),
+  sites: () => request<{ id: string; name: string }[]>("/sites"),
 };
