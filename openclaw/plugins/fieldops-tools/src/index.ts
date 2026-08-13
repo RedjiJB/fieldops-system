@@ -583,6 +583,56 @@ export default defineToolPlugin({
     // --- Scheduling & Check-in ---
 
     tool({
+      name: "list_job_types",
+      label: "List Job Types",
+      description:
+        "List known job types (e.g. interlock_repair, sod_install, service_call). Use this to resolve a freeform job description from a dispatch message to an id before calling create_job — never guess an id.",
+      parameters: Type.Object({}),
+      async execute(_input, config) {
+        return callBackend(config, "/job-types");
+      },
+    }),
+
+    tool({
+      name: "create_job",
+      label: "Create Job",
+      description:
+        "Create a job (site + date + job type) that one or more shifts can be linked to via assign_shift/assign_shifts_batch's job_id. Only create one when a dispatch message actually names or clearly implies a job type — if it doesn't, skip this and assign shifts without a job_id exactly as before. Part of the same confirmation as the shift assignment, not a separate ask.",
+      parameters: Type.Object({
+        site_id: Type.String(),
+        job_type_id: Type.Optional(Type.String({ description: "From list_job_types — omit if not resolvable." })),
+        date: Type.String({ description: "ISO date." }),
+      }),
+      async execute(input, config) {
+        return callBackend(config, "/jobs", {
+          method: "POST",
+          body: JSON.stringify(input),
+        });
+      },
+    }),
+
+    tool({
+      name: "list_jobs",
+      label: "List Jobs",
+      description: "List jobs, optionally filtered by date, site, or status.",
+      parameters: Type.Object({
+        date: Type.Optional(Type.String({ description: "ISO date." })),
+        site_id: Type.Optional(Type.String()),
+        status: Type.Optional(
+          Type.Union(["not_started", "in_progress", "complete"].map((s) => Type.Literal(s))),
+        ),
+      }),
+      async execute({ date, site_id, status }, config) {
+        const params = new URLSearchParams();
+        if (date) params.set("date", date);
+        if (site_id) params.set("site_id", site_id);
+        if (status) params.set("status", status);
+        const qs = params.toString();
+        return callBackend(config, `/jobs${qs ? `?${qs}` : ""}`);
+      },
+    }),
+
+    tool({
       name: "assign_shift",
       label: "Assign Shift",
       description: "Assign a crew member to a shift at a site on a date.",
@@ -592,6 +642,9 @@ export default defineToolPlugin({
         date: Type.String({ description: "ISO date." }),
         start_time: Type.Optional(Type.String({ description: "e.g. 07:00." })),
         end_time: Type.Optional(Type.String()),
+        job_id: Type.Optional(
+          Type.String({ description: "Link this shift to a job (see create_job) if the dispatch names a job type." }),
+        ),
       }),
       async execute(input, config) {
         return callBackend(config, "/shifts", {
@@ -614,6 +667,9 @@ export default defineToolPlugin({
             date: Type.String({ description: "ISO date." }),
             start_time: Type.Optional(Type.String({ description: "e.g. 07:00." })),
             end_time: Type.Optional(Type.String()),
+            job_id: Type.Optional(
+              Type.String({ description: "Link this shift to a job (see create_job) if the dispatch names a job type." }),
+            ),
           }),
         ),
       }),

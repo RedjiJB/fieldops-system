@@ -20,16 +20,16 @@ const LEGAL_NEXT_EVENTS: Record<string, readonly string[]> = {
 shiftsRouter.post(
   "/shifts",
   asyncHandler(async (req, res) => {
-    const { crew_member_id, site_id, date, start_time, end_time } = req.body;
+    const { crew_member_id, site_id, date, start_time, end_time, job_id } = req.body;
     if (!crew_member_id || !site_id || !date) {
       throw new HttpError(400, "crew_member_id, site_id, and date are required");
     }
 
     const result = await pool.query(
-      `INSERT INTO shifts (crew_member_id, site_id, date, start_time, end_time)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO shifts (crew_member_id, site_id, date, start_time, end_time, job_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [crew_member_id, site_id, date, start_time ?? null, end_time ?? null],
+      [crew_member_id, site_id, date, start_time ?? null, end_time ?? null, job_id ?? null],
     );
     res.status(201).json(result.rows[0]);
   }),
@@ -41,6 +41,7 @@ interface BatchShiftInput {
   date: string;
   start_time?: string;
   end_time?: string;
+  job_id?: string;
 }
 
 function validateBatchShifts(shifts: unknown): BatchShiftInput[] {
@@ -70,10 +71,10 @@ shiftsRouter.post(
       const created = [];
       for (const s of validShifts) {
         const result = await client.query(
-          `INSERT INTO shifts (crew_member_id, site_id, date, start_time, end_time)
-           VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO shifts (crew_member_id, site_id, date, start_time, end_time, job_id)
+           VALUES ($1, $2, $3, $4, $5, $6)
            RETURNING *`,
-          [s.crew_member_id, s.site_id, s.date, s.start_time ?? null, s.end_time ?? null],
+          [s.crew_member_id, s.site_id, s.date, s.start_time ?? null, s.end_time ?? null, s.job_id ?? null],
         );
         created.push(result.rows[0]);
       }
@@ -119,7 +120,7 @@ const SHIFT_STATUSES = ["assigned", "confirmed", "no_show", "declined"] as const
 shiftsRouter.get(
   "/shifts",
   asyncHandler(async (req, res) => {
-    const { date, site_id, crew_member_id, status } = req.query;
+    const { date, site_id, crew_member_id, status, job_id } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
 
@@ -134,6 +135,10 @@ shiftsRouter.get(
     if (crew_member_id) {
       params.push(crew_member_id);
       conditions.push(`sh.crew_member_id = $${params.length}`);
+    }
+    if (job_id) {
+      params.push(job_id);
+      conditions.push(`sh.job_id = $${params.length}`);
     }
     if (status) {
       if (!SHIFT_STATUSES.includes(status as (typeof SHIFT_STATUSES)[number])) {

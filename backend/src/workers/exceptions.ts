@@ -4,10 +4,18 @@ import { haversineDistanceMeters } from "../lib/geo.js";
 import { insertNotification } from "../lib/notify.js";
 import { fetchDailyForecast } from "../lib/weather.js";
 
-// wrong_site/overdue/order_stalled/delay/weather are genuine exceptions
-// worth an instant push to management; idle and vehicle_dark are explicitly
-// noisier proxies (see their check functions below) -- routine, digest-only.
-const CRITICAL_ALERT_TYPES = new Set(["wrong_site", "overdue", "order_stalled", "delay", "weather"]);
+// wrong_site/overdue/order_stalled/delay/weather/loadout_gap are genuine
+// exceptions worth an instant push to management; idle and vehicle_dark are
+// explicitly noisier proxies (see their check functions below) -- routine,
+// digest-only.
+const CRITICAL_ALERT_TYPES = new Set([
+  "wrong_site",
+  "overdue",
+  "order_stalled",
+  "delay",
+  "weather",
+  "loadout_gap",
+]);
 
 const ALERT_MESSAGES: Record<string, string> = {
   overdue: "🚨 A checked-out asset is overdue for return.",
@@ -38,13 +46,13 @@ const DELAY_BUFFER_MINUTES = 30;
 const RAIN_PROBABILITY_THRESHOLD = 70;
 const WIND_SPEED_THRESHOLD_KMH = 40;
 
-// NOTE: 'loadout_gap' is intentionally not raised yet -- it needs a link
-// from a shift to a job type/loadout, which doesn't exist — see the
-// documents.job_id comment in DATABASE_SCHEMA.md, which already flags a
-// "jobs" concept as deferred rather than something to improvise around here.
 // 'delay' below is a simpler, honest version of the original design (which
 // wanted real travel-time-vs-actual comparison) -- see
-// docs/EXCEPTION_HANDLING.md.
+// docs/EXCEPTION_HANDLING.md. 'loadout_gap' (checkLoadoutGap below) only
+// evaluates loadout_items with an asset_id -- consumables have no
+// per-departure "still out" signal the way checkouts gives assets, so a
+// consumable line in a loadout isn't something this check can honestly
+// evaluate yet.
 
 async function alertAlreadyOpen(
   client: PoolClient,
@@ -296,6 +304,52 @@ async function checkWeather(client: PoolClient): Promise<void> {
   }
 }
 
+async function checkLoadoutGap(client: PoolClient): Promise<void> {
+  // "Underway" reuses checkDelayedArrivals' reasoning: at least one
+  // confirmed shift on the job whose start time has passed. Only jobs with
+  // a job_type_id (and therefore a possible matching loadout) are relevant.
+  const jobsResult = await client.query(`
+    SELECT DISTINCT j.id AS job_id, j.site_id, j.job_type_id
+    FROM jobs j
+    JOIN shifts sh ON sh.job_id = j.id AND sh.status = 'confirmed' AND sh.start_time IS NOT NULL
+    WHERE j.date = CURRENT_DATE AND j.status != 'complete' AND j.job_type_id IS NOT NULL
+      AND now() > (j.date + sh.start_time)
+  `);
+
+  for (const job of jobsResult.rows) {
+    // Asset items only -- see the module-level comment above for why
+    // consumables aren't evaluated here. "Checked out by any crew member on
+    // this job" (not a specific one) since a loadout is shared kit for the
+    // whole job, not assigned to one person.
+    const missingResult = await client.query(
+      `SELECT COALESCE(a.name, 'unknown item') AS item_name
+       FROM loadouts l
+       JOIN loadout_items li ON li.loadout_id = l.id
+       LEFT JOIN assets a ON a.id = li.asset_id
+       WHERE l.job_type_id = $1
+         AND li.asset_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM checkouts c
+           JOIN shifts sh ON sh.crew_member_id = c.checked_out_by
+           WHERE sh.job_id = $2
+             AND c.asset_id = li.asset_id
+             AND c.checked_in_at IS NULL
+         )`,
+      [job.job_type_id, job.job_id],
+    );
+    if (missingResult.rows.length === 0) continue;
+
+    const missingNames = missingResult.rows.map((r) => r.item_name).join(", ");
+    await raiseAlert(
+      client,
+      "loadout_gap",
+      job.site_id,
+      job.job_id,
+      `🚨 Loadout gap — not checked out yet: ${missingNames}.`,
+    );
+  }
+}
+
 export async function runExceptionChecks(): Promise<void> {
   const client = await pool.connect();
   try {
@@ -305,6 +359,7 @@ export async function runExceptionChecks(): Promise<void> {
     await checkWrongSite(client);
     await checkVehicleDark(client);
     await checkDelayedArrivals(client);
+    await checkLoadoutGap(client);
     await checkWeather(client);
   } finally {
     client.release();

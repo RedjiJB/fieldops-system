@@ -80,10 +80,21 @@ Surfaced by a real gap: nothing in the original spec could look up or register a
 | `POST` | `/shifts` | Assign a shift (crew, site, date, time) |
 | `POST` | `/shifts/batch` | Assign several shifts at once, all-or-nothing — matches the real dispatch pattern of one message assigning multiple people to multiple sites |
 | `PATCH` | `/shifts/:id/confirm` | Crew confirms or declines |
-| `GET` | `/shifts?date=&site_id=&crew_member_id=&status=` | List shifts — includes `crew_member_phone`, used by `openclaw/notifier/nudge-shifts.mjs` to message a specific crew member directly |
+| `GET` | `/shifts?date=&site_id=&crew_member_id=&status=&job_id=` | List shifts — includes `crew_member_phone`, used by `openclaw/notifier/nudge-shifts.mjs` to message a specific crew member directly |
 | `PATCH` | `/shifts/:id/nudged` | Marks a shift-confirmation reminder sent — called by the nudge script after a successful send, so a same-evening re-run doesn't double-nudge |
 | `POST` | `/timeclock` | Log a check-in/break/check-out event |
 | `GET` | `/crew/status` | Live status for every active crew member (site, last event, geofence match) — powers the team-wide map view |
+
+## Jobs
+
+`POST /shifts` and `POST /shifts/batch` accept an optional `job_id` to link a shift to one of these — only created when a dispatch message actually names a job type; a shift without a `job_id` behaves exactly as before this existed. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#jobs).
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/jobs` | Create a job (`site_id`, `date`, optional `job_type_id`) |
+| `GET` | `/jobs?date=&site_id=&status=` | List jobs, joined with site/job type names |
+| `PATCH` | `/jobs/:id/status` | Forward-only: `not_started → in_progress → complete`. Manual only — auto-transition on geofence arrival is future work |
+| `GET` | `/job-types` | List known job types (existed since `0003_job_types.sql`, never had an endpoint until now) |
 
 ## Vehicles & Location
 

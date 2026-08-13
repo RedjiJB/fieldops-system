@@ -105,6 +105,27 @@ CREATE TABLE loadout_items (
 );
 ```
 
+## jobs
+
+A genuine entity, not just a column on `shifts` — one site+date+job_type dispatch can span multiple crew members' shifts (the "Team 1 / Team 2" multi-team dispatch pattern), and `documents.job_id` below anticipated something with its own identity from early on. Only created when a dispatch message actually identifies a job type — a shift without one behaves exactly as before this existed.
+
+```sql
+CREATE TYPE job_status AS ENUM ('not_started', 'in_progress', 'complete');
+
+CREATE TABLE jobs (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id      UUID NOT NULL REFERENCES sites(id),
+  job_type_id  UUID REFERENCES job_types(id),
+  date         DATE NOT NULL,
+  status       job_status NOT NULL DEFAULT 'not_started', -- manual transitions only; auto-transition on geofence arrival is future work
+  started_at   TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+`shifts.job_id UUID REFERENCES jobs(id)` (nullable) links a shift to one.
+
 ## orders / checkouts / transfers
 
 ```sql
@@ -211,7 +232,8 @@ CREATE TABLE shifts (
   start_time      TIME,
   end_time        TIME,
   status          shift_status NOT NULL DEFAULT 'assigned',
-  nudged_at       TIMESTAMPTZ -- set by openclaw/notifier/nudge-shifts.mjs once a confirm/decline reminder is sent, so a same-evening cron re-run doesn't double-nudge
+  nudged_at       TIMESTAMPTZ, -- set by openclaw/notifier/nudge-shifts.mjs once a confirm/decline reminder is sent, so a same-evening cron re-run doesn't double-nudge
+  job_id          UUID REFERENCES jobs(id) -- nullable; only set when the dispatch message identified a job type
 );
 
 CREATE TYPE timeclock_event AS ENUM ('in', 'break_start', 'break_end', 'out');
@@ -266,7 +288,7 @@ CREATE TABLE trips (
 ```sql
 CREATE TABLE documents (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  job_id       UUID, -- references a future jobs table if one is split out from sites
+  job_id       UUID REFERENCES jobs(id), -- was a bare unconstrained UUID from 0016_documents.sql until 0035_documents_job_fk.sql wired up the FK once jobs existed
   site_id      UUID REFERENCES sites(id),
   type         TEXT NOT NULL, -- contract, permit, photo, receipt, disposal_ticket, insurance_cert
   filename     TEXT NOT NULL, -- human-readable original filename
