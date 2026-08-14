@@ -22,7 +22,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // Mirrors backend/src/routes/users.ts's USER_ROLES.
-export const USER_ROLES = ["admin", "staff"] as const;
+export const USER_ROLES = ["admin", "staff", "owner"] as const;
 
 export type Me = { id: string; email: string; name: string; role: (typeof USER_ROLES)[number] };
 
@@ -152,7 +152,7 @@ export const DOCUMENT_TYPES = [
 ] as const;
 
 // Mirrors backend/src/routes/crewMembers.ts's CREW_ROLES.
-export const CREW_ROLES = ["crew", "crew_lead", "yard", "management"] as const;
+export const CREW_ROLES = ["crew", "foreman", "yard", "management", "owner"] as const;
 
 export type CrewMember = {
   id: string;

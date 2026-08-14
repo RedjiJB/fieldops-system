@@ -254,7 +254,7 @@ function PeriodCloseSection() {
 
 export function CompliancePage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "owner";
 
   if (!isAdmin) {
     return (

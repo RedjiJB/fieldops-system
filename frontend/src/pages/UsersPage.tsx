@@ -107,7 +107,7 @@ function ResetPasswordInline({ user }: { user: User }) {
 
 export function UsersPage() {
   const { user: me } = useAuth();
-  const isAdmin = me?.role === "admin";
+  const isAdmin = me?.role === "admin" || me?.role === "owner";
 
   const [users, setUsers] = useState<User[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);

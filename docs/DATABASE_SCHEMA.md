@@ -225,7 +225,7 @@ CREATE TABLE crew_members (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name        TEXT NOT NULL,
   phone       TEXT UNIQUE NOT NULL, -- WhatsApp identity
-  role        TEXT NOT NULL DEFAULT 'crew', -- crew, crew_lead, yard, management
+  role        TEXT NOT NULL DEFAULT 'crew', -- crew, foreman, yard, management, owner (foreman replaced crew_lead in 0048, a pure rename -- it never gated anything; owner is admin-equivalent-or-greater wherever requireAdmin/the confirmation-approval gate check role)
   active      BOOLEAN NOT NULL DEFAULT true,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -378,7 +378,7 @@ CREATE TABLE notifications (
 
 ## Dashboard auth
 
-`users`/`sessions` back the web dashboard's login — entirely separate from `crew_members`, which is the WhatsApp/agent-side identity model. `role` (added in 0040) gates account management (see API.md's Users section) and, as of 0041, the Payroll routes below — the two admin-only surfaces that exist so far. `requireDashboardUser`/`requireAdmin` (`backend/src/lib/roles.ts`) are the single shared implementation both route files call.
+`users`/`sessions` back the web dashboard's login — entirely separate from `crew_members`, which is the WhatsApp/agent-side identity model (still no FK between the two tables; the same real person gets a role on each independently). `role` (added in 0040) gates account management (see API.md's Users section) and, as of 0041, the Payroll/Spending/Confirmations/Compliance routes — five admin-only surfaces now. `requireDashboardUser`/`requireAdmin` (`backend/src/lib/roles.ts`) are the single shared implementation every gated route calls; as of 0049, `requireAdmin` accepts `role IN ('admin', 'owner')` — the real business owner should never have less dashboard access than a hired admin.
 
 ```sql
 CREATE TABLE users (
@@ -387,7 +387,7 @@ CREATE TABLE users (
   name          TEXT NOT NULL,
   password_hash TEXT NOT NULL,
   active        BOOLEAN NOT NULL DEFAULT true, -- added in 0038; deactivated accounts keep their row (FKs from alerts/notifications)
-  role          TEXT NOT NULL DEFAULT 'admin', -- added in 0040; 'admin' | 'staff', app-validated not a Postgres enum (matches crew_members.role convention)
+  role          TEXT NOT NULL DEFAULT 'admin', -- added in 0040; 'admin' | 'staff' | 'owner' (added 0049), app-validated not a Postgres enum (matches crew_members.role convention)
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -491,7 +491,7 @@ Two-party confirm-before-execute — a **pilot**, not a full cutover: only 6 of 
 
 A pending confirmation is backed by a real `critical` row in `notifications` (`notification_id`) — escalation is inherited from that table's existing mechanism (`notifications.ts`'s `escalated_count`/`ESCALATION_THRESHOLD_MINUTES`/`MAX_ESCALATIONS`), not duplicated here. `payload` holds whatever the original action needs (e.g. `{event_type, site_id, geofence_verified}` for a timeclock event); approving re-validates against *current* state (not state at submission time) before dispatching to the real mutation.
 
-`reviewed_by`/`reviewed_by_user_id` (added in `0044_pending_confirmations_reviewed_by.sql`) are a dual-path pair — management can review from the dashboard (`reviewed_by_user_id`, admin session) or WhatsApp (`reviewed_by`, a crew member whose `role = 'management'`; the backend 403s otherwise — the first place `crew_members.role` is checked anywhere in this codebase). The linked notification's `acknowledged_by`/`acknowledged_by_user_id` are set the same way when a review happens.
+`reviewed_by`/`reviewed_by_user_id` (added in `0044_pending_confirmations_reviewed_by.sql`) are a dual-path pair — management can review from the dashboard (`reviewed_by_user_id`, an `admin` or `owner` session) or WhatsApp (`reviewed_by`, a crew member whose `role IN ('management', 'owner')`; the backend 403s otherwise — the first place `crew_members.role` is checked anywhere in this codebase, and as of `0048_crew_role_foreman_owner.sql` the gate covers `owner` alongside `management`). The linked notification's `acknowledged_by`/`acknowledged_by_user_id` are set the same way when a review happens.
 
 ```sql
 CREATE TABLE pending_confirmations (

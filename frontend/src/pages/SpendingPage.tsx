@@ -312,7 +312,7 @@ function ApproveControl({ record, onDone }: { record: SpendRecord; onDone: (r: S
 
 export function SpendingPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "owner";
 
   const [instruments, setInstruments] = useState<MoneyInstrument[]>([]);
   const [crewMembers, setCrewMembers] = useState<CrewMember[]>([]);

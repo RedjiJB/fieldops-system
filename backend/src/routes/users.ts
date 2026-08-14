@@ -8,7 +8,9 @@ import { requireAdmin, requireDashboardUser } from "../lib/roles.js";
 export const usersRouter = Router();
 
 const MIN_PASSWORD_LENGTH = 8;
-const USER_ROLES = ["admin", "staff"] as const;
+// owner is admin-equivalent-or-greater everywhere requireAdmin is checked
+// (see lib/roles.ts) -- see 0049_users_role_owner.sql.
+const USER_ROLES = ["admin", "staff", "owner"] as const;
 
 usersRouter.get(
   "/users",

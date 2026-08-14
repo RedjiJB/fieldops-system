@@ -50,8 +50,8 @@ async function resolveReviewer(req: Request): Promise<Reviewer> {
     const crewResult = await pool.query("SELECT role FROM crew_members WHERE id = $1", [reviewed_by]);
     const crew = crewResult.rows[0];
     if (!crew) throw new HttpError(404, "Crew member not found");
-    if (crew.role !== "management") {
-      throw new HttpError(403, "Only a management-role crew member can approve/reject a pending confirmation");
+    if (crew.role !== "management" && crew.role !== "owner") {
+      throw new HttpError(403, "Only a management or owner-role crew member can approve/reject a pending confirmation");
     }
     return { reviewedBy: reviewed_by, reviewedByUserId: null };
   }

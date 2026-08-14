@@ -6,8 +6,10 @@ Host-side scripts. All run here rather than in the backend because the backend's
 
 Pushes **critical** management notifications (tool marked missing/retired, wrong-site, overdue, stalled order) to WhatsApp the moment the backend detects them, and escalates ones nobody's acknowledged. Dependency-free (global `fetch` + `node:child_process` only). Each run does two passes:
 
-1. **First push**: `GET /notifications/pending` (critical + undelivered), sends each via `openclaw message send --channel whatsapp --json`, best-effort captures the sent message's id (field name unconfirmed — see the "Live reply-id check" note below), `PATCH`es it delivered. A failed send is left undelivered for the next poll, no extra retry bookkeeping.
-2. **Escalation**: `GET /notifications/escalation-candidates` (critical, delivered, still unacknowledged for 20+ minutes, escalated fewer than 3 times), re-sends each prefixed "⏰ Still needs attention", `PATCH`es `/escalate`. Capped at 3 so a genuinely unreachable recipient doesn't get spammed forever.
+**Recipients are role-queried, not a fixed number.** `getRecipients()` calls `GET /crew-members?role=management&active=true` and the same for `owner`, dedupes by phone, and sends to all of them. Registering a second management/owner crew member picks them up automatically — no config change. `foreman` is deliberately excluded from critical paging for now (nothing site-scopes an alert to "their" site yet); add it to `CRITICAL_NOTIFICATION_ROLES` in the script when that changes. If no active crew member has either role, the run logs an error and does nothing that tick — there's nowhere to deliver to.
+
+1. **First push**: `GET /notifications/pending` (critical + undelivered), sends to every recipient via `openclaw message send --channel whatsapp --json`, best-effort captures the *first* successful send's message id (field name unconfirmed — see the "Live reply-id check" note below), `PATCH`es it delivered. A notification with zero successful sends is left undelivered for the next poll, no extra retry bookkeeping. **One `notifications` row still means one `delivered_at`/`whatsapp_message_id`/`acknowledged_by`, even with multiple recipients** — whoever acknowledges first (on any recipient's phone) clears it for the whole team. This is the same "management as a unit" semantics the schema always had (there was only ever one recipient before), not a new limitation introduced by multi-recipient delivery; true per-recipient acknowledgment tracking would need a separate `notification_deliveries` table, out of scope for now.
+2. **Escalation**: `GET /notifications/escalation-candidates` (critical, delivered, still unacknowledged for 20+ minutes, escalated fewer than 3 times), re-sends each prefixed "⏰ Still needs attention" to every recipient, `PATCH`es `/escalate`. Capped at 3 so a genuinely unreachable recipient doesn't get spammed forever.
 
 **Routine** events (normal tool registration/verification, order progress, idle-crew flags) are never touched by this script — they're pulled separately by the digest agent's `list_notifications` tool, never pushed.
 
@@ -33,7 +35,6 @@ Built after the tunnel silently died for ~30 hours with nothing to catch it — 
 
 - `BACKEND_URL` — defaults to `http://localhost:3000/api/v1`
 - `AGENT_SERVICE_TOKEN` — **required**, the same value already configured for the backend and `fieldops-tools` plugin (see `docs/DEPLOYMENT.md`'s "Dashboard auth rollout" for where this token comes from — don't generate a new one)
-- `MANAGEMENT_WHATSAPP_NUMBER` — **required**, E.164, e.g. `+15555550123`. Same recipient as the status digests for now; expanding to a second recipient/group chat is blocked on the same missing phone number/JID noted in the "Status digests" section, not something new here.
 - `OPENCLAW_BIN` — defaults to `openclaw` (works fine interactively). A cron `--command` job's `sh -lc` doesn't necessarily source the same `PATH` as an interactive SSH session — if delivery fails with `spawnSync openclaw ENOENT` in `openclaw cron runs --id <id>`, set this to the absolute path (`which openclaw` in an interactive shell) in the job's `--command-env`. Not needed by `sync-dashboard-url.mjs` — it never calls the `openclaw` binary, only `docker` and `fetch`.
 - `FIELDOPS_REPO_DIR` — `sync-dashboard-url.mjs` only, defaults to `$HOME/fieldops-system`. Working directory for `docker compose logs cloudflared`.
 
@@ -45,7 +46,6 @@ Runs as an `openclaw cron` job (same store as the three digest jobs — not in t
 openclaw cron add --name fieldops-notifier --display-name "Management Notification Delivery" \
   --command "node ~/fieldops-system/openclaw/notifier/deliver-notifications.mjs" \
   --command-env "AGENT_SERVICE_TOKEN=<real token>" \
-  --command-env "MANAGEMENT_WHATSAPP_NUMBER=+18193196405" \
   --command-env "OPENCLAW_BIN=$(which openclaw)" \
   --every 1m --timeout-seconds 30 --no-deliver
 ```
@@ -54,7 +54,7 @@ Replace `<real token>` with the real `AGENT_SERVICE_TOKEN` value — never commi
 
 Verify with `openclaw cron run <id>` (runs it immediately without waiting for the schedule) and `openclaw cron runs --id <id>` (actual stdout/stderr and error detail — `openclaw cron list`'s status column alone isn't enough to tell whether the script's own logic succeeded, since a *cron-level* delivery failure and a *script-level* delivery failure can look identical in one line).
 
-`nudge-shifts.mjs` installs the same way, once daily instead of every minute, and doesn't need `MANAGEMENT_WHATSAPP_NUMBER` (the target is per-shift, resolved from `crew_members.phone`):
+`nudge-shifts.mjs` installs the same way, once daily instead of every minute — target is per-shift, resolved from `crew_members.phone`, not role-queried like `deliver-notifications.mjs`:
 
 ```bash
 openclaw cron add --name fieldops-shift-nudge --display-name "Shift Confirmation Nudges" \
@@ -64,7 +64,7 @@ openclaw cron add --name fieldops-shift-nudge --display-name "Shift Confirmation
   --cron "0 18 * * *" --timeout-seconds 60 --no-deliver
 ```
 
-`deliver-confirmation-outcomes.mjs` installs like `deliver-notifications.mjs` (every minute), also without `MANAGEMENT_WHATSAPP_NUMBER` (per-crew-member target, same as `nudge-shifts.mjs`):
+`deliver-confirmation-outcomes.mjs` installs like `deliver-notifications.mjs` (every minute) — per-crew-member target though, same as `nudge-shifts.mjs`, not role-queried:
 
 ```bash
 openclaw cron add --name fieldops-confirmation-outcomes --display-name "Confirmation Outcome Delivery" \
@@ -74,7 +74,7 @@ openclaw cron add --name fieldops-confirmation-outcomes --display-name "Confirma
   --every 1m --timeout-seconds 30 --no-deliver
 ```
 
-`sync-dashboard-url.mjs` installs every 5 minutes, no `MANAGEMENT_WHATSAPP_NUMBER` or `OPENCLAW_BIN` needed:
+`sync-dashboard-url.mjs` installs every 5 minutes, no `OPENCLAW_BIN` needed (it never calls the `openclaw` binary):
 
 ```bash
 openclaw cron add --name fieldops-dashboard-url-sync --display-name "Dashboard URL Sync" \

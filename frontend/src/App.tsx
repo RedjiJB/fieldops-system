@@ -83,7 +83,7 @@ function Dashboard() {
             <button onClick={() => setTab("vendors")} disabled={tab === "vendors"}>
               Vendors
             </button>
-            {user?.role === "admin" && (
+            {(user?.role === "admin" || user?.role === "owner") && (
               <button onClick={() => setTab("users")} disabled={tab === "users"}>
                 Users
               </button>
@@ -97,22 +97,22 @@ function Dashboard() {
             <button onClick={() => setTab("timesheets")} disabled={tab === "timesheets"}>
               Timesheets
             </button>
-            {user?.role === "admin" && (
+            {(user?.role === "admin" || user?.role === "owner") && (
               <button onClick={() => setTab("payroll")} disabled={tab === "payroll"}>
                 Payroll
               </button>
             )}
-            {user?.role === "admin" && (
+            {(user?.role === "admin" || user?.role === "owner") && (
               <button onClick={() => setTab("spending")} disabled={tab === "spending"}>
                 Spending
               </button>
             )}
-            {user?.role === "admin" && (
+            {(user?.role === "admin" || user?.role === "owner") && (
               <button onClick={() => setTab("confirmations")} disabled={tab === "confirmations"}>
                 Confirmations
               </button>
             )}
-            {user?.role === "admin" && (
+            {(user?.role === "admin" || user?.role === "owner") && (
               <button onClick={() => setTab("compliance")} disabled={tab === "compliance"}>
                 Compliance
               </button>

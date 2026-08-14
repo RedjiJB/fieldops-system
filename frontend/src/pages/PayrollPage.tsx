@@ -140,7 +140,7 @@ function NewPayoutForm({
 
 export function PayrollPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "owner";
 
   const [profiles, setProfiles] = useState<PayProfile[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);

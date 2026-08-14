@@ -10,20 +10,22 @@ import { execFileSync } from "node:child_process";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3000/api/v1";
 const AGENT_SERVICE_TOKEN = process.env.AGENT_SERVICE_TOKEN;
-const MANAGEMENT_WHATSAPP_NUMBER = process.env.MANAGEMENT_WHATSAPP_NUMBER;
 // A cron --command job's sh -lc doesn't necessarily source the same PATH as
 // an interactive SSH session (npm-global bin is often added by .bashrc,
 // which login shells don't source) -- default to plain "openclaw" for
 // interactive/dev use, but let the cron job pin an absolute path explicitly
 // rather than silently failing with ENOENT.
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN ?? "openclaw";
+// Who gets paged for a critical notification -- queried fresh every run
+// rather than a fixed number, so registering a second management/owner
+// crew member picks them up automatically. foreman deliberately excluded
+// for now: nothing site-scopes an alert to "their" site today, so paging
+// every foreman for every critical alert everywhere would be noisy: add
+// "foreman" here once that changes, or if you want it unconditionally.
+const CRITICAL_NOTIFICATION_ROLES = ["management", "owner"];
 
 if (!AGENT_SERVICE_TOKEN) {
   console.error("AGENT_SERVICE_TOKEN is required (the same value already set on the backend/fieldops-tools plugin).");
-  process.exit(1);
-}
-if (!MANAGEMENT_WHATSAPP_NUMBER) {
-  console.error("MANAGEMENT_WHATSAPP_NUMBER is required (E.164, e.g. +15555550123).");
   process.exit(1);
 }
 
@@ -34,6 +36,21 @@ async function backendFetch(path, init) {
   });
   if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}: ${await res.text()}`);
   return res.json();
+}
+
+// Queried fresh every run rather than cached across the process lifetime --
+// this script exits after each cron tick anyway, so there's no meaningful
+// caching to do.
+async function getRecipients() {
+  const phones = new Set();
+  for (const role of CRITICAL_NOTIFICATION_ROLES) {
+    const members = await backendFetch(`/crew-members?role=${role}&active=true`);
+    for (const m of members) if (m.phone) phones.add(m.phone);
+  }
+  if (phones.size === 0) {
+    console.error(`No active crew member found with role in [${CRITICAL_NOTIFICATION_ROLES.join(", ")}] -- nowhere to deliver critical notifications.`);
+  }
+  return [...phones];
 }
 
 // The exact JSON field name for a sent message's id is unconfirmed as of
@@ -56,31 +73,60 @@ function sendWhatsApp(target, message) {
 }
 
 async function main() {
+  const recipients = await getRecipients();
+  if (recipients.length === 0) return; // already logged in getRecipients()
+
   const pending = await backendFetch("/notifications/pending");
   for (const notification of pending) {
+    // One notifications row still means one delivered_at/whatsapp_message_id
+    // -- the acknowledgment schema was never designed for per-recipient
+    // tracking, and still isn't here. First successful send's id is what
+    // gets recorded; whoever acknowledges first (on any recipient's phone)
+    // clears it for the whole team, same "management as a unit" semantics
+    // this had when there was only ever one recipient. A real per-recipient
+    // notification_deliveries table would be a bigger, separate change.
+    let firstMessageId = null;
+    let anySucceeded = false;
+    for (const target of recipients) {
+      try {
+        const whatsappMessageId = sendWhatsApp(target, notification.message);
+        if (!anySucceeded) firstMessageId = whatsappMessageId;
+        anySucceeded = true;
+      } catch (err) {
+        console.error(`Failed to deliver notification ${notification.id} to ${target}:`, err instanceof Error ? err.message : err);
+      }
+    }
+    if (!anySucceeded) continue; // leave undelivered for retry, same as before
+
     try {
-      const whatsappMessageId = sendWhatsApp(MANAGEMENT_WHATSAPP_NUMBER, notification.message);
       await backendFetch(`/notifications/${notification.id}/delivered`, {
         method: "PATCH",
-        body: JSON.stringify({ whatsapp_message_id: whatsappMessageId }),
+        body: JSON.stringify({ whatsapp_message_id: firstMessageId }),
       });
-      console.log(`Delivered notification ${notification.id}: ${notification.message}`);
+      console.log(`Delivered notification ${notification.id} to ${recipients.length} recipient(s): ${notification.message}`);
     } catch (err) {
-      // Leave undelivered for retry on the next poll -- one failed send
-      // (e.g. WhatsApp momentarily down) shouldn't block the rest of the
-      // batch or need any extra retry bookkeeping.
-      console.error(`Failed to deliver notification ${notification.id}:`, err instanceof Error ? err.message : err);
+      console.error(`Sent but failed to mark notification ${notification.id} delivered:`, err instanceof Error ? err.message : err);
     }
   }
 
   const escalations = await backendFetch("/notifications/escalation-candidates");
   for (const notification of escalations) {
+    let anySucceeded = false;
+    for (const target of recipients) {
+      try {
+        sendWhatsApp(target, `⏰ Still needs attention: ${notification.message}`);
+        anySucceeded = true;
+      } catch (err) {
+        console.error(`Failed to escalate notification ${notification.id} to ${target}:`, err instanceof Error ? err.message : err);
+      }
+    }
+    if (!anySucceeded) continue;
+
     try {
-      sendWhatsApp(MANAGEMENT_WHATSAPP_NUMBER, `⏰ Still needs attention: ${notification.message}`);
       await backendFetch(`/notifications/${notification.id}/escalate`, { method: "PATCH" });
-      console.log(`Escalated notification ${notification.id} (count now ${notification.escalated_count + 1})`);
+      console.log(`Escalated notification ${notification.id} to ${recipients.length} recipient(s) (count now ${notification.escalated_count + 1})`);
     } catch (err) {
-      console.error(`Failed to escalate notification ${notification.id}:`, err instanceof Error ? err.message : err);
+      console.error(`Sent but failed to mark notification ${notification.id} escalated:`, err instanceof Error ? err.message : err);
     }
   }
 }

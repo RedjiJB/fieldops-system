@@ -78,7 +78,7 @@ function ReviewControl({
 
 export function ConfirmationsPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "owner";
 
   const [confirmations, setConfirmations] = useState<PendingConfirmation[]>([]);
   const [statusFilter, setStatusFilter] = useState("awaiting_management");

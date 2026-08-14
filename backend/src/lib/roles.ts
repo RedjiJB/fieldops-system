@@ -8,8 +8,12 @@ export function requireDashboardUser(req: Request) {
   return req.auth;
 }
 
+// owner is admin-equivalent-or-greater everywhere this is checked -- the
+// real business owner should never have less dashboard access than a
+// hired admin. Widening this one function propagates to every
+// requireAdmin-gated route with no per-route edits needed.
 export function requireAdmin(req: Request) {
   const auth = requireDashboardUser(req);
-  if (auth.role !== "admin") throw new HttpError(403, "Only an admin can do this");
+  if (auth.role !== "admin" && auth.role !== "owner") throw new HttpError(403, "Only an admin or owner can do this");
   return auth;
 }

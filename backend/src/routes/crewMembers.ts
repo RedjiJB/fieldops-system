@@ -7,7 +7,11 @@ export const crewMembersRouter = Router();
 
 // Matches the role comment on crew_members in DATABASE_SCHEMA.md. role is
 // plain TEXT in the DB (not a Postgres enum), so this is enforced here.
-const CREW_ROLES = ["crew", "crew_lead", "yard", "management"] as const;
+// foreman replaced crew_lead (0048_crew_role_foreman_owner.sql) -- pure
+// rename, it never gated anything. owner is admin-equivalent-or-greater
+// everywhere requireAdmin is checked (see lib/roles.ts) and joins
+// management on the confirmation-approval gate (see confirmations.ts).
+const CREW_ROLES = ["crew", "foreman", "yard", "management", "owner"] as const;
 
 crewMembersRouter.get(
   "/crew-members",
