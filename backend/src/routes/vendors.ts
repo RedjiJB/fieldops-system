@@ -5,6 +5,11 @@ import { HttpError } from "../lib/httpError.js";
 
 export const vendorsRouter = Router();
 
+// Exported so confirmations.ts's approvePurchaseOrderFulfillment can
+// re-validate the exact same precondition at approval time -- one copy of
+// the business rule, not two independent ones that could drift.
+export const PO_FULFILLABLE_STATUSES = ["sent_to_office", "forwarded_by_office"] as const;
+
 vendorsRouter.get(
   "/vendors",
   asyncHandler(async (_req, res) => {
@@ -159,7 +164,7 @@ vendorsRouter.patch(
       req.params.id,
     ]);
     if (!existing.rows[0]) throw new HttpError(404, "Purchase order not found");
-    if (!["sent_to_office", "forwarded_by_office"].includes(existing.rows[0].status)) {
+    if (!PO_FULFILLABLE_STATUSES.includes(existing.rows[0].status)) {
       throw new HttpError(
         409,
         `Purchase order must be sent before it can be marked fulfilled (current status: ${existing.rows[0].status})`,

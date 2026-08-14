@@ -469,7 +469,7 @@ CREATE TABLE spend_records (
 
 ## Confirmations
 
-Two-party confirm-before-execute — a **pilot**, not a full cutover: only 4 of the agent's 54 tools route through this (`log_timeclock_event`, `adjust_consumable_quantity`, `return_checkout`, `submit_mileage_claim`), the four cases the accounting brainstorm named explicitly (hours, material-usage, damage/condition claims, mileage). The other ~49 mutating tools are unchanged — the crew member's own confirmation is still sufficient for those. Added in `0043_pending_confirmations.sql`. See [API.md](API.md#confirmations) and [ARCHITECTURE.md](ARCHITECTURE.md).
+Two-party confirm-before-execute — a **pilot**, not a full cutover: only 6 of the agent's 58 tools route through this (`log_timeclock_event`, `adjust_consumable_quantity`, `return_checkout`, `submit_mileage_claim`, `verify_asset`, `mark_purchase_order_fulfilled`) — self-reported physical-reality/money claims where the crew member's own confirmation isn't independent verification of anything (hours, material-usage, damage/condition claims, mileage, asset condition, delivery receipt). The other mutating tools are unchanged — the crew member's own confirmation is still sufficient for those. Added in `0043_pending_confirmations.sql`; `action_type` widened to 6 values in `0045_pending_confirmations_more_action_types.sql`. See [API.md](API.md#confirmations) and [ARCHITECTURE.md](ARCHITECTURE.md).
 
 A pending confirmation is backed by a real `critical` row in `notifications` (`notification_id`) — escalation is inherited from that table's existing mechanism (`notifications.ts`'s `escalated_count`/`ESCALATION_THRESHOLD_MINUTES`/`MAX_ESCALATIONS`), not duplicated here. `payload` holds whatever the original action needs (e.g. `{event_type, site_id, geofence_verified}` for a timeclock event); approving re-validates against *current* state (not state at submission time) before dispatching to the real mutation.
 
@@ -478,7 +478,7 @@ A pending confirmation is backed by a real `critical` row in `notifications` (`n
 ```sql
 CREATE TABLE pending_confirmations (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  action_type          TEXT NOT NULL CHECK (action_type IN ('timeclock_event', 'consumable_adjustment', 'checkout_return', 'mileage_claim')),
+  action_type          TEXT NOT NULL CHECK (action_type IN ('timeclock_event', 'consumable_adjustment', 'checkout_return', 'mileage_claim', 'asset_verification', 'purchase_order_fulfillment')), -- widened from 4 to 6 in 0045
   summary              TEXT NOT NULL, -- agent-authored, human-readable -- what the manager sees, on the dashboard or in a WhatsApp list
   payload              JSONB NOT NULL, -- args needed to execute the action once approved
   crew_member_id       UUID NOT NULL REFERENCES crew_members(id),

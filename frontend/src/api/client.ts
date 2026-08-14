@@ -383,6 +383,8 @@ export const CONFIRMATION_ACTION_TYPES = [
   "consumable_adjustment",
   "checkout_return",
   "mileage_claim",
+  "asset_verification",
+  "purchase_order_fulfillment",
 ] as const;
 export const CONFIRMATION_STATUSES = ["awaiting_management", "approved", "rejected", "expired"] as const;
 

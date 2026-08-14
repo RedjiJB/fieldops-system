@@ -115,15 +115,24 @@ export default defineToolPlugin({
       name: "verify_asset",
       label: "Verify Asset",
       description:
-        "Confirm an asset physically exists (a bootstrap-sweep or spot-check confirmation). This is the ONLY way an asset becomes 'available' for assignment — sets status to available and records who verified it and when.",
+        "Confirm an asset physically exists (a bootstrap-sweep or spot-check confirmation). This is the ONLY way an asset becomes 'available' for assignment. Two-party confirm-before-execute pilot: this now requires management's confirmation before it takes effect — tell the crew member it's been sent for approval, they'll be told the outcome automatically.",
       parameters: Type.Object({
         id: Type.String({ description: "The asset's UUID." }),
         verified_by: Type.String({ description: "The crew member UUID doing the verification." }),
+        summary: Type.String({
+          description:
+            "Short plain-language summary of the request for management to review, e.g. \"Redji verifying the trencher exists and is in good condition\".",
+        }),
       }),
-      async execute({ id, verified_by }, config) {
-        return callBackend(config, `/assets/${id}/verify`, {
-          method: "PATCH",
-          body: JSON.stringify({ verified_by }),
+      async execute({ id, verified_by, summary }, config) {
+        return callBackend(config, "/pending-confirmations", {
+          method: "POST",
+          body: JSON.stringify({
+            action_type: "asset_verification",
+            summary,
+            crew_member_id: verified_by,
+            payload: { asset_id: id },
+          }),
         });
       },
     }),
@@ -540,13 +549,24 @@ export default defineToolPlugin({
       name: "mark_purchase_order_fulfilled",
       label: "Mark Purchase Order Fulfilled",
       description:
-        "Mark a purchase order as fulfilled once the materials/equipment have actually arrived. Only works once it's been sent — rejected if it's still just 'compiled'.",
+        "Mark a purchase order as fulfilled once the materials/equipment have actually arrived. Only works once it's been sent — rejected if it's still just 'compiled'. Two-party confirm-before-execute pilot: this now requires management's confirmation before it takes effect — tell the crew member it's been sent for approval, they'll be told the outcome automatically.",
       parameters: Type.Object({
         id: Type.String(),
+        confirmed_by: Type.String({ description: "The crew member UUID confirming the delivery arrived." }),
+        summary: Type.String({
+          description:
+            "Short plain-language summary of the request for management to review, e.g. \"Redji confirming the mulch delivery from GreenSupply arrived\".",
+        }),
       }),
-      async execute({ id }, config) {
-        return callBackend(config, `/purchase-orders/${id}/fulfilled`, {
-          method: "PATCH",
+      async execute({ id, confirmed_by, summary }, config) {
+        return callBackend(config, "/pending-confirmations", {
+          method: "POST",
+          body: JSON.stringify({
+            action_type: "purchase_order_fulfillment",
+            summary,
+            crew_member_id: confirmed_by,
+            payload: { purchase_order_id: id },
+          }),
         });
       },
     }),

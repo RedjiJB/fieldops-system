@@ -7,16 +7,26 @@ import { HttpError } from "../lib/httpError.js";
 import { insertNotification } from "../lib/notify.js";
 import { requireAdmin } from "../lib/roles.js";
 import { LEGAL_NEXT_EVENTS, TIMECLOCK_EVENTS } from "./shifts.js";
+import { PO_FULFILLABLE_STATUSES } from "./vendors.js";
 
 export const confirmationsRouter = Router();
 
-const ACTION_TYPES = ["timeclock_event", "consumable_adjustment", "checkout_return", "mileage_claim"] as const;
+const ACTION_TYPES = [
+  "timeclock_event",
+  "consumable_adjustment",
+  "checkout_return",
+  "mileage_claim",
+  "asset_verification",
+  "purchase_order_fulfillment",
+] as const;
 type ActionType = (typeof ACTION_TYPES)[number];
 
 // Every mutating agent tool eventually needs this same two-party gate; this
-// is a pilot on the four cases the accounting brainstorm actually named
-// (hours, material-usage, damage claims, mileage), not a full 53-tool
-// cutover -- see docs/ARCHITECTURE.md.
+// is a pilot on six self-reported physical-reality/money claims where the
+// crew member's own confirmation isn't independent verification of
+// anything (hours, material-usage, damage claims, mileage, asset
+// verification, PO fulfillment) -- not a cutover of the agent's other ~50
+// mutating tools -- see docs/ARCHITECTURE.md.
 function requireServiceToken(req: Request) {
   if (req.auth?.type !== "service") {
     throw new HttpError(403, "Only the agent service token can create pending confirmations");
@@ -63,6 +73,10 @@ function validatePayload(actionType: ActionType, payload: Record<string, unknown
     if (typeof payload.distance_km !== "number" || payload.distance_km <= 0) {
       throw new HttpError(400, "payload.distance_km (positive number) is required");
     }
+  } else if (actionType === "asset_verification") {
+    if (!payload.asset_id) throw new HttpError(400, "payload.asset_id is required");
+  } else if (actionType === "purchase_order_fulfillment") {
+    if (!payload.purchase_order_id) throw new HttpError(400, "payload.purchase_order_id is required");
   }
 }
 
@@ -262,6 +276,46 @@ async function approveMileageClaim(
   return result.rows[0].id;
 }
 
+async function approveAssetVerification(client: PoolClient, pc: any): Promise<string> {
+  const { asset_id } = pc.payload;
+  const existing = await client.query("SELECT * FROM assets WHERE id = $1 FOR UPDATE", [asset_id]);
+  const asset = existing.rows[0];
+  if (!asset) throw new HttpError(404, "Asset not found");
+  if (asset.status === "retired") {
+    throw new HttpError(
+      409,
+      "This asset was retired since the verification was submitted — no longer eligible to become available",
+    );
+  }
+
+  const result = await client.query(
+    `UPDATE assets SET status = 'available', last_verified_at = now(), verified_by = $2 WHERE id = $1 RETURNING id`,
+    [asset_id, pc.crew_member_id],
+  );
+  return result.rows[0].id;
+}
+
+async function approvePurchaseOrderFulfillment(client: PoolClient, pc: any): Promise<string> {
+  const { purchase_order_id } = pc.payload;
+  const existing = await client.query("SELECT * FROM purchase_orders WHERE id = $1 FOR UPDATE", [
+    purchase_order_id,
+  ]);
+  const po = existing.rows[0];
+  if (!po) throw new HttpError(404, "Purchase order not found");
+  if (!PO_FULFILLABLE_STATUSES.includes(po.status)) {
+    throw new HttpError(
+      409,
+      `Purchase order must be sent before it can be marked fulfilled (current status: ${po.status})`,
+    );
+  }
+
+  const result = await client.query(
+    `UPDATE purchase_orders SET status = 'fulfilled' WHERE id = $1 RETURNING id`,
+    [purchase_order_id],
+  );
+  return result.rows[0].id;
+}
+
 confirmationsRouter.patch(
   "/pending-confirmations/:id/approve",
   asyncHandler(async (req, res) => {
@@ -288,11 +342,17 @@ confirmationsRouter.patch(
         resultId = await approveConsumableAdjustment(client, pc);
       } else if (pc.action_type === "checkout_return") {
         resultId = await approveCheckoutReturn(client, pc);
-      } else {
+      } else if (pc.action_type === "mileage_claim") {
         if (typeof rate_per_km !== "number" || rate_per_km < 0) {
           throw new HttpError(400, "rate_per_km (non-negative number) is required to approve a mileage claim");
         }
         resultId = await approveMileageClaim(client, pc, rate_per_km, reviewer);
+      } else if (pc.action_type === "asset_verification") {
+        resultId = await approveAssetVerification(client, pc);
+      } else if (pc.action_type === "purchase_order_fulfillment") {
+        resultId = await approvePurchaseOrderFulfillment(client, pc);
+      } else {
+        throw new HttpError(500, `Unknown action_type: ${pc.action_type}`);
       }
 
       const updated = await client.query(

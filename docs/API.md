@@ -226,7 +226,7 @@ A single event log feeding two different consumers — see [ARCHITECTURE.md](ARC
 
 ## Confirmations
 
-Two-party confirm-before-execute — **pilot scope**: only `log_timeclock_event`, `adjust_consumable_quantity`, `return_checkout`, and `submit_mileage_claim` route through this today, not the agent's other ~49 mutating tools. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#confirmations) and [ARCHITECTURE.md](ARCHITECTURE.md).
+Two-party confirm-before-execute — **pilot scope**: only `log_timeclock_event`, `adjust_consumable_quantity`, `return_checkout`, `submit_mileage_claim`, `verify_asset`, and `mark_purchase_order_fulfilled` route through this today, not the agent's other mutating tools. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#confirmations) and [ARCHITECTURE.md](ARCHITECTURE.md).
 
 Management can act from either channel: the dashboard (a real `admin` session) or WhatsApp (the agent's service token, on behalf of a crew member whose `role = 'management'` — the first place `crew_members.role` is checked anywhere in this codebase). `reviewed_by`/`reviewed_by_user_id` on the row are a dual-path pair, mutually exclusive, same convention as `checkouts.returned_by`/`returned_by_user_id` — whichever channel acted sets its own column.
 
