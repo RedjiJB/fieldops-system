@@ -409,7 +409,9 @@ CREATE TABLE payouts (
 
 ## Spending
 
-Money-handling data, admin-only end to end like Payroll above — no agent-facing route for the same reason (waits on the two-party confirm-before-execute redesign). Added in `0042_spend.sql`. Company card purchases, petty cash spend, mileage claims, and reimbursable receipts are all the same underlying shape (an amount, who, when, how it was paid, and — sometimes — management's approval), so they share one `spend_records` table with a `method`/`category` pair rather than four bespoke tables. Material cost (`order_items.unit_cost`, above) is deliberately *not* part of this — it's a property of an existing order line item flowing through the ordering/PO pipeline, not a standalone spend event.
+Money-handling data, admin-only end to end for the routes in `spending.ts` — like Payroll above. Added in `0042_spend.sql`. Company card purchases, petty cash spend, mileage claims, and reimbursable receipts are all the same underlying shape (an amount, who, when, how it was paid, and — sometimes — management's approval), so they share one `spend_records` table with a `method`/`category` pair rather than four bespoke tables. Material cost (`order_items.unit_cost`, above) is deliberately *not* part of this — it's a property of an existing order line item flowing through the ordering/PO pipeline, not a standalone spend event.
+
+`spend_records` rows aren't only created through `spending.ts` anymore, though: an approved `mileage_claim` pending confirmation (see Confirmations below) inserts one directly, already `approved`, from either a dashboard admin or a `management`-role crew member over WhatsApp. `submitted_by`/`reviewed_by` (crew member) and `submitted_by_user_id`/`reviewed_by_user_id` (dashboard user) are dual-path pairs for exactly this reason — added in `0044_pending_confirmations_reviewed_by.sql`, which also dropped `submitted_by_user_id`'s `NOT NULL` (a WhatsApp-approved row has no dashboard user id to put there). `POST /spend-records` itself still only ever sets the `_user_id` half, since that route stays dashboard-only.
 
 `money_instruments` + `money_instrument_custody` track company cards and petty cash floats — who currently has one, and the history of who's held it. `balance` is a directly hand-adjusted running number (`PATCH /money-instruments/:id/balance`, `{delta}`), same "null/unused" and manual-adjustment convention as `consumables.quantity_on_hand` — nothing in `spend_records` auto-decrements it.
 
@@ -449,8 +451,10 @@ CREATE TABLE spend_records (
   document_id           UUID REFERENCES documents(id), -- optional linked receipt photo
   instrument_id         UUID REFERENCES money_instruments(id),
   crew_member_id        UUID REFERENCES crew_members(id),
-  submitted_by_user_id  UUID NOT NULL REFERENCES users(id), -- always a dashboard admin, no dual-path actor
+  submitted_by          UUID REFERENCES crew_members(id), -- added in 0044; set only for a WhatsApp-approved mileage claim
+  submitted_by_user_id  UUID REFERENCES users(id), -- nullable as of 0044 -- see dual-path note above
   occurred_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reviewed_by           UUID REFERENCES crew_members(id), -- added in 0044
   reviewed_by_user_id   UUID REFERENCES users(id),
   reviewed_at           TIMESTAMPTZ,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -463,16 +467,19 @@ Two-party confirm-before-execute — a **pilot**, not a full cutover: only 4 of 
 
 A pending confirmation is backed by a real `critical` row in `notifications` (`notification_id`) — escalation is inherited from that table's existing mechanism (`notifications.ts`'s `escalated_count`/`ESCALATION_THRESHOLD_MINUTES`/`MAX_ESCALATIONS`), not duplicated here. `payload` holds whatever the original action needs (e.g. `{event_type, site_id, geofence_verified}` for a timeclock event); approving re-validates against *current* state (not state at submission time) before dispatching to the real mutation.
 
+`reviewed_by`/`reviewed_by_user_id` (added in `0044_pending_confirmations_reviewed_by.sql`) are a dual-path pair — management can review from the dashboard (`reviewed_by_user_id`, admin session) or WhatsApp (`reviewed_by`, a crew member whose `role = 'management'`; the backend 403s otherwise — the first place `crew_members.role` is checked anywhere in this codebase). The linked notification's `acknowledged_by`/`acknowledged_by_user_id` are set the same way when a review happens.
+
 ```sql
 CREATE TABLE pending_confirmations (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   action_type          TEXT NOT NULL CHECK (action_type IN ('timeclock_event', 'consumable_adjustment', 'checkout_return', 'mileage_claim')),
-  summary              TEXT NOT NULL, -- agent-authored, human-readable -- what the manager sees on the dashboard review screen
+  summary              TEXT NOT NULL, -- agent-authored, human-readable -- what the manager sees, on the dashboard or in a WhatsApp list
   payload              JSONB NOT NULL, -- args needed to execute the action once approved
   crew_member_id       UUID NOT NULL REFERENCES crew_members(id),
   status               TEXT NOT NULL DEFAULT 'awaiting_management' CHECK (status IN ('awaiting_management', 'approved', 'rejected', 'expired')),
   notification_id      UUID NOT NULL REFERENCES notifications(id),
-  reviewed_by_user_id  UUID REFERENCES users(id),
+  reviewed_by          UUID REFERENCES crew_members(id), -- added in 0044; WhatsApp path, role='management' enforced
+  reviewed_by_user_id  UUID REFERENCES users(id), -- dashboard path
   reviewed_at          TIMESTAMPTZ,
   result_id            UUID, -- id of the row actually created once approved (e.g. the new timeclock_entries row)
   crew_notified_at     TIMESTAMPTZ, -- set once the outcome has been sent back to the crew member over WhatsApp

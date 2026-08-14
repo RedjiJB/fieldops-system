@@ -208,12 +208,16 @@ spendingRouter.get(
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const result = await pool.query(
-      `SELECT sr.*, cm.name AS crew_member_name, u1.name AS submitted_by_name, u2.name AS reviewed_by_name,
+      `SELECT sr.*, cm.name AS crew_member_name,
+              COALESCE(u1.name, cm1.name) AS submitted_by_name,
+              COALESCE(u2.name, cm2.name) AS reviewed_by_name,
               d.filename AS document_filename, mi.label AS instrument_label
        FROM spend_records sr
        LEFT JOIN crew_members cm ON cm.id = sr.crew_member_id
        LEFT JOIN users u1 ON u1.id = sr.submitted_by_user_id
+       LEFT JOIN crew_members cm1 ON cm1.id = sr.submitted_by
        LEFT JOIN users u2 ON u2.id = sr.reviewed_by_user_id
+       LEFT JOIN crew_members cm2 ON cm2.id = sr.reviewed_by
        LEFT JOIN documents d ON d.id = sr.document_id
        LEFT JOIN money_instruments mi ON mi.id = sr.instrument_id
        ${where}

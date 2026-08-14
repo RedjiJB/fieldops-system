@@ -1053,6 +1053,63 @@ export default defineToolPlugin({
     }),
 
     tool({
+      name: "list_pending_confirmations",
+      label: "List Pending Confirmations",
+      description:
+        "List two-party confirm-before-execute requests (hours, material-usage claims, checkout damage/condition claims, mileage claims) awaiting management review. whatsapp_message_id matches one by the WhatsApp message id its paging notification was sent under, if the inbound message was a quoted reply to it — see AGENTS.md's 'Approving pending confirmations over WhatsApp' for the full resolution order (id-match first, then status=awaiting_management and act only if exactly one is open).",
+      parameters: Type.Object({
+        status: Type.Optional(
+          Type.Union(["awaiting_management", "approved", "rejected", "expired"].map((s) => Type.Literal(s))),
+        ),
+        whatsapp_message_id: Type.Optional(
+          Type.String({ description: "The quoted message's id, if the inbound message was a WhatsApp reply." }),
+        ),
+      }),
+      async execute({ status, whatsapp_message_id }, config) {
+        const params = new URLSearchParams();
+        if (status) params.set("status", status);
+        if (whatsapp_message_id) params.set("whatsapp_message_id", whatsapp_message_id);
+        const qs = params.toString();
+        return callBackend(config, `/pending-confirmations${qs ? `?${qs}` : ""}`);
+      },
+    }),
+
+    tool({
+      name: "approve_pending_confirmation",
+      label: "Approve Pending Confirmation",
+      description:
+        "Approve a pending confirmation on management's behalf. Only a crew member with role 'management' can call this (the backend enforces it — 403 otherwise), so resolve and verify the sender's role first per AGENTS.md. rate_per_km is required if (and only if) the confirmation's action_type is 'mileage_claim' — its amount is computed from this rate at the moment of approval, not a fixed number; ask for it before calling this if it wasn't given. 400 if already reviewed.",
+      parameters: Type.Object({
+        id: Type.String(),
+        reviewed_by: Type.String({ description: "The management crew member's UUID approving it." }),
+        rate_per_km: Type.Optional(Type.Number({ description: "Required only for a mileage_claim." })),
+      }),
+      async execute({ id, reviewed_by, rate_per_km }, config) {
+        return callBackend(config, `/pending-confirmations/${id}/approve`, {
+          method: "PATCH",
+          body: JSON.stringify({ reviewed_by, rate_per_km }),
+        });
+      },
+    }),
+
+    tool({
+      name: "reject_pending_confirmation",
+      label: "Reject Pending Confirmation",
+      description:
+        "Reject a pending confirmation on management's behalf. Only a crew member with role 'management' can call this (the backend enforces it — 403 otherwise). The crew member who originally submitted it is told automatically — nothing further to do here. 400 if already reviewed.",
+      parameters: Type.Object({
+        id: Type.String(),
+        reviewed_by: Type.String({ description: "The management crew member's UUID rejecting it." }),
+      }),
+      async execute({ id, reviewed_by }, config) {
+        return callBackend(config, `/pending-confirmations/${id}/reject`, {
+          method: "PATCH",
+          body: JSON.stringify({ reviewed_by }),
+        });
+      },
+    }),
+
+    tool({
       name: "report_safety_incident",
       label: "Report Safety Incident",
       description:

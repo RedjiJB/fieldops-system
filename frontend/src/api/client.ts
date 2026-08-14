@@ -327,9 +327,11 @@ export type SpendRecord = {
   instrument_label: string | null;
   crew_member_id: string | null;
   crew_member_name: string | null;
-  submitted_by_user_id: string;
+  submitted_by: string | null;
+  submitted_by_user_id: string | null;
   submitted_by_name: string;
   occurred_at: string;
+  reviewed_by: string | null;
   reviewed_by_user_id: string | null;
   reviewed_by_name: string | null;
   reviewed_at: string | null;
@@ -353,6 +355,7 @@ export type PendingConfirmation = {
   crew_member_name: string | null;
   status: (typeof CONFIRMATION_STATUSES)[number];
   notification_id: string;
+  reviewed_by: string | null;
   reviewed_by_user_id: string | null;
   reviewed_by_name: string | null;
   reviewed_at: string | null;

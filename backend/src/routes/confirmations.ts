@@ -23,6 +23,31 @@ function requireServiceToken(req: Request) {
   }
 }
 
+type Reviewer = { reviewedBy: string | null; reviewedByUserId: string | null };
+
+// Dashboard admin (requireAdmin, unchanged) or a management-role crew
+// member via the service token (the WhatsApp path) -- the first place
+// crew_members.role is ever read for authorization; every other route in
+// this codebase treats it as informational only.
+async function resolveReviewer(req: Request): Promise<Reviewer> {
+  if (req.auth?.type === "user") {
+    const auth = requireAdmin(req);
+    return { reviewedBy: null, reviewedByUserId: auth.userId };
+  }
+  if (req.auth?.type === "service") {
+    const { reviewed_by } = req.body;
+    if (!reviewed_by) throw new HttpError(400, "reviewed_by is required");
+    const crewResult = await pool.query("SELECT role FROM crew_members WHERE id = $1", [reviewed_by]);
+    const crew = crewResult.rows[0];
+    if (!crew) throw new HttpError(404, "Crew member not found");
+    if (crew.role !== "management") {
+      throw new HttpError(403, "Only a management-role crew member can approve/reject a pending confirmation");
+    }
+    return { reviewedBy: reviewed_by, reviewedByUserId: null };
+  }
+  throw new HttpError(403, "Not authorized");
+}
+
 function validatePayload(actionType: ActionType, payload: Record<string, unknown>) {
   if (actionType === "timeclock_event") {
     if (!TIMECLOCK_EVENTS.includes(payload.event_type as (typeof TIMECLOCK_EVENTS)[number])) {
@@ -73,23 +98,33 @@ confirmationsRouter.post(
   }),
 );
 
+// Dashboard sessions still need admin; the service token passes through
+// ungated (same trust boundary as GET /notifications/pending, which the
+// notifier already polls freely) -- this is what lets the agent look up
+// what's open when management asks over WhatsApp.
 confirmationsRouter.get(
   "/pending-confirmations",
   asyncHandler(async (req, res) => {
-    requireAdmin(req);
-    const { status } = req.query;
+    if (req.auth?.type === "user") requireAdmin(req);
+    const { status, whatsapp_message_id } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (status) {
       params.push(status);
       conditions.push(`pc.status = $${params.length}`);
     }
+    if (whatsapp_message_id) {
+      params.push(whatsapp_message_id);
+      conditions.push(`n.whatsapp_message_id = $${params.length}`);
+    }
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const result = await pool.query(
-      `SELECT pc.*, cm.name AS crew_member_name, u.name AS reviewed_by_name
+      `SELECT pc.*, cm.name AS crew_member_name, COALESCE(u.name, cm2.name) AS reviewed_by_name
        FROM pending_confirmations pc
        LEFT JOIN crew_members cm ON cm.id = pc.crew_member_id
        LEFT JOIN users u ON u.id = pc.reviewed_by_user_id
+       LEFT JOIN crew_members cm2 ON cm2.id = pc.reviewed_by
+       LEFT JOIN notifications n ON n.id = pc.notification_id
        ${where}
        ORDER BY pc.created_at DESC`,
       params,
@@ -198,21 +233,31 @@ async function approveMileageClaim(
   client: PoolClient,
   pc: any,
   ratePerKm: number,
-  adminUserId: string,
+  reviewer: Reviewer,
 ): Promise<string> {
   const { distance_km, description } = pc.payload;
   const amount = Number(distance_km) * ratePerKm;
 
   // Already 'approved', not spend_records' own default 'pending' -- the
   // two-party confirmation IS the approval event, this doesn't pass through
-  // a second review.
+  // a second review. submitted_by/submitted_by_user_id mirror whichever
+  // channel approved it -- a WhatsApp-approved claim has no dashboard user
+  // id to put there, same dual-path convention as everywhere else.
   const result = await client.query(
     `INSERT INTO spend_records
        (category, method, status, amount, distance_km, rate_per_km, description,
-        crew_member_id, submitted_by_user_id, reviewed_by_user_id, reviewed_at)
-     VALUES ('mileage', 'personal_reimbursed', 'approved', $1, $2, $3, $4, $5, $6, $6, now())
+        crew_member_id, submitted_by, submitted_by_user_id, reviewed_by, reviewed_by_user_id, reviewed_at)
+     VALUES ('mileage', 'personal_reimbursed', 'approved', $1, $2, $3, $4, $5, $6, $7, $6, $7, now())
      RETURNING id`,
-    [amount, distance_km, ratePerKm, description ?? null, pc.crew_member_id, adminUserId],
+    [
+      amount,
+      distance_km,
+      ratePerKm,
+      description ?? null,
+      pc.crew_member_id,
+      reviewer.reviewedBy,
+      reviewer.reviewedByUserId,
+    ],
   );
   return result.rows[0].id;
 }
@@ -220,7 +265,7 @@ async function approveMileageClaim(
 confirmationsRouter.patch(
   "/pending-confirmations/:id/approve",
   asyncHandler(async (req, res) => {
-    const auth = requireAdmin(req);
+    const reviewer = await resolveReviewer(req);
     const { rate_per_km } = req.body;
 
     const client = await pool.connect();
@@ -247,22 +292,22 @@ confirmationsRouter.patch(
         if (typeof rate_per_km !== "number" || rate_per_km < 0) {
           throw new HttpError(400, "rate_per_km (non-negative number) is required to approve a mileage claim");
         }
-        resultId = await approveMileageClaim(client, pc, rate_per_km, auth.userId);
+        resultId = await approveMileageClaim(client, pc, rate_per_km, reviewer);
       }
 
       const updated = await client.query(
         `UPDATE pending_confirmations
-         SET status = 'approved', reviewed_by_user_id = $2, reviewed_at = now(), result_id = $3
+         SET status = 'approved', reviewed_by = $2, reviewed_by_user_id = $3, reviewed_at = now(), result_id = $4
          WHERE id = $1
          RETURNING *`,
-        [req.params.id, auth.userId, resultId],
+        [req.params.id, reviewer.reviewedBy, reviewer.reviewedByUserId, resultId],
       );
       // Approving a pending confirmation IS handling its notification -- no
       // separate manual acknowledge step.
       await client.query(
-        `UPDATE notifications SET acknowledged_at = now(), acknowledged_by_user_id = $2
+        `UPDATE notifications SET acknowledged_at = now(), acknowledged_by = $2, acknowledged_by_user_id = $3
          WHERE id = $1 AND acknowledged_at IS NULL`,
-        [pc.notification_id, auth.userId],
+        [pc.notification_id, reviewer.reviewedBy, reviewer.reviewedByUserId],
       );
 
       await client.query("COMMIT");
@@ -279,7 +324,7 @@ confirmationsRouter.patch(
 confirmationsRouter.patch(
   "/pending-confirmations/:id/reject",
   asyncHandler(async (req, res) => {
-    const auth = requireAdmin(req);
+    const reviewer = await resolveReviewer(req);
 
     const existing = await pool.query("SELECT * FROM pending_confirmations WHERE id = $1", [req.params.id]);
     const pc = existing.rows[0];
@@ -289,14 +334,14 @@ confirmationsRouter.patch(
     }
 
     const result = await pool.query(
-      `UPDATE pending_confirmations SET status = 'rejected', reviewed_by_user_id = $2, reviewed_at = now()
+      `UPDATE pending_confirmations SET status = 'rejected', reviewed_by = $2, reviewed_by_user_id = $3, reviewed_at = now()
        WHERE id = $1 RETURNING *`,
-      [req.params.id, auth.userId],
+      [req.params.id, reviewer.reviewedBy, reviewer.reviewedByUserId],
     );
     await pool.query(
-      `UPDATE notifications SET acknowledged_at = now(), acknowledged_by_user_id = $2
+      `UPDATE notifications SET acknowledged_at = now(), acknowledged_by = $2, acknowledged_by_user_id = $3
        WHERE id = $1 AND acknowledged_at IS NULL`,
-      [pc.notification_id, auth.userId],
+      [pc.notification_id, reviewer.reviewedBy, reviewer.reviewedByUserId],
     );
 
     res.json(result.rows[0]);
