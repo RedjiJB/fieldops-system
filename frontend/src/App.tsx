@@ -10,6 +10,7 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { LoadoutsPage } from "./pages/LoadoutsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MapPage } from "./pages/MapPage";
+import { NotificationSettingsPage } from "./pages/NotificationSettingsPage";
 import { OpsOverviewPage } from "./pages/OpsOverviewPage";
 import { PayrollPage } from "./pages/PayrollPage";
 import { ReportsPage } from "./pages/ReportsPage";
@@ -37,7 +38,8 @@ type Tab =
   | "payroll"
   | "spending"
   | "confirmations"
-  | "compliance";
+  | "compliance"
+  | "notification-settings";
 
 function Dashboard() {
   const { user, logout } = useAuth();
@@ -118,6 +120,11 @@ function Dashboard() {
                 Compliance
               </button>
             )}
+            {(user?.role === "admin" || user?.role === "owner") && (
+              <button onClick={() => setTab("notification-settings")} disabled={tab === "notification-settings"}>
+                Notification Settings
+              </button>
+            )}
           </nav>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -142,6 +149,7 @@ function Dashboard() {
       {tab === "spending" && <SpendingPage />}
       {tab === "confirmations" && <ConfirmationsPage />}
       {tab === "compliance" && <CompliancePage />}
+      {tab === "notification-settings" && <NotificationSettingsPage />}
     </div>
   );
 }

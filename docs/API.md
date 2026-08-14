@@ -237,9 +237,18 @@ A single event log feeding two different consumers — see [ARCHITECTURE.md](ARC
 | `PATCH` | `/notifications/:id/attempt` | Increments `send_attempts` — called right after a WhatsApp send succeeds, before `/delivered` below, so the attempt still counts even if marking delivered then fails. Caps how many times a notification can be re-sent if it's stuck (added after a real incident where a delivery-marking bug caused the same critical alert to go out every minute for over an hour — see `openclaw/notifier/README.md`). |
 | `PATCH` | `/notifications/:id/delivered` | Marks a `critical` row delivered; accepts optional `whatsapp_message_id` to capture the sent message's id |
 | `PATCH` | `/notifications/:id/acknowledge` | "Seen, on it" — separate from resolving the underlying alert. Dashboard session sets `acknowledged_by_user_id`; agent/service-token path requires `acknowledged_by` (crew member id) in the body. 400 if already acknowledged. |
-| `GET` | `/notifications/escalation-candidates` | Critical, delivered, unacknowledged for 20+ minutes, escalated fewer than 3 times — polled by the notifier's second pass |
+| `GET` | `/notifications/escalation-candidates` | Critical, delivered, unacknowledged for `escalation_threshold_minutes`+ (default 20), escalated fewer than `max_escalations` times (default 3) — both now read from `notification_settings`, not hardcoded — polled by the notifier's second pass |
 | `PATCH` | `/notifications/:id/escalate` | Increments `escalated_count`, sets `last_escalated_at` — called by the notifier after a re-send |
 | `POST` | `/notifications/safety-report` | The one notification authored directly from a conversation rather than derived from backend state — always `critical`. `{message, crew_member_id?}`. See [ARCHITECTURE.md](ARCHITECTURE.md) and `AGENTS.md`'s "Safety and emergencies". |
+
+## Notification Settings
+
+Backs the dashboard's Notification Settings page — see [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#notification-settings) for the single-row `notification_settings` table this reads/writes and exactly which previously-hardcoded constants it replaced.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/notification-settings` | Current settings. Dual-path auth like `GET /notifications/pending` — dashboard session must be admin, service token passes through ungated (`openclaw/notifier/deliver-notifications.mjs` fetches this every cron run for `critical_notification_roles`) |
+| `PATCH` | `/notification-settings` | Partial update — **admin only**, no agent-facing write path. Body: any subset of `escalation_threshold_minutes`, `max_escalations`, `vehicle_dark_critical`, `critical_notification_roles` (non-empty array of valid `crew_members.role` values), `order_stall_hours`, `idle_hours`, `delay_buffer_minutes`, `rain_probability_threshold` (0–100), `wind_speed_threshold_kmh`. All numeric fields must be positive integers. |
 
 ## Confirmations
 

@@ -1,14 +1,17 @@
 import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { haversineDistanceMeters } from "../lib/geo.js";
+import { getNotificationSettings, type NotificationSettings } from "../lib/notificationSettings.js";
 import { insertNotification } from "../lib/notify.js";
 import { fetchDailyForecast } from "../lib/weather.js";
-import { ESCALATION_THRESHOLD_MINUTES, MAX_ESCALATIONS } from "../routes/notifications.js";
 
 // wrong_site/overdue/order_stalled/delay/weather/loadout_gap are genuine
-// exceptions worth an instant push to management; idle and vehicle_dark are
-// explicitly noisier proxies (see their check functions below) -- routine,
-// digest-only.
+// exceptions worth an instant push to management; idle is an explicitly
+// noisier proxy (see checkIdleCrew below) -- always routine, digest-only.
+// vehicle_dark used to be hardcoded routine too; it's now settings-driven
+// (notification_settings.vehicle_dark_critical, see raiseAlert below) --
+// deliberately not in this static set, since a static Set can't reflect a
+// value that changes at runtime from the dashboard.
 const CRITICAL_ALERT_TYPES = new Set([
   "wrong_site",
   "overdue",
@@ -28,26 +31,18 @@ const ALERT_MESSAGES: Record<string, string> = {
   dashboard_unreachable: "🚨 The dashboard's public URL is unreachable — the Quick Tunnel may be down.",
 };
 
-// Orders sitting in 'requested' longer than this without advancing get flagged.
-const ORDER_STALL_HOURS = 24;
-// Crew clocked in (or back from break) longer than this with no site
-// activity gets flagged as idle.
-const IDLE_HOURS = 2;
 // Vehicle telemetry older than this is treated as stale, not evidence of
-// a current wrong-site arrival.
+// a current wrong-site arrival. Not settings-driven (out of scope for the
+// Notification Settings page) -- a fixed staleness cutoff, not a policy call.
 const STALE_TELEMETRY_MINUTES = 60;
 // Telemetry is WhatsApp-share-driven and historically sparse (6 shares
 // across 10 weeks of real chat history) -- 3h of silence only means
 // something if the vehicle was actually reporting earlier that same shift,
 // not for a vehicle that simply never shares. See checkVehicleDark below.
+// Also not settings-driven -- distinct from vehicle_dark_critical, which
+// only controls whether this check pages instantly or waits for the
+// digest, not whether/when it fires at all.
 const VEHICLE_DARK_HOURS = 3;
-// How late a confirmed shift's start time can pass with no check-in before
-// it's flagged -- see checkDelayedArrivals below.
-const DELAY_BUFFER_MINUTES = 30;
-// Forecast thresholds for a job site with a confirmed shift today -- see
-// checkWeather below.
-const RAIN_PROBABILITY_THRESHOLD = 70;
-const WIND_SPEED_THRESHOLD_KMH = 40;
 
 // 'delay' below is a simpler, honest version of the original design (which
 // wanted real travel-time-vs-actual comparison) -- see
@@ -70,13 +65,17 @@ async function alertAlreadyOpen(
 }
 
 // Exported for backend/src/routes/system.ts's dashboard-url health check --
-// the first caller of this outside the periodic worker tick.
+// the first caller of this outside the periodic worker tick. criticalOverride
+// exists only for vehicle_dark's settings-driven priority (see checkVehicleDark
+// below) -- every other caller omits it and gets the static CRITICAL_ALERT_TYPES
+// answer, unchanged from before.
 export async function raiseAlert(
   client: PoolClient,
   type: string,
   siteId: string | null,
   relatedRecordId: string,
   message?: string,
+  criticalOverride?: boolean,
 ): Promise<void> {
   if (await alertAlreadyOpen(client, type, relatedRecordId)) return;
   await client.query(`INSERT INTO alerts (type, site_id, related_record_id) VALUES ($1, $2, $3)`, [
@@ -84,9 +83,10 @@ export async function raiseAlert(
     siteId,
     relatedRecordId,
   ]);
+  const critical = criticalOverride ?? CRITICAL_ALERT_TYPES.has(type);
   await insertNotification(
     client,
-    CRITICAL_ALERT_TYPES.has(type) ? "critical" : "routine",
+    critical ? "critical" : "routine",
     message ?? ALERT_MESSAGES[type] ?? `Alert raised: ${type}.`,
     "alert",
     relatedRecordId,
@@ -107,18 +107,18 @@ async function checkOverdueCheckouts(client: PoolClient): Promise<void> {
   }
 }
 
-async function checkStalledOrders(client: PoolClient): Promise<void> {
+async function checkStalledOrders(client: PoolClient, settings: NotificationSettings): Promise<void> {
   const result = await client.query(
     `SELECT id, site_id FROM orders
      WHERE status = 'requested' AND created_at < now() - ($1 || ' hours')::interval`,
-    [ORDER_STALL_HOURS],
+    [settings.order_stall_hours],
   );
   for (const row of result.rows) {
     await raiseAlert(client, "order_stalled", row.site_id, row.id);
   }
 }
 
-async function checkIdleCrew(client: PoolClient): Promise<void> {
+async function checkIdleCrew(client: PoolClient, settings: NotificationSettings): Promise<void> {
   // Crew members currently on-shift (last event 'in' or 'break_end'), with
   // no order or checkout activity recorded at their site since they last
   // clocked in — a rough proxy for "nothing is moving" until a real
@@ -137,7 +137,7 @@ async function checkIdleCrew(client: PoolClient): Promise<void> {
     if (!row.site_id) continue;
 
     const hoursSince = (Date.now() - new Date(row.timestamp).getTime()) / (1000 * 60 * 60);
-    if (hoursSince < IDLE_HOURS) continue;
+    if (hoursSince < settings.idle_hours) continue;
 
     const activity = await client.query(
       `SELECT
@@ -190,7 +190,7 @@ async function checkWrongSite(client: PoolClient): Promise<void> {
   }
 }
 
-async function checkVehicleDark(client: PoolClient): Promise<void> {
+async function checkVehicleDark(client: PoolClient, settings: NotificationSettings): Promise<void> {
   // Only fires when the vehicle's latest telemetry point is stale AND an
   // earlier point exists within the preceding 24h -- "was reporting, now
   // silent", not "never reports" (see VEHICLE_DARK_HOURS comment above).
@@ -222,11 +222,11 @@ async function checkVehicleDark(client: PoolClient): Promise<void> {
     [VEHICLE_DARK_HOURS],
   );
   for (const row of result.rows) {
-    await raiseAlert(client, "vehicle_dark", row.site_id, row.vehicle_id);
+    await raiseAlert(client, "vehicle_dark", row.site_id, row.vehicle_id, undefined, settings.vehicle_dark_critical);
   }
 }
 
-async function checkDelayedArrivals(client: PoolClient): Promise<void> {
+async function checkDelayedArrivals(client: PoolClient, settings: NotificationSettings): Promise<void> {
   // Simpler than the original design's "actual transit time vs. expected"
   // concept (still not buildable -- no site-to-site duration data exists).
   // This instead catches a confirmed shift whose scheduled start has passed,
@@ -249,7 +249,7 @@ async function checkDelayedArrivals(client: PoolClient): Promise<void> {
            AND t.event_type = 'in'
            AND t.timestamp >= sh.date::timestamp
        )`,
-    [DELAY_BUFFER_MINUTES],
+    [settings.delay_buffer_minutes],
   );
   for (const row of result.rows) {
     await raiseAlert(
@@ -262,7 +262,7 @@ async function checkDelayedArrivals(client: PoolClient): Promise<void> {
   }
 }
 
-async function checkWeather(client: PoolClient): Promise<void> {
+async function checkWeather(client: PoolClient, settings: NotificationSettings): Promise<void> {
   const result = await client.query(`
     SELECT DISTINCT s.id AS site_id, s.name AS site_name, s.center_lat, s.center_lng
     FROM sites s
@@ -295,8 +295,8 @@ async function checkWeather(client: PoolClient): Promise<void> {
     if (!forecast) continue;
 
     if (
-      forecast.precipitationProbabilityMax >= RAIN_PROBABILITY_THRESHOLD ||
-      forecast.windSpeedMaxKmh >= WIND_SPEED_THRESHOLD_KMH
+      forecast.precipitationProbabilityMax >= settings.rain_probability_threshold ||
+      forecast.windSpeedMaxKmh >= settings.wind_speed_threshold_kmh
     ) {
       await raiseAlert(
         client,
@@ -360,7 +360,7 @@ async function checkLoadoutGap(client: PoolClient): Promise<void> {
 // than duplicated here -- this just watches for one that's exhausted its
 // escalations with nobody ever acting on it, and expires it rather than
 // leaving the crew member waiting forever.
-async function expirePendingConfirmations(client: PoolClient): Promise<void> {
+async function expirePendingConfirmations(client: PoolClient, settings: NotificationSettings): Promise<void> {
   await client.query(
     `UPDATE pending_confirmations pc
      SET status = 'expired'
@@ -369,22 +369,25 @@ async function expirePendingConfirmations(client: PoolClient): Promise<void> {
        AND pc.status = 'awaiting_management'
        AND n.escalated_count >= $1
        AND COALESCE(n.last_escalated_at, n.delivered_at) < now() - ($2 || ' minutes')::interval`,
-    [MAX_ESCALATIONS, ESCALATION_THRESHOLD_MINUTES],
+    [settings.max_escalations, settings.escalation_threshold_minutes],
   );
 }
 
 export async function runExceptionChecks(): Promise<void> {
   const client = await pool.connect();
   try {
+    // Fetched once per tick, not per check -- every check function gets the
+    // same settings snapshot rather than each re-querying independently.
+    const settings = await getNotificationSettings(client);
     await checkOverdueCheckouts(client);
-    await checkStalledOrders(client);
-    await checkIdleCrew(client);
+    await checkStalledOrders(client, settings);
+    await checkIdleCrew(client, settings);
     await checkWrongSite(client);
-    await checkVehicleDark(client);
-    await checkDelayedArrivals(client);
+    await checkVehicleDark(client, settings);
+    await checkDelayedArrivals(client, settings);
     await checkLoadoutGap(client);
-    await checkWeather(client);
-    await expirePendingConfirmations(client);
+    await checkWeather(client, settings);
+    await expirePendingConfirmations(client, settings);
   } finally {
     client.release();
   }

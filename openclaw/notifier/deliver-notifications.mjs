@@ -16,13 +16,6 @@ const AGENT_SERVICE_TOKEN = process.env.AGENT_SERVICE_TOKEN;
 // interactive/dev use, but let the cron job pin an absolute path explicitly
 // rather than silently failing with ENOENT.
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN ?? "openclaw";
-// Who gets paged for a critical notification -- queried fresh every run
-// rather than a fixed number, so registering a second management/owner
-// crew member picks them up automatically. foreman deliberately excluded
-// for now: nothing site-scopes an alert to "their" site today, so paging
-// every foreman for every critical alert everywhere would be noisy: add
-// "foreman" here once that changes, or if you want it unconditionally.
-const CRITICAL_NOTIFICATION_ROLES = ["management", "owner"];
 
 if (!AGENT_SERVICE_TOKEN) {
   console.error("AGENT_SERVICE_TOKEN is required (the same value already set on the backend/fieldops-tools plugin).");
@@ -57,15 +50,21 @@ async function backendFetch(path, init) {
 
 // Queried fresh every run rather than cached across the process lifetime --
 // this script exits after each cron tick anyway, so there's no meaningful
-// caching to do.
+// caching to do. Which roles count as "critical recipients" used to be a
+// hardcoded array here (management + owner, foreman excluded since nothing
+// site-scopes an alert to "their" site) -- now lives in
+// notification_settings.critical_notification_roles, editable from the
+// dashboard's Notification Settings page without a code change or redeploy.
 async function getRecipients() {
+  const settings = await backendFetch("/notification-settings");
+  const roles = settings.critical_notification_roles;
   const phones = new Set();
-  for (const role of CRITICAL_NOTIFICATION_ROLES) {
+  for (const role of roles) {
     const members = await backendFetch(`/crew-members?role=${role}&active=true`);
     for (const m of members) if (m.phone) phones.add(m.phone);
   }
   if (phones.size === 0) {
-    console.error(`No active crew member found with role in [${CRITICAL_NOTIFICATION_ROLES.join(", ")}] -- nowhere to deliver critical notifications.`);
+    console.error(`No active crew member found with role in [${roles.join(", ")}] -- nowhere to deliver critical notifications.`);
   }
   return [...phones];
 }

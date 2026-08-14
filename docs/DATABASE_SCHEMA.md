@@ -382,6 +382,27 @@ CREATE TABLE notifications (
 );
 ```
 
+### Notification settings
+
+`0054_notification_settings.sql` — a single-row settings table, same convention as `dashboard_url` above (no `id`, no `WHERE` clause, just `SELECT ... LIMIT 1` / a bare `UPDATE`). Backs the dashboard's Notification Settings page (see [API.md](API.md#notification-settings)), replacing what used to be a set of hardcoded TypeScript constants scattered across `backend/src/workers/exceptions.ts`, `backend/src/routes/notifications.ts`, and `openclaw/notifier/deliver-notifications.mjs`'s own `CRITICAL_NOTIFICATION_ROLES` array. `backend/src/lib/notificationSettings.ts`'s `getNotificationSettings()` is the one read path every consumer shares — the exceptions worker fetches it once per tick (`runExceptionChecks`) and threads it through every check function rather than each one querying independently; `deliver-notifications.mjs` fetches it fresh every cron run via `GET /notification-settings` (dual-path auth like `GET /notifications/pending` — dashboard sessions must be admin, the service token passes through ungated, since the notifier script has no DB access, only the backend's HTTP API).
+
+Not everything hardcoded in `exceptions.ts` moved here — `STALE_TELEMETRY_MINUTES` (60) and `VEHICLE_DARK_HOURS` (3, the silence threshold that triggers a `vehicle_dark` check at all) stayed fixed constants, deliberately: they're detection-sensitivity tuning, not the kind of policy call ("should this page management instantly, and who") this page is for. `vehicle_dark_critical` is a different knob entirely — it only controls whether an already-detected `vehicle_dark` alert is `critical` (pages instantly) or `routine` (digest-only), via a `criticalOverride` param `raiseAlert` now accepts; every other alert type still uses the static `CRITICAL_ALERT_TYPES` set in `exceptions.ts`, unchanged.
+
+```sql
+CREATE TABLE notification_settings (
+  escalation_threshold_minutes INTEGER NOT NULL DEFAULT 20,
+  max_escalations              INTEGER NOT NULL DEFAULT 3,
+  vehicle_dark_critical        BOOLEAN NOT NULL DEFAULT false,
+  critical_notification_roles  TEXT[] NOT NULL DEFAULT ARRAY['management', 'owner'],
+  order_stall_hours            INTEGER NOT NULL DEFAULT 24,
+  idle_hours                   INTEGER NOT NULL DEFAULT 2,
+  delay_buffer_minutes         INTEGER NOT NULL DEFAULT 30,
+  rain_probability_threshold   INTEGER NOT NULL DEFAULT 70,
+  wind_speed_threshold_kmh     INTEGER NOT NULL DEFAULT 40,
+  updated_at                   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
 ## Dashboard auth
 
 `users`/`sessions` back the web dashboard's login — entirely separate from `crew_members`, which is the WhatsApp/agent-side identity model (still no FK between the two tables; the same real person gets a role on each independently). `role` (added in 0040) gates account management (see API.md's Users section) and, as of 0041, the Payroll/Spending/Confirmations/Compliance routes — five admin-only surfaces now. `requireDashboardUser`/`requireAdmin` (`backend/src/lib/roles.ts`) are the single shared implementation every gated route calls; as of 0049, `requireAdmin` accepts `role IN ('admin', 'owner')` — the real business owner should never have less dashboard access than a hired admin.

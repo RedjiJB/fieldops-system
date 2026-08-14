@@ -2,6 +2,7 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
+import { getNotificationSettings } from "../lib/notificationSettings.js";
 import { insertNotification } from "../lib/notify.js";
 
 export const notificationsRouter = Router();
@@ -127,10 +128,12 @@ notificationsRouter.patch(
   }),
 );
 
-// Exported for exceptions.ts's expirePendingConfirmations, which reuses
-// this exact threshold rather than duplicating it.
-export const ESCALATION_THRESHOLD_MINUTES = 20;
-export const MAX_ESCALATIONS = 3;
+// escalation_threshold_minutes/max_escalations now live in
+// notification_settings (see docs/DATABASE_SCHEMA.md), editable from the
+// dashboard's Notification Settings page -- exceptions.ts's
+// expirePendingConfirmations reads the same table directly rather than
+// importing a static constant from here, same reuse-not-duplicate intent
+// as before, just settings-backed instead of hardcoded.
 
 // Polled by the same deliver-notifications.mjs run, right after the
 // first-push pass -- critical, delivered, still unacknowledged, and either
@@ -139,13 +142,14 @@ export const MAX_ESCALATIONS = 3;
 notificationsRouter.get(
   "/notifications/escalation-candidates",
   asyncHandler(async (_req, res) => {
+    const settings = await getNotificationSettings(pool);
     const result = await pool.query(
       `SELECT * FROM notifications
        WHERE priority = 'critical' AND delivered_at IS NOT NULL AND acknowledged_at IS NULL
          AND escalated_count < $1
          AND COALESCE(last_escalated_at, delivered_at) < now() - ($2 || ' minutes')::interval
        ORDER BY created_at ASC`,
-      [MAX_ESCALATIONS, ESCALATION_THRESHOLD_MINUTES],
+      [settings.max_escalations, settings.escalation_threshold_minutes],
     );
     res.json(result.rows);
   }),

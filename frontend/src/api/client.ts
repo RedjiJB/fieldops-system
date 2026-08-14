@@ -177,6 +177,20 @@ export const DOCUMENT_TYPES = [
 // Mirrors backend/src/routes/crewMembers.ts's CREW_ROLES.
 export const CREW_ROLES = ["crew", "foreman", "yard", "management", "owner"] as const;
 
+// Mirrors backend/src/lib/notificationSettings.ts's NotificationSettings.
+export type NotificationSettings = {
+  escalation_threshold_minutes: number;
+  max_escalations: number;
+  vehicle_dark_critical: boolean;
+  critical_notification_roles: (typeof CREW_ROLES)[number][];
+  order_stall_hours: number;
+  idle_hours: number;
+  delay_buffer_minutes: number;
+  rain_probability_threshold: number;
+  wind_speed_threshold_kmh: number;
+  updated_at: string;
+};
+
 export type CrewMember = {
   id: string;
   name: string;
@@ -601,6 +615,9 @@ export const api = {
     const qs = params.toString();
     return request<TimeclockSession[]>(`/timesheets/sessions${qs ? `?${qs}` : ""}`);
   },
+  notificationSettings: () => request<NotificationSettings>("/notification-settings"),
+  updateNotificationSettings: (patch: Partial<Omit<NotificationSettings, "updated_at">>) =>
+    request<NotificationSettings>("/notification-settings", { method: "PATCH", body: JSON.stringify(patch) }),
   payProfiles: () => request<PayProfile[]>("/crew-members/pay-profiles"),
   updatePayProfile: (crewMemberId: string, patch: { pay_type?: PayProfile["pay_type"]; hourly_rate?: number | null }) =>
     request<Omit<PayProfile, "crew_member_name">>(`/crew-members/${crewMemberId}/pay-profile`, {
