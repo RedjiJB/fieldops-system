@@ -70,6 +70,7 @@
       "end_trip",
       "list_vehicle_trips",
       "log_document",
+      "classify_document",
       "list_documents",
       "list_expiring_documents",
       "list_missing_receipts",
