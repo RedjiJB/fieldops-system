@@ -58,6 +58,7 @@
       "confirm_shift",
       "list_shifts",
       "log_timeclock_event",
+      "submit_mileage_claim",
       "get_crew_status",
       "list_alerts",
       "resolve_alert",
