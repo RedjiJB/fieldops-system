@@ -8,6 +8,16 @@ export const notificationsRouter = Router();
 
 const PRIORITIES = ["critical", "routine"] as const;
 
+// Capped the same way escalations are (MAX_ESCALATIONS below) -- added
+// after a real incident where a WhatsApp send succeeded every single
+// cron tick but marking it delivered kept failing (a stale keep-alive
+// connection, since fixed), so the same critical alert went out every
+// minute for over an hour with nothing to stop it. send_attempts bounds
+// that failure class generically, not just the one bug that caused it --
+// once a notification hits the cap it just sits pending (visible via
+// GET /notifications) rather than resending forever.
+export const MAX_SEND_ATTEMPTS = 5;
+
 // Polled by openclaw/notifier/deliver-notifications.mjs on the Pi host
 // every minute -- the only undelivered 'critical' rows, oldest first, so a
 // send failure leaves a row for retry on the next poll without re-sending
@@ -16,9 +26,29 @@ notificationsRouter.get(
   "/notifications/pending",
   asyncHandler(async (_req, res) => {
     const result = await pool.query(
-      `SELECT * FROM notifications WHERE priority = 'critical' AND delivered_at IS NULL ORDER BY created_at ASC`,
+      `SELECT * FROM notifications
+       WHERE priority = 'critical' AND delivered_at IS NULL AND send_attempts < $1
+       ORDER BY created_at ASC`,
+      [MAX_SEND_ATTEMPTS],
     );
     res.json(result.rows);
+  }),
+);
+
+// Called right after a WhatsApp send succeeds, before the /delivered call
+// below -- deliberately a separate request so the attempt still counts
+// even if marking delivered then fails. Not folded into /delivered itself,
+// since that route only ever fires on success and this needs to persist
+// on both outcomes.
+notificationsRouter.patch(
+  "/notifications/:id/attempt",
+  asyncHandler(async (req, res) => {
+    const result = await pool.query(
+      `UPDATE notifications SET send_attempts = send_attempts + 1 WHERE id = $1 RETURNING *`,
+      [req.params.id],
+    );
+    if (!result.rows[0]) throw new HttpError(404, "Notification not found");
+    res.json(result.rows[0]);
   }),
 );
 

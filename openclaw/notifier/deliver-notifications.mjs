@@ -115,6 +115,21 @@ async function main() {
     }
     if (!anySucceeded) continue; // leave undelivered for retry, same as before
 
+    // Recorded as a separate call, deliberately, before the /delivered
+    // attempt below -- this is what still counts against send_attempts
+    // even if marking delivered then fails, so a repeat of the incident
+    // this was added for (WhatsApp send succeeds every tick, marking
+    // delivered never does) runs out after MAX_SEND_ATTEMPTS instead of
+    // resending forever. Failure here is logged but not fatal to this
+    // notification's delivery this run -- Connection: close (above) is
+    // the actual fix for the known failure mode; this is the backstop for
+    // whatever isn't known yet.
+    try {
+      await backendFetch(`/notifications/${notification.id}/attempt`, { method: "PATCH" });
+    } catch (err) {
+      console.error(`Failed to record send attempt for notification ${notification.id}:`, err instanceof Error ? err.message : err);
+    }
+
     try {
       await backendFetch(`/notifications/${notification.id}/delivered`, {
         method: "PATCH",

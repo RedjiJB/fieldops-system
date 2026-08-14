@@ -359,6 +359,8 @@ A single event log feeding two consumers: `critical` rows get pushed to manageme
 
 Acknowledgment (`acknowledged_at`/`acknowledged_by`/`acknowledged_by_user_id`) is deliberately separate from `alerts.resolved_at` — "a human has seen this and is on it" vs. "the underlying problem is actually fixed." Escalation (`escalated_count`/`last_escalated_at`) tracks re-sends of a critical notification nobody's acknowledged yet, capped at 3.
 
+`send_attempts` (added in `0053`) caps a different failure class than escalation does: escalation re-sends an already-*delivered* notification nobody's acknowledged; `send_attempts` bounds retries of a notification that's still *undelivered* — `GET /notifications/pending` only returns rows with `send_attempts < 5`. Added after a real incident where a WhatsApp send succeeded every single cron tick but marking the row delivered kept failing (a stale keep-alive connection — see `openclaw/notifier/README.md`), so the same critical alert went out every minute for over an hour with nothing to stop it. `PATCH /notifications/:id/attempt` increments it right after a successful send, before the `/delivered` call — deliberately a separate request, so the attempt still counts even when marking delivered then fails.
+
 ```sql
 CREATE TYPE notification_priority AS ENUM ('critical', 'routine');
 
@@ -375,7 +377,8 @@ CREATE TABLE notifications (
   acknowledged_by_user_id UUID REFERENCES users(id), -- set when acknowledged via the dashboard
   whatsapp_message_id    TEXT, -- captured at delivery, for matching a later quote-reply back to this row (see AGENTS.md)
   escalated_count        INTEGER NOT NULL DEFAULT 0,
-  last_escalated_at      TIMESTAMPTZ
+  last_escalated_at      TIMESTAMPTZ,
+  send_attempts          INTEGER NOT NULL DEFAULT 0 -- added in 0053; caps retries of an undelivered row, see below
 );
 ```
 

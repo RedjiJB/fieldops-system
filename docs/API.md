@@ -232,8 +232,9 @@ A single event log feeding two different consumers — see [ARCHITECTURE.md](ARC
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/notifications/pending` | `critical` priority, undelivered — polled every minute by `openclaw/notifier/` and pushed to WhatsApp the moment they're found |
+| `GET` | `/notifications/pending` | `critical` priority, undelivered, `send_attempts < 5` — polled every minute by `openclaw/notifier/` and pushed to WhatsApp the moment they're found |
 | `GET` | `/notifications?priority=&since=&acknowledged=&whatsapp_message_id=` | Filtered list. `priority` omitted returns both (the dashboard activity feed); the `list_notifications` tool always passes `priority=routine` explicitly unless resolving an acknowledgment. |
+| `PATCH` | `/notifications/:id/attempt` | Increments `send_attempts` — called right after a WhatsApp send succeeds, before `/delivered` below, so the attempt still counts even if marking delivered then fails. Caps how many times a notification can be re-sent if it's stuck (added after a real incident where a delivery-marking bug caused the same critical alert to go out every minute for over an hour — see `openclaw/notifier/README.md`). |
 | `PATCH` | `/notifications/:id/delivered` | Marks a `critical` row delivered; accepts optional `whatsapp_message_id` to capture the sent message's id |
 | `PATCH` | `/notifications/:id/acknowledge` | "Seen, on it" — separate from resolving the underlying alert. Dashboard session sets `acknowledged_by_user_id`; agent/service-token path requires `acknowledged_by` (crew member id) in the body. 400 if already acknowledged. |
 | `GET` | `/notifications/escalation-candidates` | Critical, delivered, unacknowledged for 20+ minutes, escalated fewer than 3 times — polled by the notifier's second pass |
