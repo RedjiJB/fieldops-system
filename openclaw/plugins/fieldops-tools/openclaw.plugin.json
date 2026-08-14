@@ -74,6 +74,9 @@
       "list_expiring_documents",
       "list_notifications",
       "acknowledge_notification",
+      "list_pending_confirmations",
+      "approve_pending_confirmation",
+      "reject_pending_confirmation",
       "report_safety_incident"
     ]
   }
