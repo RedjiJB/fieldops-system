@@ -6,15 +6,30 @@ Every mutating endpoint (POST/PATCH/DELETE) that the agent calls should be treat
 
 ## Auth
 
-Every `/api/v1/*` route requires authentication except `POST /auth/login` — either a valid dashboard session cookie, or the agent's static service token, checked by one `requireAuth` middleware. `/health` (outside `/api/v1`) stays fully public. See [DEPLOYMENT.md](DEPLOYMENT.md#dashboard-auth-rollout) for how the two credential types are provisioned.
+Every `/api/v1/*` route requires authentication except `POST /auth/login` and `GET /auth/redeem` — either a valid dashboard session cookie, or a crew session cookie, or the agent's static service token, checked by one `requireAuth` middleware. `/health` (outside `/api/v1`) stays fully public. See [DEPLOYMENT.md](DEPLOYMENT.md#dashboard-auth-rollout) for how the two credential types are provisioned.
+
+As of `0051`/`0052`, there are two parallel ways to end up with a session cookie: a `users` row via `/auth/login` (email+password, unchanged), or a `crew_members` row via the WhatsApp magic-link flow below — never merged, same "no FK between `users` and `crew_members`" split used everywhere else. `GET /auth/me`'s response shape discriminates on `identityType` (`"dashboard"` | `"crew"`) so the frontend can route accordingly.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/auth/login` | `{email, password}` → sets an `HttpOnly` session cookie. Public. |
-| `POST` | `/auth/logout` | Deletes the current session, clears the cookie. |
-| `GET` | `/auth/me` | Current dashboard user, or 401. |
+| `POST` | `/auth/login` | `{email, password}` → sets an `HttpOnly` session cookie. Public. Response: `{identityType: "dashboard", id, email, name, role}` |
+| `POST` | `/auth/logout` | Deletes the current session (either type), clears the cookie. |
+| `GET` | `/auth/me` | Current session identity, or 401. `{identityType: "dashboard", id, email, name, role}` or `{identityType: "crew", id, name, role}` |
+| `POST` | `/auth/login-token` | `{crew_member_id}` → `{token}`, a raw 15-minute single-use magic-link token (only its hash is stored). **Service token only** — called by the agent's `send_dashboard_login_link` tool, never directly by a browser. |
+| `GET` | `/auth/redeem?token=` | Public. Redeems a login token: 401 ("expired or already been used") if invalid/expired/already-used, otherwise sets a crew session cookie and redirects to `/`. Hit by a real browser navigation from a tapped WhatsApp link, not an API client. |
 
 Dashboard accounts can also now be created/managed from the dashboard itself (see Users below) — the CLI script still works but is no longer the only way.
+
+## My Stuff (crew self-service)
+
+`backend/src/routes/me.ts` — a crew member's own scoped view, added alongside the WhatsApp magic-link login above. Every route here requires a **crew session** specifically (`req.auth.type === "crew"`, 403 otherwise — a dashboard admin session doesn't have a `crew_member_id` to scope by) and derives `crew_member_id` from the session itself, never from a query param or body field, so there's no way to see another crew member's data by editing a request. This is the first row-level scoping anywhere in this API — every other route above takes a client-supplied `crew_member_id` filter instead. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#dashboard-auth) for the known gap this leaves open (existing unscoped routes like `GET /shifts` are still technically reachable by a crew session; the crew-facing frontend just never calls them).
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/me/pay` | `{profile: {pay_type, hourly_rate, updated_at}, payouts: [...]}` for the calling crew member |
+| `GET` | `/me/shifts?date_from=&date_to=` | `{shifts: [...], timeclock_sessions: [...]}` — shifts joined with site name, timeclock sessions via the same `fetchSessionsInRange` helper Payroll reconciliation uses |
+| `GET` | `/me/checkouts` | Assets currently or previously checked out to the calling crew member, joined with asset name/category |
+| `GET` | `/me/spend-records` | Spend/mileage records where the calling crew member is either the subject (`crew_member_id`) or the submitter (`submitted_by`) |
 
 ## Users
 

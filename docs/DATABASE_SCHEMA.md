@@ -383,6 +383,8 @@ CREATE TABLE notifications (
 
 `users`/`sessions` back the web dashboard's login — entirely separate from `crew_members`, which is the WhatsApp/agent-side identity model (still no FK between the two tables; the same real person gets a role on each independently). `role` (added in 0040) gates account management (see API.md's Users section) and, as of 0041, the Payroll/Spending/Confirmations/Compliance routes — five admin-only surfaces now. `requireDashboardUser`/`requireAdmin` (`backend/src/lib/roles.ts`) are the single shared implementation every gated route calls; as of 0049, `requireAdmin` accepts `role IN ('admin', 'owner')` — the real business owner should never have less dashboard access than a hired admin.
 
+As of `0051_sessions_crew_member.sql`, `sessions` is **dual-path**, the same convention used throughout this schema for actor columns (`reviewed_by`/`reviewed_by_user_id`, etc.) — but this is the first time it's applied to the session/login layer itself, giving `crew_members` its first-ever dashboard-facing identity path (still no FK to `users`; a crew member's dashboard session is entirely a `crew_members` row, never merged with a `users` row). Exactly one of `user_id`/`crew_member_id` is set, enforced by a CHECK constraint. `backend/src/lib/session.ts`'s `findSessionIdentity` reads either path and returns a discriminated `{type: "user", ...}` | `{type: "crew", ...}` shape; `requireAuth` (`backend/src/middleware/auth.ts`) sets `req.auth` accordingly. `requireAdmin`/`requireDashboardUser` are unchanged — they only match `req.auth.type === "user"`, so a crew session 403s off every admin-gated route automatically, with zero new gating code.
+
 ```sql
 CREATE TABLE users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -395,14 +397,34 @@ CREATE TABLE users (
 );
 
 -- token_hash stores sha256(raw token), never the raw token — same principle
--- as password_hash never storing the plaintext password.
+-- as password_hash never storing the plaintext password. Exactly one of
+-- user_id/crew_member_id is set (0051) -- a dashboard-password session or a
+-- WhatsApp-magic-link crew session, never both, never neither.
 CREATE TABLE sessions (
-  token_hash TEXT PRIMARY KEY,
-  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  expires_at TIMESTAMPTZ NOT NULL
+  token_hash      TEXT PRIMARY KEY,
+  user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
+  crew_member_id  UUID REFERENCES crew_members(id) ON DELETE CASCADE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at      TIMESTAMPTZ NOT NULL,
+  CONSTRAINT sessions_exactly_one_identity CHECK ((user_id IS NOT NULL) != (crew_member_id IS NOT NULL))
+);
+
+-- The magic-link redeem table (0052). Short-lived (15 min, set at mint time
+-- by createLoginToken) and single-use (used_at set on redemption; an
+-- already-used or expired token fails redeemLoginToken). Minted only via
+-- POST /auth/login-token (service-token only, called by the agent's
+-- send_dashboard_login_link tool), redeemed via the public GET /auth/redeem,
+-- which trades it for a real 30-day sessions row via createSession.
+CREATE TABLE login_tokens (
+  token_hash     TEXT PRIMARY KEY,
+  crew_member_id UUID NOT NULL REFERENCES crew_members(id) ON DELETE CASCADE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at     TIMESTAMPTZ NOT NULL,
+  used_at        TIMESTAMPTZ
 );
 ```
+
+A crew session is deliberately scoped to a narrow set of `/me/*` routes (`backend/src/routes/me.ts`: `GET /me/pay`, `/me/shifts`, `/me/checkouts`, `/me/spend-records`) that derive `crew_member_id` from `req.auth.crewMemberId` — never a client-supplied param — so there's no way to see another crew member's data by editing a request. This is the first row-level data scoping anywhere in this schema; every other dashboard route still takes a client-supplied `crew_member_id` filter and shows the full table to whoever can reach the tab. Existing unscoped routes (e.g. `GET /shifts`) remain technically reachable by a crew session — the v1 mitigation is that the crew-facing frontend (`CrewPortalPage`) simply never calls them, not that the routes themselves enforce scoping. Foreman/management-tier dashboard views (broader than crew's own data, narrower than admin's) are a named follow-up, not yet built.
 
 ## Payroll
 

@@ -7,7 +7,8 @@ declare global {
     interface Request {
       auth?:
         | { type: "service" }
-        | { type: "user"; userId: string; email: string; name: string; role: string };
+        | { type: "user"; userId: string; email: string; name: string; role: string }
+        | { type: "crew"; crewMemberId: string; name: string; role: string };
     }
   }
 }

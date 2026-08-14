@@ -5,7 +5,7 @@ import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
 import { verifyPassword } from "../lib/password.js";
-import { createSession, deleteSession } from "../lib/session.js";
+import { createSession, deleteSession, createLoginToken, redeemLoginToken } from "../lib/session.js";
 import { requireAuth, SESSION_COOKIE_NAME } from "../middleware/auth.js";
 
 export const authRouter = Router();
@@ -40,7 +40,7 @@ authRouter.post(
       throw new HttpError(401, "Invalid email or password");
     }
 
-    const token = await createSession(user.id);
+    const token = await createSession({ userId: user.id });
     res.setHeader(
       "Set-Cookie",
       serializeCookie(SESSION_COOKIE_NAME, token, {
@@ -51,7 +51,7 @@ authRouter.post(
         maxAge: SESSION_COOKIE_MAX_AGE_SECONDS,
       }),
     );
-    res.json({ id: user.id, email: user.email, name: user.name, role: user.role });
+    res.json({ identityType: "dashboard", id: user.id, email: user.email, name: user.name, role: user.role });
   }),
 );
 
@@ -74,7 +74,56 @@ authRouter.get(
   "/auth/me",
   requireAuth,
   asyncHandler(async (req, res) => {
-    if (req.auth?.type !== "user") throw new HttpError(401, "Authentication required");
-    res.json({ id: req.auth.userId, email: req.auth.email, name: req.auth.name, role: req.auth.role });
+    if (req.auth?.type === "user") {
+      res.json({ identityType: "dashboard", id: req.auth.userId, email: req.auth.email, name: req.auth.name, role: req.auth.role });
+      return;
+    }
+    if (req.auth?.type === "crew") {
+      res.json({ identityType: "crew", id: req.auth.crewMemberId, name: req.auth.name, role: req.auth.role });
+      return;
+    }
+    throw new HttpError(401, "Authentication required");
+  }),
+);
+
+// Service-token only -- called by the agent's send_dashboard_login_link
+// tool, never directly by a browser. Returns the RAW token; only its hash
+// is ever stored (see createLoginToken).
+authRouter.post(
+  "/auth/login-token",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (req.auth?.type !== "service") throw new HttpError(403, "Only the agent service token can do this");
+    const { crew_member_id } = req.body;
+    if (!crew_member_id) throw new HttpError(400, "crew_member_id is required");
+    const token = await createLoginToken(crew_member_id);
+    res.json({ token });
+  }),
+);
+
+// Public -- this IS the auth mechanism, same exemption as /auth/login.
+// Hit by a real browser navigation from a tapped WhatsApp link, so it
+// redirects rather than returning JSON.
+authRouter.get(
+  "/auth/redeem",
+  asyncHandler(async (req, res) => {
+    const { token } = req.query;
+    if (typeof token !== "string" || !token) throw new HttpError(400, "token is required");
+
+    const crewMemberId = await redeemLoginToken(token);
+    if (!crewMemberId) throw new HttpError(401, "This link has expired or already been used");
+
+    const sessionToken = await createSession({ crewMemberId });
+    res.setHeader(
+      "Set-Cookie",
+      serializeCookie(SESSION_COOKIE_NAME, sessionToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: SESSION_COOKIE_MAX_AGE_SECONDS,
+      }),
+    );
+    res.redirect("/");
   }),
 );

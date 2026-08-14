@@ -1,14 +1,17 @@
 import { parse as parseCookie } from "cookie";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
-import { findSessionUser } from "../lib/session.js";
+import { findSessionIdentity } from "../lib/session.js";
 
 export const SESSION_COOKIE_NAME = "fieldops_session";
 
-// Accepts either the agent's static service token (Authorization: Bearer)
-// or a real dashboard user's session cookie — one guard, two credential
-// types, so adding real per-user login never breaks the already-working
-// WhatsApp agent integration, which has no concept of logging in.
+// Accepts the agent's static service token (Authorization: Bearer), a real
+// dashboard user's session cookie, or (as of the crew-dashboard-access
+// increment) a crew member's magic-link session cookie -- same cookie name,
+// same table, findSessionIdentity discriminates which one it is. requireAdmin/
+// requireDashboardUser (lib/roles.ts) only ever match type === "user", so a
+// crew session is automatically blocked from every existing admin-tier
+// route with no changes needed there.
 export const requireAuth = asyncHandler(async (req, _res, next) => {
   const authHeader = req.headers.authorization;
   const serviceToken = process.env.AGENT_SERVICE_TOKEN;
@@ -20,9 +23,12 @@ export const requireAuth = asyncHandler(async (req, _res, next) => {
 
   const cookies = parseCookie(req.headers.cookie ?? "");
   const sessionToken = cookies[SESSION_COOKIE_NAME];
-  const user = sessionToken ? await findSessionUser(sessionToken) : null;
-  if (!user) throw new HttpError(401, "Authentication required");
+  const identity = sessionToken ? await findSessionIdentity(sessionToken) : null;
+  if (!identity) throw new HttpError(401, "Authentication required");
 
-  req.auth = { type: "user", userId: user.id, email: user.email, name: user.name, role: user.role };
+  req.auth =
+    identity.type === "user"
+      ? { type: "user", userId: identity.id, email: identity.email, name: identity.name, role: identity.role }
+      : { type: "crew", crewMemberId: identity.id, name: identity.name, role: identity.role };
   next();
 });

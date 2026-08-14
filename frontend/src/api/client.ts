@@ -24,7 +24,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 // Mirrors backend/src/routes/users.ts's USER_ROLES.
 export const USER_ROLES = ["admin", "staff", "owner"] as const;
 
-export type Me = { id: string; email: string; name: string; role: (typeof USER_ROLES)[number] };
+export type Me =
+  | { identityType: "dashboard"; id: string; email: string; name: string; role: (typeof USER_ROLES)[number] }
+  | { identityType: "crew"; id: string; name: string; role: (typeof CREW_ROLES)[number] };
+
+export type MyPay = {
+  profile: { pay_type: "payroll" | "cash"; hourly_rate: number | null; updated_at: string | null };
+  payouts: { id: string; amount: number; paid_at: string; note: string | null }[];
+};
+export type MyShifts = {
+  shifts: (Shift & { site_name: string | null })[];
+  timeclock_sessions: TimeclockSession[];
+};
+export type MyCheckout = {
+  id: string;
+  asset_id: string;
+  asset_name: string;
+  asset_category: string;
+  checked_out_at: string;
+  checked_in_at: string | null;
+  expected_return_at: string | null;
+  damage_flag: boolean;
+  damage_note: string | null;
+};
+export type MySpendRecord = SpendRecord & { document_filename: string | null };
 
 export type VehicleLocation = {
   id: string;
@@ -456,6 +479,10 @@ export const api = {
     request<Me>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   me: () => request<Me>("/auth/me"),
+  myPay: () => request<MyPay>("/me/pay"),
+  myShifts: () => request<MyShifts>("/me/shifts"),
+  myCheckouts: () => request<MyCheckout[]>("/me/checkouts"),
+  mySpendRecords: () => request<MySpendRecord[]>("/me/spend-records"),
   vehicles: () => request<Vehicle[]>("/vehicles"),
   shiftsToday: () => request<Shift[]>(`/shifts?date=${todayIso()}`),
   unresolvedAlerts: () => request<Alert[]>("/alerts?resolved=false"),

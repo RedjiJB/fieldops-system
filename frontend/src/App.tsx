@@ -5,6 +5,7 @@ import { AssetsPage } from "./pages/AssetsPage";
 import { CompliancePage } from "./pages/CompliancePage";
 import { ConfirmationsPage } from "./pages/ConfirmationsPage";
 import { CrewPage } from "./pages/CrewPage";
+import { CrewPortalPage } from "./pages/CrewPortalPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { LoadoutsPage } from "./pages/LoadoutsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -148,7 +149,9 @@ function Dashboard() {
 function Routed() {
   const { user, loading } = useAuth();
   if (loading) return null;
-  return user ? <Dashboard /> : <LoginPage />;
+  if (!user) return <LoginPage />;
+  if (user.identityType === "crew") return <CrewPortalPage />;
+  return <Dashboard />;
 }
 
 export function App() {

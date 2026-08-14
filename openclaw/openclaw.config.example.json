@@ -31,7 +31,7 @@
       "list_vehicles", "get_vehicle", "register_vehicle", "log_vehicle_location",
       "start_trip", "end_trip", "list_vehicle_trips",
       "log_document", "list_documents", "list_expiring_documents", "classify_document", "list_missing_receipts",
-      "get_dashboard_url", "restart_dashboard_tunnel",
+      "get_dashboard_url", "restart_dashboard_tunnel", "send_dashboard_login_link",
       "list_notifications", "acknowledge_notification", "report_safety_incident",
       "list_pending_confirmations", "approve_pending_confirmation", "reject_pending_confirmation"
     ],

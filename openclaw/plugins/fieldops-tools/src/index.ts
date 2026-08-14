@@ -1141,6 +1141,24 @@ export default defineToolPlugin({
     }),
 
     tool({
+      name: "send_dashboard_login_link",
+      label: "Send Dashboard Login Link",
+      description:
+        "Send a one-time login link for the dashboard's crew view to the person you're talking to, when they ask to see their pay, jobs, checkouts, or claims on the dashboard. The link expires in 15 minutes and works once. Always resolve the sender to a crew_member_id first (per 'Resolving who's messaging you') and pass that id — this logs in as whoever the id belongs to, so it must always be the resolved sender's own id, never someone else's on their behalf.",
+      parameters: Type.Object({
+        crew_member_id: Type.String({ description: "The resolved sender's own crew_member id." }),
+      }),
+      async execute({ crew_member_id }, config) {
+        const { token } = (await callBackend(config, "/auth/login-token", {
+          method: "POST",
+          body: JSON.stringify({ crew_member_id }),
+        })) as { token: string };
+        const { url: dashboardUrl } = (await callBackend(config, "/system/dashboard-url")) as { url: string };
+        return { url: `${dashboardUrl}/api/v1/auth/redeem?token=${token}` };
+      },
+    }),
+
+    tool({
       name: "list_notifications",
       label: "List Notifications",
       description:
