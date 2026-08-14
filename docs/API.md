@@ -41,7 +41,9 @@ Wage/cash data — every route here is `admin`-only, both reads and writes (unli
 
 ## Spending
 
-Money-handling data — every route in this section is `admin`-only, both reads and writes, same rule as Payroll above. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#spending). None of these routes themselves are agent-facing — but `spend_records` rows *can* now be created outside them: an approved `mileage_claim` pending confirmation (see Confirmations below) inserts a `spend_records` row directly, already `approved`, via either a dashboard admin or a `management`-role crew member over WhatsApp. `submitted_by`/`submitted_by_user_id` and `reviewed_by`/`reviewed_by_user_id` are dual-path pairs for this reason — `POST /spend-records` itself still only ever sets the `_user_id` half, since that route stays dashboard-only.
+Money-handling data — every route in this section is `admin`-only for dashboard sessions, both reads and writes, same rule as Payroll above. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#spending). None of these routes themselves are agent-facing — but `spend_records` rows *can* now be created outside them: an approved `mileage_claim` pending confirmation (see Confirmations below) inserts a `spend_records` row directly, already `approved`, via either a dashboard admin or a `management`-role crew member over WhatsApp. `submitted_by`/`submitted_by_user_id` and `reviewed_by`/`reviewed_by_user_id` are dual-path pairs for this reason — `POST /spend-records` itself still only ever sets the `_user_id` half, since that route stays dashboard-only.
+
+`GET /spend-records/missing-receipts` is the one exception to "admin-only": it's gated `if (req.auth?.type === "user") requireAdmin(req)` — a dashboard session must be admin, but the agent's service token passes through ungated, same dual-path pattern as `GET /pending-confirmations`. This is what backs the `list_missing_receipts` agent tool, so management can ask over WhatsApp too.
 
 Company card purchases, petty cash spend, mileage claims, and reimbursable receipts share one `spend_records` table (`method`: `cash` / `company_card` / `personal_reimbursed`; `category`: `material` / `fuel` / `mileage` / `receipt` / `other`) rather than four bespoke ones. `category = 'mileage'` requires `method = 'personal_reimbursed'`, `distance_km` set, and `amount` omitted at submission — `amount` is computed at approval as `distance_km × rate_per_km`. Every other category requires `amount` at submission and no `distance_km`. `status` starts `'pending'` only for `method = 'personal_reimbursed'` (a claim that needs sign-off before it's trusted); everything else starts `'approved'` immediately (it's a record of money already spent, not a request).
 
@@ -55,6 +57,7 @@ Company card purchases, petty cash spend, mileage claims, and reimbursable recei
 | `GET` | `/spend-records?category=&method=&status=&crew_member_id=&date_from=&date_to=` | Joined with crew/submitter/reviewer names, document filename, instrument label |
 | `PATCH` | `/spend-records/:id/approve` | `{rate_per_km?}` — required (and used to compute `amount`) only when `category = 'mileage'`; 400 if not `pending` |
 | `PATCH` | `/spend-records/:id/reject` | 400 if not `pending` |
+| `GET` | `/spend-records/missing-receipts?category=&date_from=&date_to=` | Approved spend with `document_id IS NULL`, excluding `mileage` (structurally can't have a receipt) — 400 if `category=mileage` is explicitly requested |
 
 ## Assets & Inventory
 
@@ -161,6 +164,8 @@ CSV downloads, all filterable by `date_from`/`date_to` (widened internally where
 | `GET` | `/reports/checkouts.csv?date_from=&date_to=&asset_id=` | Checkouts with checked-out-by/returned-by names and damage flags |
 | `GET` | `/reports/purchase-orders.csv?date_from=&date_to=&vendor_id=` | Purchase orders with vendor/site names, cost, ETA |
 | `GET` | `/reports/timesheets.csv?date_from=&date_to=&crew_member_id=` | Computed timeclock sessions (see below) — incomplete sessions export with a blank hours column and `Status = incomplete`, never a guessed number |
+| `GET` | `/reports/period-close?date_from=&date_to=` | JSON rollup for month/quarter close — completed jobs, hours by crew member, spend by category, missing receipts, anomalies (alerts). `date_from`/`date_to` are **required** (400 if either is missing, unlike the routes above); `admin`-only unconditionally, both dashboard and service-token — no agent tool for this one |
+| `GET` | `/reports/period-close.csv?date_from=&date_to=` | Same rollup as **multi-section CSV**: a summary-totals row, then one flat table per section (Completed Jobs, Hours by Crew Member, Spend by Category, Missing Receipts, Anomalies), each with its own title row. Meant for a human/bookkeeper to scan or copy-paste section by section — not one flat table to re-parse programmatically |
 
 ## Timesheets
 

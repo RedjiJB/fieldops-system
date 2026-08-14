@@ -309,6 +309,8 @@ CREATE TABLE documents (
 );
 ```
 
+`GET /documents/expiring` (expiry of a document that exists) and `GET /spend-records/missing-receipts` (absence — no document at all for a spend that should have one, see [Spending](#spending) below) are two separate, non-overlapping checks against this table and `spend_records.document_id` respectively — no schema change needed for either.
+
 ## alerts
 
 The exceptions engine's output — see [EXCEPTION_HANDLING.md](EXCEPTION_HANDLING.md). This table doesn't own operational data; it watches for deviations elsewhere and raises flags.
@@ -327,6 +329,8 @@ CREATE TABLE alerts (
   resolved_by_user_id UUID REFERENCES users(id) -- set when a dashboard user resolves it; mutually exclusive with resolved_by
 );
 ```
+
+`GET /alerts` only ever filtered by current `resolved` state until the period-close summary (see [API.md](API.md#reports--exports)) added the first `raised_at`-range query — no schema change, `raised_at` already existed.
 
 ## notifications
 
@@ -409,7 +413,9 @@ CREATE TABLE payouts (
 
 ## Spending
 
-Money-handling data, admin-only end to end for the routes in `spending.ts` — like Payroll above. Added in `0042_spend.sql`. Company card purchases, petty cash spend, mileage claims, and reimbursable receipts are all the same underlying shape (an amount, who, when, how it was paid, and — sometimes — management's approval), so they share one `spend_records` table with a `method`/`category` pair rather than four bespoke tables. Material cost (`order_items.unit_cost`, above) is deliberately *not* part of this — it's a property of an existing order line item flowing through the ordering/PO pipeline, not a standalone spend event.
+Money-handling data, admin-only for dashboard sessions on every route in `spending.ts` — like Payroll above, with one exception: `GET /spend-records/missing-receipts` passes the service token through ungated (same dual-path pattern as `GET /pending-confirmations`), since it's a read-only "are we missing a receipt for X" check the agent can also answer over WhatsApp, not sensitive enough to restrict to the dashboard. Added in `0042_spend.sql`. Company card purchases, petty cash spend, mileage claims, and reimbursable receipts are all the same underlying shape (an amount, who, when, how it was paid, and — sometimes — management's approval), so they share one `spend_records` table with a `method`/`category` pair rather than four bespoke tables. Material cost (`order_items.unit_cost`, above) is deliberately *not* part of this — it's a property of an existing order line item flowing through the ordering/PO pipeline, not a standalone spend event.
+
+`GET /spend-records/missing-receipts` and the period-close summary's own missing-receipts callout (see [API.md](API.md#reports--exports)) both read `document_id IS NULL AND category != 'mileage' AND status = 'approved'` — no schema change, `document_id` was already nullable and never enforced.
 
 `spend_records` rows aren't only created through `spending.ts` anymore, though: an approved `mileage_claim` pending confirmation (see Confirmations below) inserts one directly, already `approved`, from either a dashboard admin or a `management`-role crew member over WhatsApp. `submitted_by`/`reviewed_by` (crew member) and `submitted_by_user_id`/`reviewed_by_user_id` (dashboard user) are dual-path pairs for exactly this reason — added in `0044_pending_confirmations_reviewed_by.sql`, which also dropped `submitted_by_user_id`'s `NOT NULL` (a WhatsApp-approved row has no dashboard user id to put there). `POST /spend-records` itself still only ever sets the `_user_id` half, since that route stays dashboard-only.
 

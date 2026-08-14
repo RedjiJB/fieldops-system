@@ -228,6 +228,50 @@ spendingRouter.get(
   }),
 );
 
+// Absence, not expiry -- distinct from GET /documents/expiring, which flags a
+// document that exists and is about to lapse. This flags a spend that should
+// have a receipt attached and doesn't. Dual-path auth like
+// GET /pending-confirmations: a dashboard session must be admin, but the
+// service token passes through ungated so the agent can answer this over
+// WhatsApp too.
+spendingRouter.get(
+  "/spend-records/missing-receipts",
+  asyncHandler(async (req, res) => {
+    if (req.auth?.type === "user") requireAdmin(req);
+    const { category, date_from, date_to } = req.query;
+    if (category === "mileage") {
+      throw new HttpError(400, "category cannot be mileage — mileage claims can't have a receipt");
+    }
+    const conditions = ["sr.document_id IS NULL", "sr.category != 'mileage'", "sr.status = 'approved'"];
+    const params: unknown[] = [];
+    if (category) {
+      params.push(category);
+      conditions.push(`sr.category = $${params.length}`);
+    }
+    if (date_from) {
+      params.push(date_from);
+      conditions.push(`sr.occurred_at >= $${params.length}`);
+    }
+    if (date_to) {
+      params.push(date_to);
+      conditions.push(`sr.occurred_at < ($${params.length}::date + interval '1 day')`);
+    }
+
+    const result = await pool.query(
+      `SELECT sr.*, cm.name AS crew_member_name,
+              COALESCE(u1.name, cm1.name) AS submitted_by_name
+       FROM spend_records sr
+       LEFT JOIN crew_members cm ON cm.id = sr.crew_member_id
+       LEFT JOIN users u1 ON u1.id = sr.submitted_by_user_id
+       LEFT JOIN crew_members cm1 ON cm1.id = sr.submitted_by
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY sr.occurred_at DESC`,
+      params,
+    );
+    res.json(result.rows);
+  }),
+);
+
 spendingRouter.patch(
   "/spend-records/:id/approve",
   asyncHandler(async (req, res) => {

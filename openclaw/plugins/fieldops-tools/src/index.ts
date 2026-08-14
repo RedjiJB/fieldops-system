@@ -1011,6 +1011,28 @@ export default defineToolPlugin({
     }),
 
     tool({
+      name: "list_missing_receipts",
+      label: "List Missing Receipts",
+      description:
+        "List approved spend records with no linked receipt document — for a year-end/tax-prep check of 'are we missing a receipt for X'. Mileage claims are excluded (rate-computed, not receipt-based, so they structurally can't have one). Separate from list_expiring_documents, which is about documents that exist and are about to lapse, not spend with no document at all.",
+      parameters: Type.Object({
+        category: Type.Optional(
+          Type.Union(["material", "fuel", "receipt", "other"].map((s) => Type.Literal(s))),
+        ),
+        date_from: Type.Optional(Type.String({ description: "ISO date." })),
+        date_to: Type.Optional(Type.String({ description: "ISO date." })),
+      }),
+      async execute({ category, date_from, date_to }, config) {
+        const params = new URLSearchParams();
+        if (category) params.set("category", category);
+        if (date_from) params.set("date_from", date_from);
+        if (date_to) params.set("date_to", date_to);
+        const qs = params.toString();
+        return callBackend(config, `/spend-records/missing-receipts${qs ? `?${qs}` : ""}`);
+      },
+    }),
+
+    tool({
       name: "list_notifications",
       label: "List Notifications",
       description:

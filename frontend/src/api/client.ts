@@ -338,6 +338,46 @@ export type SpendRecord = {
   created_at: string;
 };
 
+export type PeriodCloseJob = {
+  id: string;
+  date: string;
+  site_name: string | null;
+  job_type_name: string | null;
+  completed_at: string;
+  completed_by_name: string | null;
+};
+
+export type PeriodCloseHours = {
+  crew_member_id: string;
+  crew_member_name: string;
+  completed_hours: number;
+  incomplete_sessions: number;
+};
+
+export type PeriodCloseSpend = {
+  category: (typeof SPEND_CATEGORIES)[number];
+  count: number;
+  total_amount: number;
+};
+
+export type PeriodCloseAlert = {
+  id: string;
+  type: string;
+  site_name: string | null;
+  raised_at: string;
+  resolved_at: string | null;
+};
+
+export type PeriodCloseSummary = {
+  date_from: string;
+  date_to: string;
+  jobs: PeriodCloseJob[];
+  hours: PeriodCloseHours[];
+  spend: PeriodCloseSpend[];
+  missing_receipts: { count: number; total_amount: number; records: SpendRecord[] };
+  anomalies: { by_type: { type: string; count: number }[]; alerts: PeriodCloseAlert[] };
+};
+
 export const CONFIRMATION_ACTION_TYPES = [
   "timeclock_event",
   "consumable_adjustment",
@@ -600,6 +640,16 @@ export const api = {
     const qs = params.toString();
     return request<SpendRecord[]>(`/spend-records${qs ? `?${qs}` : ""}`);
   },
+  missingReceipts: (filters: { category?: string; date_from?: string; date_to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.category) params.set("category", filters.category);
+    if (filters.date_from) params.set("date_from", filters.date_from);
+    if (filters.date_to) params.set("date_to", filters.date_to);
+    const qs = params.toString();
+    return request<SpendRecord[]>(`/spend-records/missing-receipts${qs ? `?${qs}` : ""}`);
+  },
+  periodCloseSummary: (dateFrom: string, dateTo: string) =>
+    request<PeriodCloseSummary>(`/reports/period-close?date_from=${dateFrom}&date_to=${dateTo}`),
   approveSpendRecord: (id: string, ratePerKm?: number) =>
     request<SpendRecord>(`/spend-records/${id}/approve`, {
       method: "PATCH",
