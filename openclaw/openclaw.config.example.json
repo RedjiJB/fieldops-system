@@ -24,13 +24,15 @@
       "request_transfer", "update_transfer_status",
       "list_vendors", "add_vendor", "send_purchase_order", "mark_purchase_order_fulfilled",
       "list_crew_members", "register_crew_member",
+      "list_job_types", "create_job", "list_jobs",
       "assign_shift", "assign_shifts_batch", "confirm_shift", "list_shifts",
-      "log_timeclock_event", "get_crew_status",
+      "log_timeclock_event", "submit_mileage_claim", "get_crew_status",
       "list_alerts", "resolve_alert",
       "list_vehicles", "get_vehicle", "register_vehicle", "log_vehicle_location",
       "start_trip", "end_trip", "list_vehicle_trips",
-      "log_document", "list_documents", "list_expiring_documents", "classify_document",
-      "list_notifications", "acknowledge_notification", "report_safety_incident"
+      "log_document", "list_documents", "list_expiring_documents", "classify_document", "list_missing_receipts",
+      "list_notifications", "acknowledge_notification", "report_safety_incident",
+      "list_pending_confirmations", "approve_pending_confirmation", "reject_pending_confirmation"
     ],
     "media": {
       "_comment": "Turns on inbound voice-note transcription -- OpenClaw downloads the audio, transcribes it, and replaces the message body with the transcript before the reply pipeline runs (see docs/ARCHITECTURE.md). Neither DeepSeek nor Anthropic/Claude (the two funded providers) can transcribe audio, hence OpenAI here specifically -- it's also the next fallback slot in agents.list[].model.fallbacks below, so this key does double duty. No API key in this file -- run `openclaw models auth login --provider openai` to add one.",
