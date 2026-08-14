@@ -340,13 +340,16 @@ CREATE TABLE alerts (
 
 Tracks the current Cloudflare Quick Tunnel URL for the web dashboard and whether it's currently reachable. This repo runs Quick Tunnel mode (no domain registered — see [DEPLOYMENT.md](DEPLOYMENT.md)), which mints a new random `*.trycloudflare.com` URL on every restart and has no uptime guarantee, so this can't be a static value anywhere. Singleton table — exactly one row, seeded by migration, always `UPDATE`d afterward. `openclaw/notifier/sync-dashboard-url.mjs` (host-side, polls every 5 minutes — no container in this stack has Docker socket access) is the only writer; the agent's `get_dashboard_url` tool is the only reader.
 
+`checked_at` is touched on **every** poll, restart or not — it cannot answer "was this just restarted." `last_restarted_at` (added `0050`) is the field that actually can: it's set only when `POST /system/dashboard-url/health` is called with `{restarted: true}`, which only ever happens from `restart_dashboard_tunnel`'s own post-restart sync invocation, never the routine cron run. `restart_dashboard_tunnel`'s 5-minute cooldown checks `last_restarted_at`, not `checked_at` — an earlier version of this checked `checked_at` and was effectively always "on cooldown" once the cron job existed, since the cron touches it every 5 minutes regardless of restarts. Fixed after a live test surfaced it.
+
 ```sql
 CREATE TABLE dashboard_url (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  url         TEXT NOT NULL,
-  reachable   BOOLEAN NOT NULL DEFAULT true,
-  checked_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  url                TEXT NOT NULL,
+  reachable          BOOLEAN NOT NULL DEFAULT true,
+  checked_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_restarted_at  TIMESTAMPTZ
 );
 ```
 

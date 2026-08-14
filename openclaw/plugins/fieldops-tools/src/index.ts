@@ -1110,10 +1110,18 @@ export default defineToolPlugin({
           url: string;
           reachable: boolean;
           checked_at: string;
+          last_restarted_at: string | null;
         };
-        const checkedAgoMs = Date.now() - new Date(current.checked_at).getTime();
-        if (current.reachable && checkedAgoMs < FIVE_MINUTES_MS) {
-          return { ...current, note: "Already restarted/healthy within the last 5 minutes — not restarting again." };
+        // last_restarted_at, not checked_at -- the routine 5-minute cron
+        // poll touches checked_at on every run regardless of whether a
+        // restart happened, so checked_at can never tell "just polled"
+        // from "just restarted" apart. last_restarted_at is only ever set
+        // by this tool's own post-restart sync invocation below.
+        const restartedAgoMs = current.last_restarted_at
+          ? Date.now() - new Date(current.last_restarted_at).getTime()
+          : Infinity;
+        if (current.reachable && restartedAgoMs < FIVE_MINUTES_MS) {
+          return { ...current, note: "Already restarted within the last 5 minutes and still healthy — not restarting again." };
         }
 
         const repoDir = process.env.FIELDOPS_REPO_DIR ?? `${process.env.HOME}/fieldops-system`;
@@ -1125,7 +1133,7 @@ export default defineToolPlugin({
         // + edge propagation), not just "the container is running again."
         await new Promise((resolve) => setTimeout(resolve, 12000));
         execFileSync("node", [`${repoDir}/openclaw/notifier/sync-dashboard-url.mjs`], {
-          env: { ...process.env, AGENT_SERVICE_TOKEN: config.serviceToken ?? "" },
+          env: { ...process.env, AGENT_SERVICE_TOKEN: config.serviceToken ?? "", DASHBOARD_URL_JUST_RESTARTED: "1" },
           stdio: "pipe",
         });
         return callBackend(config, "/system/dashboard-url");

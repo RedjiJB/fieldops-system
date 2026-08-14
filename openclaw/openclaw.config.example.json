@@ -70,7 +70,10 @@
             "google/gemini-2.5-flash",
             "anthropic/claude-sonnet-5"
           ]
-        }
+        },
+        "_bootstrapComment": "AGENTS.md outgrew OpenClaw's default 20000-char per-file bootstrap cap (it's ~29000 chars as of this increment, confirmed truncated in a live run's diagnostics) — raised per-agent here rather than globally, so 'main' keeps the default. bootstrapTotalMaxChars raised too since all 6 bootstrap files combined (~34000 chars) already exceed the default 60000 total once headroom for further AGENTS.md growth is counted.",
+        "bootstrapMaxChars": 50000,
+        "bootstrapTotalMaxChars": 120000
       }
     ]
   },

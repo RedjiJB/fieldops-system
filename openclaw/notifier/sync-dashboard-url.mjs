@@ -16,6 +16,11 @@ import { execFileSync } from "node:child_process";
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3000/api/v1";
 const AGENT_SERVICE_TOKEN = process.env.AGENT_SERVICE_TOKEN;
 const REPO_DIR = process.env.FIELDOPS_REPO_DIR ?? `${process.env.HOME}/fieldops-system`;
+// Set only by restart_dashboard_tunnel's own post-restart invocation of
+// this script, never by the routine cron poll -- this is what lets
+// last_restarted_at actually mean "a restart just happened," distinct
+// from checked_at, which every run touches regardless.
+const JUST_RESTARTED = process.env.DASHBOARD_URL_JUST_RESTARTED === "1";
 
 if (!AGENT_SERVICE_TOKEN) {
   console.error("AGENT_SERVICE_TOKEN is required (the same value already set on the backend/fieldops-tools plugin).");
@@ -67,9 +72,9 @@ async function main() {
   await backendFetch("/system/dashboard-url", { method: "PATCH", body: JSON.stringify({ url }) });
   await backendFetch("/system/dashboard-url/health", {
     method: "POST",
-    body: JSON.stringify({ reachable }),
+    body: JSON.stringify({ reachable, restarted: JUST_RESTARTED }),
   });
-  console.log(`Dashboard URL: ${url} (reachable: ${reachable})`);
+  console.log(`Dashboard URL: ${url} (reachable: ${reachable}${JUST_RESTARTED ? ", just restarted" : ""})`);
 }
 
 main().catch((err) => {
