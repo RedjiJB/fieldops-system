@@ -16,6 +16,39 @@ function requireCrewSession(req: import("express").Request): string {
   return req.auth.crewMemberId;
 }
 
+// Foreman's "a little more" tier, scoped this session per an explicit ask:
+// site roster, site checkouts, site pending orders. management gets the
+// same tier here (their "even more" is meant to come from a real users
+// account instead -- see AGENTS.md's "Sharing the dashboard link" -- but a
+// management-role crew session should never see LESS than foreman, same
+// "additive, never a separate restricted path" principle as the owner/admin
+// widening earlier this session). yard is deliberately excluded -- nothing
+// was asked for it.
+const FOREMAN_TIER_ROLES = ["foreman", "management", "owner"];
+
+function requireForemanTierSession(req: import("express").Request): string {
+  if (req.auth?.type !== "crew") throw new HttpError(403, "Crew session required");
+  if (!FOREMAN_TIER_ROLES.includes(req.auth.role)) {
+    throw new HttpError(403, "This view is only available to foreman, management, or owner crew sessions");
+  }
+  return req.auth.crewMemberId;
+}
+
+// "Their site" = wherever they have a confirmed shift today -- same
+// definition backend/src/workers/exceptions.ts already uses for
+// checkWrongSite/checkVehicleDark/checkDelayedArrivals, not a fixed
+// per-person site assignment (none exists in this schema). Multiple
+// confirmed shifts today means multiple sites; none today means an empty
+// site list, and every route below returns an empty result rather than
+// erroring in that case.
+async function todaysSiteIds(crewMemberId: string): Promise<string[]> {
+  const result = await pool.query(
+    `SELECT DISTINCT site_id FROM shifts WHERE crew_member_id = $1 AND date = CURRENT_DATE AND status = 'confirmed'`,
+    [crewMemberId],
+  );
+  return result.rows.map((r) => r.site_id);
+}
+
 meRouter.get(
   "/me/pay",
   asyncHandler(async (req, res) => {
@@ -85,5 +118,106 @@ meRouter.get(
       [crewMemberId],
     );
     res.json(result.rows);
+  }),
+);
+
+// Everyone with a confirmed shift at the site today, not just crew --
+// includes the calling foreman themselves. Latest timeclock event per
+// person (LATERAL, same pattern checkIdleCrew in exceptions.ts uses) gives
+// a rough on-site/off-site read without a dedicated attendance concept.
+meRouter.get(
+  "/me/site-roster",
+  asyncHandler(async (req, res) => {
+    const crewMemberId = requireForemanTierSession(req);
+    const siteIds = await todaysSiteIds(crewMemberId);
+    if (siteIds.length === 0) {
+      res.json([]);
+      return;
+    }
+    const result = await pool.query(
+      `SELECT cm.id AS crew_member_id, cm.name, cm.role, sh.site_id, s.name AS site_name,
+              t.event_type AS last_event_type, t.timestamp AS last_event_at
+       FROM shifts sh
+       JOIN crew_members cm ON cm.id = sh.crew_member_id
+       JOIN sites s ON s.id = sh.site_id
+       LEFT JOIN LATERAL (
+         SELECT event_type, timestamp FROM timeclock_entries
+         WHERE crew_member_id = sh.crew_member_id
+         ORDER BY timestamp DESC LIMIT 1
+       ) t ON true
+       WHERE sh.date = CURRENT_DATE AND sh.status = 'confirmed' AND sh.site_id = ANY($1)
+       ORDER BY s.name, cm.name`,
+      [siteIds],
+    );
+    res.json(result.rows);
+  }),
+);
+
+// Everything currently checked out at the foreman's site(s) today, not
+// just their own -- distinct from GET /me/checkouts above, which is
+// scoped to checkouts BY this crew member specifically.
+meRouter.get(
+  "/me/site-checkouts",
+  asyncHandler(async (req, res) => {
+    const crewMemberId = requireForemanTierSession(req);
+    const siteIds = await todaysSiteIds(crewMemberId);
+    if (siteIds.length === 0) {
+      res.json([]);
+      return;
+    }
+    const result = await pool.query(
+      `SELECT c.*, a.name AS asset_name, a.category AS asset_category, cm.name AS checked_out_by_name
+       FROM checkouts c
+       JOIN assets a ON a.id = c.asset_id
+       JOIN crew_members cm ON cm.id = c.checked_out_by
+       WHERE a.current_site_id = ANY($1) AND c.checked_in_at IS NULL
+       ORDER BY c.checked_out_at DESC`,
+      [siteIds],
+    );
+    res.json(result.rows);
+  }),
+);
+
+// Orders requested for the foreman's site(s) -- visibility into supply
+// requests without asking the agent over WhatsApp. Same two-query
+// order+items shape as GET /orders/:id, just fetched for every order at
+// once instead of a single one.
+meRouter.get(
+  "/me/site-orders",
+  asyncHandler(async (req, res) => {
+    const crewMemberId = requireForemanTierSession(req);
+    const siteIds = await todaysSiteIds(crewMemberId);
+    if (siteIds.length === 0) {
+      res.json([]);
+      return;
+    }
+    const ordersResult = await pool.query(
+      `SELECT o.*, s.name AS site_name, cm.name AS requester_name
+       FROM orders o
+       JOIN sites s ON s.id = o.site_id
+       JOIN crew_members cm ON cm.id = o.requester_id
+       WHERE o.site_id = ANY($1)
+       ORDER BY o.created_at DESC`,
+      [siteIds],
+    );
+    const orderIds = ordersResult.rows.map((o) => o.id);
+    const itemsResult = orderIds.length
+      ? await pool.query(
+          `SELECT oi.*, COALESCE(a.name, c.name) AS item_name
+           FROM order_items oi
+           LEFT JOIN assets a ON oi.asset_id = a.id
+           LEFT JOIN consumables c ON oi.consumable_id = c.id
+           WHERE oi.order_id = ANY($1)
+           ORDER BY oi.id`,
+          [orderIds],
+        )
+      : { rows: [] };
+    const itemsByOrder = new Map<string, typeof itemsResult.rows>();
+    for (const item of itemsResult.rows) {
+      const list = itemsByOrder.get(item.order_id) ?? [];
+      list.push(item);
+      itemsByOrder.set(item.order_id, list);
+    }
+    res.json(ordersResult.rows.map((o) => ({ ...o, items: itemsByOrder.get(o.id) ?? [] })));
   }),
 );

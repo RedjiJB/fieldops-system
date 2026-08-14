@@ -200,6 +200,24 @@ export type CrewMember = {
   created_at: string;
 };
 
+// Foreman/management/owner-tier crew-session views (see docs/API.md's "My
+// Stuff" section) -- everyone with a confirmed shift at the caller's site(s)
+// today, not just the caller. Distinct from MyCheckout/MyShifts above,
+// which are always scoped to the caller only.
+export type MySiteRosterEntry = {
+  crew_member_id: string;
+  name: string;
+  role: (typeof CREW_ROLES)[number];
+  site_id: string;
+  site_name: string;
+  last_event_type: string | null;
+  last_event_at: string | null;
+};
+
+export type MySiteCheckout = MyCheckout & { checked_out_by: string; checked_out_by_name: string };
+
+export type MySiteOrder = Order & { created_at: string; items: OrderItem[] };
+
 // Mirrors backend/src/routes/sites.ts's SITE_TYPES.
 export const SITE_TYPES = ["job_site", "depot", "vendor", "shop"] as const;
 
@@ -497,6 +515,9 @@ export const api = {
   myShifts: () => request<MyShifts>("/me/shifts"),
   myCheckouts: () => request<MyCheckout[]>("/me/checkouts"),
   mySpendRecords: () => request<MySpendRecord[]>("/me/spend-records"),
+  mySiteRoster: () => request<MySiteRosterEntry[]>("/me/site-roster"),
+  mySiteCheckouts: () => request<MySiteCheckout[]>("/me/site-checkouts"),
+  mySiteOrders: () => request<MySiteOrder[]>("/me/site-orders"),
   vehicles: () => request<Vehicle[]>("/vehicles"),
   shiftsToday: () => request<Shift[]>(`/shifts?date=${todayIso()}`),
   unresolvedAlerts: () => request<Alert[]>("/alerts?resolved=false"),

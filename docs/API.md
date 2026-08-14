@@ -31,6 +31,14 @@ Dashboard accounts can also now be created/managed from the dashboard itself (se
 | `GET` | `/me/checkouts` | Assets currently or previously checked out to the calling crew member, joined with asset name/category |
 | `GET` | `/me/spend-records` | Spend/mileage records where the calling crew member is either the subject (`crew_member_id`) or the submitter (`submitted_by`) |
 
+**Foreman-tier routes** — same file, three more routes gated to `role IN ('foreman', 'management', 'owner')` on top of the crew-session check above (403 for `crew`/`yard`). "Their site(s)" means wherever the caller has a `status = 'confirmed'` shift today — the same definition `backend/src/workers/exceptions.ts` already uses for `wrong_site`/`vehicle_dark`/`delay`, not a fixed per-person site assignment (none exists in this schema). No shift today means an empty result, not an error. `management`'s broader access is meant to come from a real `users` account instead (see `AGENTS.md`'s "Sharing the dashboard link") — these routes exist for foreman specifically, and cover management/owner only so a crew session for either role is never more restricted than foreman's.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/me/site-roster` | Everyone with a confirmed shift at the caller's site(s) today (including the caller), each with their latest timeclock event/time — a rough on-site read, not a dedicated attendance concept |
+| `GET` | `/me/site-checkouts` | Everything currently checked out at the caller's site(s) today, by anyone — distinct from `GET /me/checkouts` above, which is scoped to checkouts *by* the caller specifically |
+| `GET` | `/me/site-orders` | Orders requested for the caller's site(s), each with its `items` (same shape as `GET /orders/:id`) |
+
 ## Users
 
 Dashboard account management — distinct from `crew_members` (the WhatsApp/agent-facing table). All routes require a dashboard session (the service token is rejected with 403 — the agent has no business managing dashboard accounts). Three roles exist (`admin`/`staff`/`owner`, `owner` added 0049): `GET /users` is open to any dashboard session; every mutating route requires `requireAdmin`, which accepts `admin` or `owner` — the real business owner should never have less dashboard access than a hired admin. `requireDashboardUser`/`requireAdmin` (`backend/src/lib/roles.ts`) are the shared guards used by every admin-gated route in this file. No `DELETE` — accounts are deactivated (`active = false`), never removed, to avoid orphaning `alerts.resolved_by_user_id`/`notifications.acknowledged_by_user_id`.
