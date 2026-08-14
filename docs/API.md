@@ -198,6 +198,7 @@ Surfaced by the same gap crew-members/sites had: nothing could look up or regist
 | `POST` | `/documents` | Log a document's *metadata only* (photo, receipt, permit, etc.) with site/job tagging — no file content, just a filename record |
 | `POST` | `/documents/upload` | Upload actual file content (base64) alongside metadata — stored on a persistent volume, retrievable via `/documents/:id/file`. What the WhatsApp photo auto-logging hook uses. |
 | `GET` | `/documents/:id/file` | Retrieve the stored file content for a document created via `/documents/upload` |
+| `PATCH` | `/documents/:id` | `{type}` — the only mutation route besides creation. Introduced so a photo auto-filed as `type='photo'` can be corrected once an agent turn can tell it's actually a receipt/permit/contract/insurance_cert/disposal_ticket (see ARCHITECTURE.md's image-classification section) |
 | `GET` | `/documents?site_id=&type=` | Retrieve documents, e.g. "everything for Site 7" |
 | `GET` | `/documents/expiring?within_days=` | Insurance/cert/permit expiry alerts |
 

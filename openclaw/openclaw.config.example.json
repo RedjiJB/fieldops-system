@@ -29,7 +29,7 @@
       "list_alerts", "resolve_alert",
       "list_vehicles", "get_vehicle", "register_vehicle", "log_vehicle_location",
       "start_trip", "end_trip", "list_vehicle_trips",
-      "log_document", "list_documents", "list_expiring_documents",
+      "log_document", "list_documents", "list_expiring_documents", "classify_document",
       "list_notifications", "acknowledge_notification", "report_safety_incident"
     ],
     "media": {
@@ -37,6 +37,12 @@
       "audio": {
         "enabled": true,
         "models": [{ "provider": "openai", "model": "gpt-4o-transcribe" }]
+      },
+      "image": {
+        "_comment": "Turns on inbound photo classification -- fieldops-media still auto-files every photo instantly as type='photo' (unchanged, zero added latency), but with this on, the agent turn also sees a text description of the image and can call classify_document to upgrade the type to receipt/permit/contract/insurance_cert/disposal_ticket when it's clearly one of those. OpenAI pinned explicitly, same reasoning as audio above -- auto-detect would likely prefer Anthropic (ahead of OpenAI in bundled provider priority).",
+        "enabled": true,
+        "models": [{ "provider": "openai", "model": "gpt-4o" }],
+        "prompt": "Describe this image. If it looks like a receipt or invoice, note any visible vendor name and total amount. If it's construction/landscaping equipment, note its condition. If it's a permit, contract, insurance card, or disposal ticket, say so plainly."
       }
     }
   },

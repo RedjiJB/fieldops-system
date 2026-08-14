@@ -10,7 +10,7 @@ Crew / Management phone (WhatsApp)
 OpenClaw gateway (self-hosted, WhatsApp channel, QR-paired)
         ↕
 Agent (DeepSeek → Kimi → OpenAI → Gemini → Claude fallback chain — tool-use enabled)
-   ── Speech-to-text (voice notes, live via OpenAI gpt-4o-transcribe) ── OCR (receipts/tickets, not yet built)
+   ── Speech-to-text (voice notes, live via OpenAI gpt-4o-transcribe) ── Image classification (live via OpenAI gpt-4o — see below; OCR/amount-extraction still not built)
         ↕
 Backend API (REST)
         ↕
@@ -59,6 +59,14 @@ If a critical notification is delivered but nobody acknowledges it within 20 min
 A second, separate script (`openclaw/notifier/nudge-shifts.mjs`, its own daily cron job) follows the same "poll the backend, push via `openclaw message send`" shape but targets a crew member directly rather than management — reminding them to confirm tomorrow's shift the evening before, rather than waiting for them to forget.
 
 See `openclaw/notifier/README.md` for both scripts and their cron jobs, and [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#notifications) for the table.
+
+## Photo classification
+
+`fieldops-media`'s hook still auto-files every inbound WhatsApp photo instantly as `documents.type = 'photo'` — unchanged, zero added latency for the crew member. Separately, `tools.media.image` (OpenClaw's built-in vision-understanding capability, same mechanism as the voice-transcription feature above) is turned on, so the agent turn that follows also sees a text description of the photo and can call `classify_document` to upgrade the type to `receipt`/`permit`/`contract`/`insurance_cert`/`disposal_ticket` once the image content makes that clear — `photo` is left as-is for anything else (equipment, damage, job-progress shots), since there's no more specific type for those.
+
+The bridge between "the hook knows the new document's id" and "the agent turn can act on it" doesn't go through the normal reply pipeline — `message:received` (the hook fieldops-media already used) is fire-and-forget and can't inject anything into a prompt. Instead it hands the id off via a short-lived, session-keyed in-process map, picked up by a second, *typed* hook (`agent_turn_prepare`, registered via `api.on(...)`) that appends a line naming the pending document id into that turn's prompt. Entries are consume-once and TTL-bounded, since "one message maps to exactly one agent turn per session" isn't a documented platform guarantee — worst case on a mismatch is a wrong `type` on one document, corrected the same way any other misclassification would be.
+
+No confirmation round-trip for the `classify_document` call itself — it corrects metadata on a record that was already auto-filed, it doesn't create anything new or move inventory/money/schedule, so it stays consistent with the hook's existing no-confirmation behavior. See `AGENTS.md`'s "Photo classification" section for the agent-facing rules, and [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#documents) for the now-mutable `type` column.
 
 ## Hosting (POC)
 

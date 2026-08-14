@@ -996,6 +996,30 @@ export default defineToolPlugin({
     }),
 
     tool({
+      name: "classify_document",
+      label: "Classify Document",
+      description:
+        "Correct an auto-filed photo's document type once you can tell what it actually is from the image " +
+        "description in your context. Every inbound photo is already auto-filed as type='photo' the instant " +
+        "it's received — this only upgrades that to a more specific type (receipt, permit, contract, " +
+        "insurance_cert, disposal_ticket) when the photo clearly is one of those. Leave equipment/damage/" +
+        "job-progress photos alone; 'photo' is already correct for those. No confirmation needed — this " +
+        "corrects metadata on an already-filed record, it doesn't create anything new or move inventory/money/schedule.",
+      parameters: Type.Object({
+        id: Type.String({ description: "The document's UUID (given to you in your context after a photo is filed)." }),
+        type: Type.Union(
+          ["contract", "permit", "receipt", "disposal_ticket", "insurance_cert"].map((s) => Type.Literal(s)),
+        ),
+      }),
+      async execute({ id, type }, config) {
+        return callBackend(config, `/documents/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ type }),
+        });
+      },
+    }),
+
+    tool({
       name: "list_documents",
       label: "List Documents",
       description:

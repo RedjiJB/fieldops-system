@@ -130,6 +130,26 @@ documentsRouter.post(
   }),
 );
 
+// Corrects a document's type after auto-filing -- the only mutation route on
+// this table besides creation. Introduced for fieldops-media's classify_document
+// tool (a photo starts out type='photo' the instant it's received, then an
+// agent turn may upgrade it once it can tell what the photo actually is).
+documentsRouter.patch(
+  "/documents/:id",
+  asyncHandler(async (req, res) => {
+    const { type } = req.body;
+    if (!DOCUMENT_TYPES.includes(type)) {
+      throw new HttpError(400, `type must be one of: ${DOCUMENT_TYPES.join(", ")}`);
+    }
+    const result = await pool.query(`UPDATE documents SET type = $2 WHERE id = $1 RETURNING *`, [
+      req.params.id,
+      type,
+    ]);
+    if (!result.rows[0]) throw new HttpError(404, "Document not found");
+    res.json(result.rows[0]);
+  }),
+);
+
 documentsRouter.get(
   "/documents/:id/file",
   asyncHandler(async (req, res) => {

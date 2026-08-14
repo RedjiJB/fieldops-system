@@ -4,7 +4,7 @@ OpenClaw tool plugin wrapping the fieldops-system backend API (`../../../backend
 
 Configure `backendUrl` (defaults to `http://localhost:3000/api/v1`) via the plugin's config entry if the backend isn't on localhost.
 
-All 58 tools from every docs/API.md group are wired up and smoke-tested against the live backend:
+All 59 tools from every docs/API.md group are wired up and smoke-tested against the live backend:
 
 - **Assets & Inventory** — `list_assets`, `get_asset`, `register_asset`, `verify_asset`, `update_asset_status`, `list_consumables`, `adjust_consumable_quantity`, `get_site_inventory`
 - **Loadouts & Checkout** — `list_loadouts`, `create_loadout`, `resolve_loadout`, `checkout_asset`, `return_checkout`, `list_overdue_checkouts`
@@ -13,7 +13,7 @@ All 58 tools from every docs/API.md group are wired up and smoke-tested against 
 - **Scheduling & Check-in** — `assign_shift`, `confirm_shift`, `list_shifts`, `log_timeclock_event`, `get_crew_status`
 - **Alerts** — `list_alerts`, `resolve_alert`
 - **Vehicles & Location** — `log_vehicle_location`, `start_trip`, `end_trip`, `list_vehicle_trips`
-- **Documents** — `log_document`, `list_documents`, `list_expiring_documents`
+- **Documents** — `log_document`, `list_documents`, `list_expiring_documents`, `classify_document` (upgrades an auto-filed photo's type to receipt/permit/contract/insurance_cert/disposal_ticket once `tools.media.image`'s description makes it clear — see `fieldops-media`'s README)
 - **Compliance** — `list_missing_receipts` (spend with no linked receipt — a year-end/tax-prep check, distinct from `list_expiring_documents`)
 
 ## Build

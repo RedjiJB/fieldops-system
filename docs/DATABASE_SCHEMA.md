@@ -311,6 +311,8 @@ CREATE TABLE documents (
 
 `GET /documents/expiring` (expiry of a document that exists) and `GET /spend-records/missing-receipts` (absence — no document at all for a spend that should have one, see [Spending](#spending) below) are two separate, non-overlapping checks against this table and `spend_records.document_id` respectively — no schema change needed for either.
 
+`type` was never changeable after creation until `PATCH /documents/:id` (see [API.md](API.md)) — every inbound WhatsApp photo is still auto-filed instantly as `type='photo'` (unchanged), but an agent turn can now call `classify_document` to upgrade it to `receipt`/`permit`/`contract`/`insurance_cert`/`disposal_ticket` once the image content makes that clear. See [ARCHITECTURE.md](ARCHITECTURE.md) for the classification flow.
+
 ## alerts
 
 The exceptions engine's output — see [EXCEPTION_HANDLING.md](EXCEPTION_HANDLING.md). This table doesn't own operational data; it watches for deviations elsewhere and raises flags.

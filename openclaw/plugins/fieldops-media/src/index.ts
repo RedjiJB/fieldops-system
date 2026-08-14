@@ -57,14 +57,14 @@ export type MediaLoggerDeps = {
 export async function logPhotoIfPresent(
   context: MessageReceivedContext,
   deps: MediaLoggerDeps,
-): Promise<void> {
+): Promise<string | undefined> {
   const media = extractImageMedia(context);
-  if (!media) return;
+  if (!media) return undefined;
 
   const phone = extractSenderPhone(context);
   if (!phone) {
     deps.log("fieldops-media: skipped photo — no resolvable sender phone number");
-    return;
+    return undefined;
   }
 
   const crewMembers = (await deps.callBackend(`/crew-members?phone=${encodeURIComponent(phone)}`)) as
@@ -72,7 +72,7 @@ export async function logPhotoIfPresent(
     | { error: true; message: string };
   if (!Array.isArray(crewMembers) || crewMembers.length === 0) {
     deps.log(`fieldops-media: skipped photo — no crew member registered for ${phone}`);
-    return;
+    return undefined;
   }
   const uploadedBy = crewMembers[0].id;
 
@@ -81,7 +81,7 @@ export async function logPhotoIfPresent(
     fileBuffer = await deps.readFile(media.mediaPath);
   } catch (err) {
     deps.log(`fieldops-media: skipped photo — could not read ${media.mediaPath}: ${String(err)}`);
-    return;
+    return undefined;
   }
 
   const result = await deps.callBackend("/documents/upload", {
@@ -98,10 +98,22 @@ export async function logPhotoIfPresent(
 
   if (result && typeof result === "object" && "error" in result) {
     deps.log(`fieldops-media: upload failed for ${phone}: ${JSON.stringify(result)}`);
-    return;
+    return undefined;
   }
-  deps.log(`fieldops-media: logged photo from ${phone} as document ${(result as { id?: string })?.id ?? "?"}`);
+  const documentId = (result as { id?: string })?.id;
+  deps.log(`fieldops-media: logged photo from ${phone} as document ${documentId ?? "?"}`);
+  return documentId;
 }
+
+// Bridges "the hook knows a photo's document id" to "the agent turn can act
+// on it" -- message:received is fire-and-forget and can't inject anything
+// into the prompt, so we hand the id off via a short-lived, session-keyed
+// map and pick it up in agent_turn_prepare (a typed hook that can). TTL and
+// consume-once are defensive: "one message = one serialized turn per
+// session" isn't a documented guarantee, so a stale/mismatched entry expires
+// rather than silently attaching to a much later, unrelated turn.
+const PENDING_TTL_MS = 3 * 60 * 1000;
+const pendingClassifications = new Map<string, { documentId: string; uploadedAt: number }>();
 
 const configSchema = buildJsonPluginConfigSchema({
   type: "object",
@@ -130,13 +142,37 @@ const entry: ReturnType<typeof definePluginEntry> = definePluginEntry({
     api.registerHook(
       "message:received",
       async (event) => {
-        await logPhotoIfPresent(event.context as MessageReceivedContext, deps);
+        const documentId = await logPhotoIfPresent(event.context as MessageReceivedContext, deps);
+        if (documentId) {
+          pendingClassifications.set(event.sessionKey, { documentId, uploadedAt: Date.now() });
+        }
       },
       {
         name: "fieldops-media-photo-logger",
         description: "Auto-logs inbound WhatsApp photo attachments as documents",
       },
     );
+
+    // Hands the just-uploaded document id to the same turn's prompt so the
+    // agent can call classify_document (fieldops-tools) if the image
+    // description names something more specific than the 'photo' default --
+    // see AGENTS.md's "Photo classification" section for the agent-facing
+    // rules. Consume-once + TTL, per the comment on pendingClassifications above.
+    api.on("agent_turn_prepare", (_event, ctx) => {
+      if (!ctx.sessionKey) return;
+      const pending = pendingClassifications.get(ctx.sessionKey);
+      if (!pending) return;
+      pendingClassifications.delete(ctx.sessionKey);
+      if (Date.now() - pending.uploadedAt > PENDING_TTL_MS) return;
+      return {
+        appendContext:
+          `A photo was just auto-filed as document ${pending.documentId} (type: 'photo', a safe default). ` +
+          `If the image description above clearly shows a receipt, permit, contract, insurance certificate, or ` +
+          `disposal ticket, call classify_document with id: "${pending.documentId}" and the matching type — do ` +
+          `this silently, no need to mention it in your reply. Equipment, damage, and job-progress photos should ` +
+          `stay 'photo' (there's no more specific type for them) — leave those alone, no action needed.`,
+      };
+    });
   },
 });
 
