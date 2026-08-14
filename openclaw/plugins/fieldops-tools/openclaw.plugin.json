@@ -76,6 +76,7 @@
       "list_missing_receipts",
       "get_dashboard_url",
       "restart_dashboard_tunnel",
+      "send_dashboard_login_link",
       "list_notifications",
       "acknowledge_notification",
       "list_pending_confirmations",
