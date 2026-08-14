@@ -74,6 +74,8 @@
       "list_documents",
       "list_expiring_documents",
       "list_missing_receipts",
+      "get_dashboard_url",
+      "restart_dashboard_tunnel",
       "list_notifications",
       "acknowledge_notification",
       "list_pending_confirmations",

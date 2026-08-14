@@ -49,6 +49,14 @@ services:
     # ...and add a public hostname in the Cloudflare Zero Trust dashboard
     # instead of relying on the printed URL. See DEPLOYMENT.md.
     command: tunnel --no-autoupdate --url http://frontend:80
+    # No rotation was set here before, on a `restart: unless-stopped`
+    # service that (per openclaw/notifier/sync-dashboard-url.mjs) now also
+    # gets polled every 5 minutes -- unbounded growth on a long-running Pi.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   pgdata:

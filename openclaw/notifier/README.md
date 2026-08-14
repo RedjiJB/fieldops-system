@@ -1,6 +1,6 @@
 # openclaw/notifier/
 
-Two host-side scripts. Both run here rather than in the backend because the backend's Docker container has no filesystem or network access to the `openclaw` binary/gateway — see `docs/ARCHITECTURE.md`'s "Management notifications" section. Both poll the backend's HTTP API (the direction that already works everywhere else in this repo) and push via `openclaw message send`.
+Host-side scripts. All run here rather than in the backend because the backend's Docker container has no filesystem or network access to the `openclaw` binary/gateway — see `docs/ARCHITECTURE.md`'s "Management notifications" section. Most poll the backend's HTTP API and push via `openclaw message send`; `sync-dashboard-url.mjs` is the one exception (see below) — it needs real `docker` CLI access instead, for the same "backend container can't reach the host" reason, just a different host-level capability.
 
 ## `deliver-notifications.mjs`
 
@@ -21,12 +21,21 @@ Runs once daily, evening before, and messages each crew member directly (not man
 
 Same shape as `nudge-shifts.mjs` (targets the crew member directly, not management), but polls continuously (~1min, same cadence as `deliver-notifications.mjs`) rather than once daily: `GET /pending-confirmations/unnotified` (`status IN ('approved','rejected','expired') AND crew_notified_at IS NULL`), sends a plain-language outcome message to `crew_member_phone`, `PATCH /pending-confirmations/:id/mark-notified`. This is the "tell the crew member the outcome" half of the two-party confirm-before-execute pilot (see `AGENTS.md`'s "Two-party confirm-before-execute" section and `docs/DATABASE_SCHEMA.md#confirmations`) — the crew member doesn't need to check back after submitting one of the four gated tool calls, this delivers the decision proactively once management (or a timeout) resolves it.
 
+## `sync-dashboard-url.mjs`
+
+Runs every 5 minutes, keeps `dashboard_url` (Postgres) fresh with the current Cloudflare Quick Tunnel URL. Doesn't call `openclaw message send` at all — no WhatsApp involved, this one only needs `docker` CLI access (no container in this stack has a `docker.sock` mount) and the backend's HTTP API. `execFileSync("docker", ["compose", "logs", "--tail", "50", "cloudflared"])`, extracts the last `https://*.trycloudflare.com` match (logs accumulate across restarts — always the last one, not the first), does a `HEAD` request to confirm it's actually serving, then `PATCH /system/dashboard-url` (if a URL was found) and `POST /system/dashboard-url/health` (always) — see `docs/API.md`'s System section and `docs/DATABASE_SCHEMA.md#dashboard_url`.
+
+Also invoked directly (not via cron) by the agent's `restart_dashboard_tunnel` tool right after it restarts the `cloudflared` container — same script either way, no separate logic kept in sync.
+
+Built after the tunnel silently died for ~30 hours with nothing to catch it — see `docs/ARCHITECTURE.md`'s Hosting section.
+
 ## Environment variables
 
 - `BACKEND_URL` — defaults to `http://localhost:3000/api/v1`
 - `AGENT_SERVICE_TOKEN` — **required**, the same value already configured for the backend and `fieldops-tools` plugin (see `docs/DEPLOYMENT.md`'s "Dashboard auth rollout" for where this token comes from — don't generate a new one)
 - `MANAGEMENT_WHATSAPP_NUMBER` — **required**, E.164, e.g. `+15555550123`. Same recipient as the status digests for now; expanding to a second recipient/group chat is blocked on the same missing phone number/JID noted in the "Status digests" section, not something new here.
-- `OPENCLAW_BIN` — defaults to `openclaw` (works fine interactively). A cron `--command` job's `sh -lc` doesn't necessarily source the same `PATH` as an interactive SSH session — if delivery fails with `spawnSync openclaw ENOENT` in `openclaw cron runs --id <id>`, set this to the absolute path (`which openclaw` in an interactive shell) in the job's `--command-env`.
+- `OPENCLAW_BIN` — defaults to `openclaw` (works fine interactively). A cron `--command` job's `sh -lc` doesn't necessarily source the same `PATH` as an interactive SSH session — if delivery fails with `spawnSync openclaw ENOENT` in `openclaw cron runs --id <id>`, set this to the absolute path (`which openclaw` in an interactive shell) in the job's `--command-env`. Not needed by `sync-dashboard-url.mjs` — it never calls the `openclaw` binary, only `docker` and `fetch`.
+- `FIELDOPS_REPO_DIR` — `sync-dashboard-url.mjs` only, defaults to `$HOME/fieldops-system`. Working directory for `docker compose logs cloudflared`.
 
 ## Install
 
@@ -63,6 +72,15 @@ openclaw cron add --name fieldops-confirmation-outcomes --display-name "Confirma
   --command-env "AGENT_SERVICE_TOKEN=<real token>" \
   --command-env "OPENCLAW_BIN=$(which openclaw)" \
   --every 1m --timeout-seconds 30 --no-deliver
+```
+
+`sync-dashboard-url.mjs` installs every 5 minutes, no `MANAGEMENT_WHATSAPP_NUMBER` or `OPENCLAW_BIN` needed:
+
+```bash
+openclaw cron add --name fieldops-dashboard-url-sync --display-name "Dashboard URL Sync" \
+  --command "node ~/fieldops-system/openclaw/notifier/sync-dashboard-url.mjs" \
+  --command-env "AGENT_SERVICE_TOKEN=<real token>" \
+  --every 5m --timeout-seconds 30 --no-deliver
 ```
 
 ## Live reply-id check (do once, not blocking)

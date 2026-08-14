@@ -318,7 +318,7 @@ CREATE TABLE documents (
 The exceptions engine's output — see [EXCEPTION_HANDLING.md](EXCEPTION_HANDLING.md). This table doesn't own operational data; it watches for deviations elsewhere and raises flags.
 
 ```sql
-CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue', 'vehicle_dark', 'weather');
+CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue', 'vehicle_dark', 'weather', 'dashboard_unreachable');
 
 CREATE TABLE alerts (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -333,6 +333,22 @@ CREATE TABLE alerts (
 ```
 
 `GET /alerts` only ever filtered by current `resolved` state until the period-close summary (see [API.md](API.md#reports--exports)) added the first `raised_at`-range query — no schema change, `raised_at` already existed.
+
+`dashboard_unreachable` is raised by `POST /system/dashboard-url/health` (see `dashboard_url` below) via the exceptions worker's own `raiseAlert` — same dedup-while-unresolved semantics as every other type here, reused rather than reimplemented. It never auto-resolves on recovery, same convention as the rest of this table; a human confirms via the Alerts page.
+
+## dashboard_url
+
+Tracks the current Cloudflare Quick Tunnel URL for the web dashboard and whether it's currently reachable. This repo runs Quick Tunnel mode (no domain registered — see [DEPLOYMENT.md](DEPLOYMENT.md)), which mints a new random `*.trycloudflare.com` URL on every restart and has no uptime guarantee, so this can't be a static value anywhere. Singleton table — exactly one row, seeded by migration, always `UPDATE`d afterward. `openclaw/notifier/sync-dashboard-url.mjs` (host-side, polls every 5 minutes — no container in this stack has Docker socket access) is the only writer; the agent's `get_dashboard_url` tool is the only reader.
+
+```sql
+CREATE TABLE dashboard_url (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  url         TEXT NOT NULL,
+  reachable   BOOLEAN NOT NULL DEFAULT true,
+  checked_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
 
 ## notifications
 

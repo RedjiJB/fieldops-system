@@ -239,3 +239,11 @@ Management can act from either channel: the dashboard (a real `admin` session) o
 | `PATCH` | `/pending-confirmations/:id/reject` | Same dual-path auth as approve above (no `rate_per_km`). 400 if not `awaiting_management`. Also acknowledges the linked notification. |
 | `GET` | `/pending-confirmations/unnotified` | Not admin-gated (matches `GET /notifications/pending`'s precedent) — `status IN ('approved','rejected','expired') AND crew_notified_at IS NULL`, joined with `crew_members.phone`. Polled by `openclaw/notifier/deliver-confirmation-outcomes.mjs`. |
 | `PATCH` | `/pending-confirmations/:id/mark-notified` | Sets `crew_notified_at = now()` — called by the outcome-delivery script after a successful WhatsApp send |
+
+## System
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/system/dashboard-url` | Open to any authenticated caller (service token or dashboard session) — informational, not sensitive. Returns `{url, reachable, checked_at, updated_at}`. |
+| `PATCH` | `/system/dashboard-url` | Service-token only. `{url}` — called by `openclaw/notifier/sync-dashboard-url.mjs` when it captures a new Quick Tunnel URL from `cloudflared`'s logs. |
+| `POST` | `/system/dashboard-url/health` | Service-token only. `{reachable}` — called by the same script on every run. `reachable: false` raises a `dashboard_unreachable` alert via the exceptions worker's `raiseAlert` (see [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#alerts)); never auto-resolves on recovery. |

@@ -1,5 +1,8 @@
+import { execFileSync } from "node:child_process";
 import { Type } from "typebox";
 import { defineToolPlugin } from "openclaw/plugin-sdk/tool-plugin";
+
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 const configSchema = Type.Object({
   backendUrl: Type.Optional(
@@ -1073,6 +1076,59 @@ export default defineToolPlugin({
         if (date_to) params.set("date_to", date_to);
         const qs = params.toString();
         return callBackend(config, `/spend-records/missing-receipts${qs ? `?${qs}` : ""}`);
+      },
+    }),
+
+    // --- System ---
+
+    tool({
+      name: "get_dashboard_url",
+      label: "Get Dashboard URL",
+      description:
+        "Get the current web dashboard URL to share when someone asks for 'the dashboard' or 'the app'. The dashboard runs behind a Cloudflare Quick Tunnel that mints a new random URL on every restart — this is why the URL always has to be looked up fresh, never memorized. Also tells you whether it was reachable on the last health check (run every 5 minutes) — if not, say so plainly rather than handing out a link that might be dead. When you DO share a working link, mention that if it doesn't load, saying so lets you restart it (restart_dashboard_tunnel).",
+      parameters: Type.Object({}),
+      async execute(_input, config) {
+        return callBackend(config, "/system/dashboard-url");
+      },
+    }),
+
+    // The one tool in this plugin that doesn't just call the backend for
+    // its core action -- the OpenClaw gateway (and this plugin, running
+    // inside it) is a native systemd service on the Pi host, not a
+    // container, so it already has real `docker` CLI access the backend
+    // container doesn't. Reuses sync-dashboard-url.mjs's own URL-extraction
+    // and health-check logic (same script the cron job runs) rather than
+    // duplicating it here.
+    tool({
+      name: "restart_dashboard_tunnel",
+      label: "Restart Dashboard Tunnel",
+      description:
+        "Restart the Cloudflare Quick Tunnel that serves the web dashboard, when someone reports the dashboard link isn't working. Mints a brand-new URL (Quick Tunnel URLs change on every restart) and returns it. Won't actually restart if one already happened in the last 5 minutes and is currently healthy — returns the current link instead and says so, to avoid needless churn from repeated requests. This changes real infrastructure state, so confirm with the person first before calling it, same as any other action with a real effect.",
+      parameters: Type.Object({}),
+      async execute(_input, config) {
+        const current = (await callBackend(config, "/system/dashboard-url")) as {
+          url: string;
+          reachable: boolean;
+          checked_at: string;
+        };
+        const checkedAgoMs = Date.now() - new Date(current.checked_at).getTime();
+        if (current.reachable && checkedAgoMs < FIVE_MINUTES_MS) {
+          return { ...current, note: "Already restarted/healthy within the last 5 minutes — not restarting again." };
+        }
+
+        const repoDir = process.env.FIELDOPS_REPO_DIR ?? `${process.env.HOME}/fieldops-system`;
+        execFileSync("docker", ["compose", "restart", "cloudflared"], { cwd: repoDir, stdio: "pipe" });
+        // Give the container time to mint the new tunnel and for it to
+        // actually become reachable before the sync script's first
+        // log-read + health check -- empirically closer to 12s than 8s
+        // end-to-end on a live test (container start + tunnel negotiation
+        // + edge propagation), not just "the container is running again."
+        await new Promise((resolve) => setTimeout(resolve, 12000));
+        execFileSync("node", [`${repoDir}/openclaw/notifier/sync-dashboard-url.mjs`], {
+          env: { ...process.env, AGENT_SERVICE_TOKEN: config.serviceToken ?? "" },
+          stdio: "pipe",
+        });
+        return callBackend(config, "/system/dashboard-url");
       },
     }),
 

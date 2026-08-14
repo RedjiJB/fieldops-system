@@ -16,6 +16,7 @@ const CRITICAL_ALERT_TYPES = new Set([
   "delay",
   "weather",
   "loadout_gap",
+  "dashboard_unreachable",
 ]);
 
 const ALERT_MESSAGES: Record<string, string> = {
@@ -24,6 +25,7 @@ const ALERT_MESSAGES: Record<string, string> = {
   wrong_site: "🚨 A vehicle is outside its expected site's geofence.",
   idle: "A crew member has been on-shift 2+ hours with no recorded site activity.",
   vehicle_dark: "A vehicle was reporting location today and has since gone quiet for 3+ hours.",
+  dashboard_unreachable: "🚨 The dashboard's public URL is unreachable — the Quick Tunnel may be down.",
 };
 
 // Orders sitting in 'requested' longer than this without advancing get flagged.
@@ -67,7 +69,9 @@ async function alertAlreadyOpen(
   return (result.rowCount ?? 0) > 0;
 }
 
-async function raiseAlert(
+// Exported for backend/src/routes/system.ts's dashboard-url health check --
+// the first caller of this outside the periodic worker tick.
+export async function raiseAlert(
   client: PoolClient,
   type: string,
   siteId: string | null,
