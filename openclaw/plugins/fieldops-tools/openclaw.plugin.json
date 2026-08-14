@@ -72,6 +72,7 @@
       "log_document",
       "list_documents",
       "list_expiring_documents",
+      "list_missing_receipts",
       "list_notifications",
       "acknowledge_notification",
       "list_pending_confirmations",
