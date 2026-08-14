@@ -53,7 +53,18 @@ async function isReachable(url) {
 }
 
 async function main() {
-  const logOutput = execFileSync("docker", ["compose", "logs", "--tail", "50", "cloudflared"], {
+  // No --tail limit, deliberately: Quick Tunnel prints the URL banner once,
+  // at startup, and every reconnect after that only adds churn noise (INF/ERR
+  // retry lines) -- during a flapping episode that noise alone can exceed a
+  // fixed tail window within minutes, permanently pushing the URL out of
+  // view and forcing a false "unreachable" for as long as the churn
+  // continues, even once the tunnel actually recovers (confirmed live: this
+  // is what let a real dashboard_unreachable alert sit unresolved for
+  // hours after the tunnel had already come back). The service's own
+  // logging block (max-size 10m, max-file 3) already bounds total log
+  // volume to ~30MB, so reading everything docker has buffered is cheap and
+  // never actually unbounded.
+  const logOutput = execFileSync("docker", ["compose", "logs", "cloudflared"], {
     cwd: REPO_DIR,
     encoding: "utf8",
   });

@@ -29,10 +29,27 @@ if (!AGENT_SERVICE_TOKEN) {
   process.exit(1);
 }
 
+// Connection: close on every request, deliberately -- sendWhatsApp below is
+// a blocking execFileSync that can easily run past the backend's 5s
+// Keep-Alive timeout (real WhatsApp sends aren't instant). A kept-alive
+// socket idle across that gap gets closed server-side while Node still
+// thinks it's reusable, and the next fetch() on it fails with a bare
+// "fetch failed" (an ECONNRESET wrapped by undici with no useful detail) --
+// this is exactly what caused a delivered notification to look
+// undelivered forever and get re-sent every single cron tick (confirmed
+// live: the same critical alert went out every minute for over an hour
+// before this was caught). A short-lived cron script gains nothing from
+// connection reuse anyway, so closing every time trades a few ms of
+// TCP-handshake overhead for never hitting this class of failure again.
 async function backendFetch(path, init) {
   const res = await fetch(`${BACKEND_URL}${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${AGENT_SERVICE_TOKEN}`, "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      Authorization: `Bearer ${AGENT_SERVICE_TOKEN}`,
+      "Content-Type": "application/json",
+      Connection: "close",
+      ...init?.headers,
+    },
   });
   if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}: ${await res.text()}`);
   return res.json();
