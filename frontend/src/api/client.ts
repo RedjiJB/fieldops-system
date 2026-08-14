@@ -336,6 +336,31 @@ export type SpendRecord = {
   created_at: string;
 };
 
+export const CONFIRMATION_ACTION_TYPES = [
+  "timeclock_event",
+  "consumable_adjustment",
+  "checkout_return",
+  "mileage_claim",
+] as const;
+export const CONFIRMATION_STATUSES = ["awaiting_management", "approved", "rejected", "expired"] as const;
+
+export type PendingConfirmation = {
+  id: string;
+  action_type: (typeof CONFIRMATION_ACTION_TYPES)[number];
+  summary: string;
+  payload: Record<string, unknown>;
+  crew_member_id: string;
+  crew_member_name: string | null;
+  status: (typeof CONFIRMATION_STATUSES)[number];
+  notification_id: string;
+  reviewed_by_user_id: string | null;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
+  result_id: string | null;
+  crew_notified_at: string | null;
+  created_at: string;
+};
+
 export const ACTIVITY_EVENT_TYPES = [
   "job_started",
   "job_completed",
@@ -579,4 +604,13 @@ export const api = {
     }),
   rejectSpendRecord: (id: string) =>
     request<SpendRecord>(`/spend-records/${id}/reject`, { method: "PATCH" }),
+  pendingConfirmations: (status?: string) =>
+    request<PendingConfirmation[]>(`/pending-confirmations${status ? `?status=${status}` : ""}`),
+  approvePendingConfirmation: (id: string, ratePerKm?: number) =>
+    request<PendingConfirmation>(`/pending-confirmations/${id}/approve`, {
+      method: "PATCH",
+      body: JSON.stringify(ratePerKm !== undefined ? { rate_per_km: ratePerKm } : {}),
+    }),
+  rejectPendingConfirmation: (id: string) =>
+    request<PendingConfirmation>(`/pending-confirmations/${id}/reject`, { method: "PATCH" }),
 };

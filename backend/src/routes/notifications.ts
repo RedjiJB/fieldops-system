@@ -97,8 +97,10 @@ notificationsRouter.patch(
   }),
 );
 
-const ESCALATION_THRESHOLD_MINUTES = 20;
-const MAX_ESCALATIONS = 3;
+// Exported for exceptions.ts's expirePendingConfirmations, which reuses
+// this exact threshold rather than duplicating it.
+export const ESCALATION_THRESHOLD_MINUTES = 20;
+export const MAX_ESCALATIONS = 3;
 
 // Polled by the same deliver-notifications.mjs run, right after the
 // first-push pass -- critical, delivered, still unacknowledged, and either

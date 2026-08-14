@@ -163,15 +163,25 @@ export default defineToolPlugin({
       name: "adjust_consumable_quantity",
       label: "Adjust Consumable Quantity",
       description:
-        "Adjust a 'stocked' consumable's on-hand quantity by a delta — positive for a restock, negative for reported usage. Only works on 'stocked' items; per_job_delivery items don't carry an on-hand quantity and will be rejected.",
+        "Request an adjustment to a 'stocked' consumable's on-hand quantity by a delta — positive for a restock, negative for reported usage. Two-party confirm-before-execute pilot: this now requires management's confirmation before it takes effect — tell the crew member it's been sent for approval, they'll be told the outcome automatically, they don't need to check back. Only works on 'stocked' items; re-checked at approval time.",
       parameters: Type.Object({
         id: Type.String({ description: "The consumable's UUID." }),
         delta: Type.Number({ description: "Positive to add (restock), negative to subtract (usage)." }),
+        crew_member_id: Type.String({ description: "The crew member reporting this." }),
+        summary: Type.String({
+          description:
+            "Short plain-language summary of the request for management to review, reusing the wording already confirmed with the crew member, e.g. \"Redji used 3 bags of mulch at Site 7\".",
+        }),
       }),
-      async execute({ id, delta }, config) {
-        return callBackend(config, `/consumables/${id}/quantity`, {
-          method: "PATCH",
-          body: JSON.stringify({ delta }),
+      async execute({ id, delta, crew_member_id, summary }, config) {
+        return callBackend(config, "/pending-confirmations", {
+          method: "POST",
+          body: JSON.stringify({
+            action_type: "consumable_adjustment",
+            summary,
+            crew_member_id,
+            payload: { consumable_id: id, delta },
+          }),
         });
       },
     }),
@@ -318,18 +328,27 @@ export default defineToolPlugin({
       name: "return_checkout",
       label: "Return Checkout",
       description:
-        "Check an asset back in. If damage_flag is true, the asset goes to 'in_maintenance' instead of straight back to 'available' — always ask about damage before calling this if it wasn't already mentioned.",
+        "Request checking an asset back in. Two-party confirm-before-execute pilot: this now requires management's confirmation before it takes effect — tell the crew member it's been sent for approval, they'll be told the outcome automatically. If damage_flag is true, the asset moves to 'in_maintenance' instead of 'available' once approved — always ask about damage before calling this if it wasn't already mentioned.",
       parameters: Type.Object({
         id: Type.String({ description: "The checkout's UUID (not the asset's)." }),
         returned_by: Type.String({ description: "The crew member UUID returning it." }),
         damage_flag: Type.Optional(Type.Boolean()),
         damage_note: Type.Optional(Type.String()),
         photo_url: Type.Optional(Type.String()),
+        summary: Type.String({
+          description:
+            "Short plain-language summary of the request for management to review, reusing the wording already confirmed with the crew member, e.g. \"Redji returning the trencher, no damage\".",
+        }),
       }),
-      async execute({ id, ...body }, config) {
-        return callBackend(config, `/checkouts/${id}/return`, {
-          method: "PATCH",
-          body: JSON.stringify(body),
+      async execute({ id, returned_by, damage_flag, damage_note, photo_url, summary }, config) {
+        return callBackend(config, "/pending-confirmations", {
+          method: "POST",
+          body: JSON.stringify({
+            action_type: "checkout_return",
+            summary,
+            crew_member_id: returned_by,
+            payload: { checkout_id: id, damage_flag, damage_note, photo_url },
+          }),
         });
       },
     }),
@@ -723,7 +742,7 @@ export default defineToolPlugin({
       name: "log_timeclock_event",
       label: "Log Timeclock Event",
       description:
-        "Log a check-in/break/check-out event for a crew member. Events must follow a legal sequence per crew member — 'in' first, then break_start/break_end can alternate, then 'out'. An out-of-sequence event (e.g. break_start without ever clocking in) is rejected with a clear reason.",
+        "Request logging a check-in/break/check-out event for a crew member. Two-party confirm-before-execute pilot: this now requires management's confirmation before it's recorded — tell the crew member it's been sent for approval, they'll be told the outcome automatically, they don't need to check back. Events must still follow a legal sequence per crew member — 'in' first, then break_start/break_end can alternate, then 'out' — that's re-checked at approval time, since it may have changed while this sat pending.",
       parameters: Type.Object({
         crew_member_id: Type.String(),
         event_type: Type.Union(["in", "break_start", "break_end", "out"].map((s) => Type.Literal(s))),
@@ -731,11 +750,47 @@ export default defineToolPlugin({
         geofence_verified: Type.Optional(
           Type.Boolean({ description: "Whether the crew member's location matched the assigned site's geofence." }),
         ),
+        summary: Type.String({
+          description:
+            "Short plain-language summary of the request for management to review, reusing the wording already confirmed with the crew member, e.g. \"Redji clocking in at Site 7\".",
+        }),
       }),
-      async execute(input, config) {
-        return callBackend(config, "/timeclock", {
+      async execute({ crew_member_id, event_type, site_id, geofence_verified, summary }, config) {
+        return callBackend(config, "/pending-confirmations", {
           method: "POST",
-          body: JSON.stringify(input),
+          body: JSON.stringify({
+            action_type: "timeclock_event",
+            summary,
+            crew_member_id,
+            payload: { event_type, site_id, geofence_verified },
+          }),
+        });
+      },
+    }),
+
+    tool({
+      name: "submit_mileage_claim",
+      label: "Submit Mileage Claim",
+      description:
+        "Submit a personal-vehicle mileage reimbursement claim for a crew member. Two-party confirm-before-execute: management reviews it and sets the reimbursement rate at the moment of approval, not a fixed system-wide number — the crew member is told the outcome automatically once decided, they don't need to check back.",
+      parameters: Type.Object({
+        crew_member_id: Type.String(),
+        distance_km: Type.Number({ description: "Distance driven, in km." }),
+        description: Type.Optional(Type.String({ description: "What the trip was for." })),
+        summary: Type.String({
+          description:
+            "Short plain-language summary of the request for management to review, e.g. \"Redji claiming 40km for a supply run to Site 7\".",
+        }),
+      }),
+      async execute({ crew_member_id, distance_km, description, summary }, config) {
+        return callBackend(config, "/pending-confirmations", {
+          method: "POST",
+          body: JSON.stringify({
+            action_type: "mileage_claim",
+            summary,
+            crew_member_id,
+            payload: { distance_km, description },
+          }),
         });
       },
     }),

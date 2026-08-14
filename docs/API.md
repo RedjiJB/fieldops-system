@@ -218,3 +218,16 @@ A single event log feeding two different consumers — see [ARCHITECTURE.md](ARC
 | `GET` | `/notifications/escalation-candidates` | Critical, delivered, unacknowledged for 20+ minutes, escalated fewer than 3 times — polled by the notifier's second pass |
 | `PATCH` | `/notifications/:id/escalate` | Increments `escalated_count`, sets `last_escalated_at` — called by the notifier after a re-send |
 | `POST` | `/notifications/safety-report` | The one notification authored directly from a conversation rather than derived from backend state — always `critical`. `{message, crew_member_id?}`. See [ARCHITECTURE.md](ARCHITECTURE.md) and `AGENTS.md`'s "Safety and emergencies". |
+
+## Confirmations
+
+Two-party confirm-before-execute — **pilot scope**: only `log_timeclock_event`, `adjust_consumable_quantity`, `return_checkout`, and `submit_mileage_claim` route through this today, not the agent's other ~49 mutating tools. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#confirmations) and [ARCHITECTURE.md](ARCHITECTURE.md).
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/pending-confirmations` | Service-token only. `{action_type, summary, payload, crew_member_id}` — creates the row and a linked `critical` notification (management's existing WhatsApp alert path handles delivery/escalation with no changes) |
+| `GET` | `/pending-confirmations?status=` | `admin`-only, joined with crew member and reviewer names |
+| `PATCH` | `/pending-confirmations/:id/approve` | `admin`-only. `{rate_per_km?}` — required only for `action_type: 'mileage_claim'`. Re-validates against current state (e.g. re-runs the timeclock legal-transition check) before dispatching to the real mutation; 400 if not `awaiting_management`. Also acknowledges the linked notification. |
+| `PATCH` | `/pending-confirmations/:id/reject` | `admin`-only. 400 if not `awaiting_management`. Also acknowledges the linked notification. |
+| `GET` | `/pending-confirmations/unnotified` | Not admin-gated (matches `GET /notifications/pending`'s precedent) — `status IN ('approved','rejected','expired') AND crew_notified_at IS NULL`, joined with `crew_members.phone`. Polled by `openclaw/notifier/deliver-confirmation-outcomes.mjs`. |
+| `PATCH` | `/pending-confirmations/:id/mark-notified` | Sets `crew_notified_at = now()` — called by the outcome-delivery script after a successful WhatsApp send |

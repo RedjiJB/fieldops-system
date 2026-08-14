@@ -5,11 +5,13 @@ import { HttpError } from "../lib/httpError.js";
 
 export const shiftsRouter = Router();
 
-const TIMECLOCK_EVENTS = ["in", "break_start", "break_end", "out"] as const;
+export const TIMECLOCK_EVENTS = ["in", "break_start", "break_end", "out"] as const;
 
 // What event can legally follow a crew member's last recorded event —
-// e.g. you can't log a break without having clocked in first.
-const LEGAL_NEXT_EVENTS: Record<string, readonly string[]> = {
+// e.g. you can't log a break without having clocked in first. Exported for
+// confirmations.ts, which re-runs this same check at approval time (state
+// may have shifted since a pending confirmation was submitted).
+export const LEGAL_NEXT_EVENTS: Record<string, readonly string[]> = {
   none: ["in"],
   in: ["break_start", "out"],
   break_start: ["break_end"],

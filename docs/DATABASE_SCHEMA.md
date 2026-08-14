@@ -457,6 +457,31 @@ CREATE TABLE spend_records (
 );
 ```
 
+## Confirmations
+
+Two-party confirm-before-execute — a **pilot**, not a full cutover: only 4 of the agent's 54 tools route through this (`log_timeclock_event`, `adjust_consumable_quantity`, `return_checkout`, `submit_mileage_claim`), the four cases the accounting brainstorm named explicitly (hours, material-usage, damage/condition claims, mileage). The other ~49 mutating tools are unchanged — the crew member's own confirmation is still sufficient for those. Added in `0043_pending_confirmations.sql`. See [API.md](API.md#confirmations) and [ARCHITECTURE.md](ARCHITECTURE.md).
+
+A pending confirmation is backed by a real `critical` row in `notifications` (`notification_id`) — escalation is inherited from that table's existing mechanism (`notifications.ts`'s `escalated_count`/`ESCALATION_THRESHOLD_MINUTES`/`MAX_ESCALATIONS`), not duplicated here. `payload` holds whatever the original action needs (e.g. `{event_type, site_id, geofence_verified}` for a timeclock event); approving re-validates against *current* state (not state at submission time) before dispatching to the real mutation.
+
+```sql
+CREATE TABLE pending_confirmations (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  action_type          TEXT NOT NULL CHECK (action_type IN ('timeclock_event', 'consumable_adjustment', 'checkout_return', 'mileage_claim')),
+  summary              TEXT NOT NULL, -- agent-authored, human-readable -- what the manager sees on the dashboard review screen
+  payload              JSONB NOT NULL, -- args needed to execute the action once approved
+  crew_member_id       UUID NOT NULL REFERENCES crew_members(id),
+  status               TEXT NOT NULL DEFAULT 'awaiting_management' CHECK (status IN ('awaiting_management', 'approved', 'rejected', 'expired')),
+  notification_id      UUID NOT NULL REFERENCES notifications(id),
+  reviewed_by_user_id  UUID REFERENCES users(id),
+  reviewed_at          TIMESTAMPTZ,
+  result_id            UUID, -- id of the row actually created once approved (e.g. the new timeclock_entries row)
+  crew_notified_at     TIMESTAMPTZ, -- set once the outcome has been sent back to the crew member over WhatsApp
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+`expirePendingConfirmations` (`backend/src/workers/exceptions.ts`, part of the regular exceptions-worker sweep) flips a row to `expired` once its linked notification has exhausted its escalations with nobody acting on it — the crew member is told it wasn't approved in time rather than left waiting forever. Outcome delivery (`openclaw/notifier/deliver-confirmation-outcomes.mjs`) is a host-side script targeting `crew_members.phone` directly, the same pattern `nudge-shifts.mjs` already established, since the backend container has no network path to send WhatsApp messages itself.
+
 ## Entity relationship summary
 
 ```

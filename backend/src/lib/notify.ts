@@ -13,9 +13,10 @@ export async function insertNotification(
   message: string,
   sourceType: string,
   sourceId: string | null,
-): Promise<void> {
-  await db.query(
-    `INSERT INTO notifications (priority, message, source_type, source_id) VALUES ($1, $2, $3, $4)`,
+): Promise<string> {
+  const result = await db.query(
+    `INSERT INTO notifications (priority, message, source_type, source_id) VALUES ($1, $2, $3, $4) RETURNING id`,
     [priority, message, sourceType, sourceId],
   );
+  return result.rows[0].id;
 }

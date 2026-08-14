@@ -17,6 +17,10 @@ Pushes **critical** management notifications (tool marked missing/retired, wrong
 
 Runs once daily, evening before, and messages each crew member directly (not management) whose shift for tomorrow is still `status=assigned`: `GET /shifts?date=<tomorrow>&status=assigned`, skips anything with `nudged_at` already set or no phone on file, sends a "reply CONFIRM or DECLINE" message to `shift.crew_member_phone`, then `PATCH /shifts/:id/nudged`. The reply lands as a normal inbound message the agent already routes to the existing `confirm_shift` tool — no new correlation logic needed for this one.
 
+## `deliver-confirmation-outcomes.mjs`
+
+Same shape as `nudge-shifts.mjs` (targets the crew member directly, not management), but polls continuously (~1min, same cadence as `deliver-notifications.mjs`) rather than once daily: `GET /pending-confirmations/unnotified` (`status IN ('approved','rejected','expired') AND crew_notified_at IS NULL`), sends a plain-language outcome message to `crew_member_phone`, `PATCH /pending-confirmations/:id/mark-notified`. This is the "tell the crew member the outcome" half of the two-party confirm-before-execute pilot (see `AGENTS.md`'s "Two-party confirm-before-execute" section and `docs/DATABASE_SCHEMA.md#confirmations`) — the crew member doesn't need to check back after submitting one of the four gated tool calls, this delivers the decision proactively once management (or a timeout) resolves it.
+
 ## Environment variables
 
 - `BACKEND_URL` — defaults to `http://localhost:3000/api/v1`
@@ -49,6 +53,16 @@ openclaw cron add --name fieldops-shift-nudge --display-name "Shift Confirmation
   --command-env "AGENT_SERVICE_TOKEN=<real token>" \
   --command-env "OPENCLAW_BIN=$(which openclaw)" \
   --cron "0 18 * * *" --timeout-seconds 60 --no-deliver
+```
+
+`deliver-confirmation-outcomes.mjs` installs like `deliver-notifications.mjs` (every minute), also without `MANAGEMENT_WHATSAPP_NUMBER` (per-crew-member target, same as `nudge-shifts.mjs`):
+
+```bash
+openclaw cron add --name fieldops-confirmation-outcomes --display-name "Confirmation Outcome Delivery" \
+  --command "node ~/fieldops-system/openclaw/notifier/deliver-confirmation-outcomes.mjs" \
+  --command-env "AGENT_SERVICE_TOKEN=<real token>" \
+  --command-env "OPENCLAW_BIN=$(which openclaw)" \
+  --every 1m --timeout-seconds 30 --no-deliver
 ```
 
 ## Live reply-id check (do once, not blocking)

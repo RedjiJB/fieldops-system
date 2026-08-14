@@ -3,6 +3,7 @@ import { pool } from "../db/pool.js";
 import { haversineDistanceMeters } from "../lib/geo.js";
 import { insertNotification } from "../lib/notify.js";
 import { fetchDailyForecast } from "../lib/weather.js";
+import { ESCALATION_THRESHOLD_MINUTES, MAX_ESCALATIONS } from "../routes/notifications.js";
 
 // wrong_site/overdue/order_stalled/delay/weather/loadout_gap are genuine
 // exceptions worth an instant push to management; idle and vehicle_dark are
@@ -350,6 +351,24 @@ async function checkLoadoutGap(client: PoolClient): Promise<void> {
   }
 }
 
+// A pending confirmation is backed by a real critical notification, so its
+// escalation is inherited from notifications.ts's existing mechanism rather
+// than duplicated here -- this just watches for one that's exhausted its
+// escalations with nobody ever acting on it, and expires it rather than
+// leaving the crew member waiting forever.
+async function expirePendingConfirmations(client: PoolClient): Promise<void> {
+  await client.query(
+    `UPDATE pending_confirmations pc
+     SET status = 'expired'
+     FROM notifications n
+     WHERE pc.notification_id = n.id
+       AND pc.status = 'awaiting_management'
+       AND n.escalated_count >= $1
+       AND COALESCE(n.last_escalated_at, n.delivered_at) < now() - ($2 || ' minutes')::interval`,
+    [MAX_ESCALATIONS, ESCALATION_THRESHOLD_MINUTES],
+  );
+}
+
 export async function runExceptionChecks(): Promise<void> {
   const client = await pool.connect();
   try {
@@ -361,6 +380,7 @@ export async function runExceptionChecks(): Promise<void> {
     await checkDelayedArrivals(client);
     await checkLoadoutGap(client);
     await checkWeather(client);
+    await expirePendingConfirmations(client);
   } finally {
     client.release();
   }

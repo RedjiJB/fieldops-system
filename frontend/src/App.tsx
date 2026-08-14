@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { AssetsPage } from "./pages/AssetsPage";
+import { ConfirmationsPage } from "./pages/ConfirmationsPage";
 import { CrewPage } from "./pages/CrewPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { LoadoutsPage } from "./pages/LoadoutsPage";
@@ -32,7 +33,8 @@ type Tab =
   | "reports"
   | "timesheets"
   | "payroll"
-  | "spending";
+  | "spending"
+  | "confirmations";
 
 function Dashboard() {
   const { user, logout } = useAuth();
@@ -103,6 +105,11 @@ function Dashboard() {
                 Spending
               </button>
             )}
+            {user?.role === "admin" && (
+              <button onClick={() => setTab("confirmations")} disabled={tab === "confirmations"}>
+                Confirmations
+              </button>
+            )}
           </nav>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -125,6 +132,7 @@ function Dashboard() {
       {tab === "timesheets" && <TimesheetsPage />}
       {tab === "payroll" && <PayrollPage />}
       {tab === "spending" && <SpendingPage />}
+      {tab === "confirmations" && <ConfirmationsPage />}
     </div>
   );
 }
