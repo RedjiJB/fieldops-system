@@ -37,10 +37,12 @@ async function backendFetch(path, init) {
 }
 
 // Logs accumulate across restarts, so a URL can appear more than once --
-// always take the last match, never the first.
+// always take the last match, never the first. Excludes api.trycloudflare.com,
+// which is cloudflared's own control-plane host and matches the same pattern
+// but is never a tunnel URL.
 function extractLatestUrl(logOutput) {
-  const matches = logOutput.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/g);
-  return matches ? matches[matches.length - 1] : null;
+  const matches = logOutput.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/g)?.filter((u) => u !== "https://api.trycloudflare.com");
+  return matches?.length ? matches[matches.length - 1] : null;
 }
 
 async function isReachable(url) {
@@ -53,18 +55,24 @@ async function isReachable(url) {
 }
 
 async function main() {
-  // No --tail limit, deliberately: Quick Tunnel prints the URL banner once,
-  // at startup, and every reconnect after that only adds churn noise (INF/ERR
-  // retry lines) -- during a flapping episode that noise alone can exceed a
-  // fixed tail window within minutes, permanently pushing the URL out of
-  // view and forcing a false "unreachable" for as long as the churn
-  // continues, even once the tunnel actually recovers (confirmed live: this
-  // is what let a real dashboard_unreachable alert sit unresolved for
-  // hours after the tunnel had already come back). The service's own
-  // logging block (max-size 10m, max-file 3) already bounds total log
-  // volume to ~30MB, so reading everything docker has buffered is cheap and
-  // never actually unbounded.
-  const logOutput = execFileSync("docker", ["compose", "logs", "cloudflared"], {
+  // Bounded tail (--tail=100), not unbounded -- inverted from this script's
+  // original design, and confirmed empirically live rather than assumed.
+  // A plain `docker compose logs cloudflared` with no --tail limit was
+  // found to silently omit the most recently-written URL banner once the
+  // service's log rotation (max-size 10m, max-file 3) has cycled -- root
+  // cause not fully chased down (a multi-rotated-file read/ordering quirk
+  // in this Engine/Compose version), but reproduced directly: --tail=500
+  // returned a banner from *hours* earlier while --tail=50 through
+  // --tail=200, queried at the same moment, all correctly returned the
+  // live URL. 100 sits in the middle of that empirically-confirmed-good
+  // range, comfortably above one restart cycle's ~15-20 lines of precheck/
+  // connection noise (with margin for a couple of rapid reconnects) and
+  // comfortably below where spillover into older rotated files was
+  // observed. (Also tried `--since <container StartedAt>` to scope to just
+  // the current run -- abandoned separately: `--since` returned zero lines
+  // even for timestamps seconds in the past, on this host, for reasons not
+  // chased down.)
+  const logOutput = execFileSync("docker", ["compose", "logs", "cloudflared", "--tail=100"], {
     cwd: REPO_DIR,
     encoding: "utf8",
   });
