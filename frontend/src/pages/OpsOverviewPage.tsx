@@ -230,13 +230,27 @@ export function OpsOverviewPage() {
         setAlerts(a);
         setOrders(o);
         setNotifications(n);
-        setSelectedAlertIds(new Set());
-        setSelectedNotificationIds(new Set());
+        // Prune rather than wipe -- a poll firing mid-selection shouldn't
+        // discard checkboxes for items that are still there; only ones
+        // that dropped out of the new list (someone else resolved/
+        // acknowledged it, or this reload followed a bulk action of our
+        // own) get deselected.
+        setSelectedAlertIds((prev) => new Set([...prev].filter((id) => a.some((x) => x.id === id))));
+        setSelectedNotificationIds((prev) => new Set([...prev].filter((id) => n.some((x) => x.id === id))));
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load ops data"));
   }
 
-  useEffect(reload, []);
+  // This page is specifically what "a new alert won't appear until you
+  // refresh" was about -- alerts/notifications/orders are the time-sensitive
+  // data here, unlike most other dashboard pages (editing forms, browsing
+  // history) where a background refresh would be more disruptive than
+  // useful. Scoped to this page rather than every page in the app.
+  useEffect(() => {
+    reload();
+    const interval = setInterval(reload, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   function toggleAlertSelected(id: string) {
     setSelectedAlertIds((prev) => {
