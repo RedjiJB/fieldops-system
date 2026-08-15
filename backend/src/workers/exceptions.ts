@@ -29,6 +29,7 @@ const ALERT_MESSAGES: Record<string, string> = {
   idle: "A crew member has been on-shift 2+ hours with no recorded site activity.",
   vehicle_dark: "A vehicle was reporting location today and has since gone quiet for 3+ hours.",
   dashboard_unreachable: "🚨 The dashboard's public URL is unreachable — the Quick Tunnel may be down.",
+  maintenance_due: "An asset's preventive maintenance interval has elapsed.",
 };
 
 // Vehicle telemetry older than this is treated as stale, not evidence of
@@ -355,6 +356,33 @@ async function checkLoadoutGap(client: PoolClient): Promise<void> {
   }
 }
 
+// Calendar-interval only (see 0056_assets_maintenance_schedule.sql) --
+// service_interval_days IS NULL means no schedule is configured for that
+// asset, not "due now". Never-serviced assets are due starting from
+// registration (COALESCE to created_at), not exempt forever. Routine, not
+// critical -- same reasoning as in_maintenance itself not being in
+// CRITICAL_ASSET_STATUSES (backend/src/routes/assets.ts): a lapsed service
+// window is a planning nudge, not an active-incident page.
+async function checkMaintenanceDue(client: PoolClient): Promise<void> {
+  const result = await client.query(`
+    SELECT a.id, a.name, a.current_site_id, a.last_serviced_at
+    FROM assets a
+    WHERE a.service_interval_days IS NOT NULL
+      AND a.status != 'retired'
+      AND COALESCE(a.last_serviced_at, a.created_at) + (a.service_interval_days || ' days')::interval < now()
+  `);
+  for (const row of result.rows) {
+    const lastServiced = row.last_serviced_at ? new Date(row.last_serviced_at).toLocaleDateString() : "never";
+    await raiseAlert(
+      client,
+      "maintenance_due",
+      row.current_site_id,
+      row.id,
+      `🔧 ${row.name} is due for maintenance (last serviced: ${lastServiced}).`,
+    );
+  }
+}
+
 // A pending confirmation is backed by a real critical notification, so its
 // escalation is inherited from notifications.ts's existing mechanism rather
 // than duplicated here -- this just watches for one that's exhausted its
@@ -386,6 +414,7 @@ export async function runExceptionChecks(): Promise<void> {
     await checkVehicleDark(client, settings);
     await checkDelayedArrivals(client, settings);
     await checkLoadoutGap(client);
+    await checkMaintenanceDue(client);
     await checkWeather(client, settings);
     await expirePendingConfirmations(client, settings);
   } finally {

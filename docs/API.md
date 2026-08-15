@@ -91,6 +91,8 @@ Company card purchases, petty cash spend, mileage claims, and reimbursable recei
 | `POST` | `/assets` | Register a new asset (yard staff or crew, on purchase) |
 | `PATCH` | `/assets/:id/verify` | Mark verified during bootstrap sweep — sets `last_verified_at`, `status: available` |
 | `PATCH` | `/assets/:id/status` | Update status (missing, in_maintenance, retired, etc.) |
+| `PATCH` | `/assets/:id/maintenance-schedule` | Set (or `null` to clear) `service_interval_days` — the recurring calendar interval a preventive-maintenance schedule runs on |
+| `POST` | `/assets/:id/log-service` | Record that maintenance just happened, resetting `last_serviced_at` to now |
 | `GET` | `/consumables?stocking_type=` | List consumables, with on-hand quantities where applicable |
 | `PATCH` | `/consumables/:id/quantity` | Adjust on-hand quantity (crew-reported restock/usage) |
 | `GET` | `/consumables/:id/price-history` | Real transaction-time `unit_cost` values from `order_items`, newest first — feeds future job-costing/reporting, no dedicated frontend view yet |

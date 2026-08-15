@@ -163,6 +163,9 @@ export type Asset = {
   current_holder_name: string | null;
   last_verified_at: string | null;
   created_at: string;
+  service_interval_days: number | null;
+  last_serviced_at: string | null;
+  next_service_due: string | null;
 };
 
 export const DOCUMENT_TYPES = [
@@ -559,6 +562,12 @@ export const api = {
   },
   updateAssetStatus: (id: string, status: string) =>
     request<Asset>(`/assets/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  setAssetMaintenanceSchedule: (id: string, serviceIntervalDays: number | null) =>
+    request<Asset>(`/assets/${id}/maintenance-schedule`, {
+      method: "PATCH",
+      body: JSON.stringify({ service_interval_days: serviceIntervalDays }),
+    }),
+  logAssetService: (id: string) => request<Asset>(`/assets/${id}/log-service`, { method: "POST" }),
   documents: (filters: { site_id?: string; type?: string }) => {
     const params = new URLSearchParams();
     if (filters.site_id) params.set("site_id", filters.site_id);

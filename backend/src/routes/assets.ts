@@ -9,6 +9,18 @@ import { insertNotification } from "../lib/notify.js";
 // is routine and only ever shows up in the digest via list_notifications.
 const CRITICAL_ASSET_STATUSES = new Set(["missing", "retired"]);
 
+// Computed, not stored -- shared across every route that returns an asset
+// row (GET /assets, GET /assets/:id, and the two maintenance-mutating
+// routes below) so a client never sees a stale value from a route whose
+// RETURNING * doesn't happen to include it. Never-serviced assets are due
+// starting from registration (COALESCE to created_at), not exempt forever.
+const NEXT_SERVICE_DUE_SQL = `
+  CASE WHEN a.service_interval_days IS NOT NULL
+    THEN COALESCE(a.last_serviced_at, a.created_at) + (a.service_interval_days || ' days')::interval
+    ELSE NULL
+  END AS next_service_due
+`;
+
 export const assetsRouter = Router();
 
 const ASSET_STATUSES = [
@@ -52,8 +64,12 @@ assetsRouter.get(
     // Joined names for the dashboard's asset browser — raw UUIDs aren't
     // useful on a management screen. Purely additive, same reasoning as
     // GET /orders/GET /shifts gaining joined names earlier.
+    // next_service_due is computed, not stored -- last_serviced_at falls
+    // back to created_at (never-serviced assets are due starting from
+    // registration, not exempt from the schedule forever) whenever an
+    // interval is actually set; null when no interval is set at all.
     const result = await pool.query(
-      `SELECT a.*, s.name AS current_site_name, cm.name AS current_holder_name
+      `SELECT a.*, s.name AS current_site_name, cm.name AS current_holder_name, ${NEXT_SERVICE_DUE_SQL}
        FROM assets a
        LEFT JOIN sites s ON s.id = a.current_site_id
        LEFT JOIN crew_members cm ON cm.id = a.current_holder
@@ -68,7 +84,10 @@ assetsRouter.get(
 assetsRouter.get(
   "/assets/:id",
   asyncHandler(async (req, res) => {
-    const assetResult = await pool.query("SELECT * FROM assets WHERE id = $1", [req.params.id]);
+    const assetResult = await pool.query(
+      `SELECT a.*, ${NEXT_SERVICE_DUE_SQL} FROM assets a WHERE a.id = $1`,
+      [req.params.id],
+    );
     const asset = assetResult.rows[0];
     if (!asset) throw new HttpError(404, "Asset not found");
 
@@ -125,6 +144,48 @@ assetsRouter.patch(
     const asset = result.rows[0];
     if (!asset) throw new HttpError(404, "Asset not found");
     await insertNotification(pool, "routine", `${asset.name} verified — now available.`, "asset", asset.id);
+    res.json(asset);
+  }),
+);
+
+// Sets the recurring interval a maintenance schedule runs on. Separate from
+// /log-service below -- setting up a schedule and recording that service
+// just happened are two different actions, same granular-route style as
+// /verify vs. /status.
+assetsRouter.patch(
+  "/assets/:id/maintenance-schedule",
+  asyncHandler(async (req, res) => {
+    const { service_interval_days } = req.body;
+    if (service_interval_days !== null && !Number.isInteger(service_interval_days)) {
+      throw new HttpError(400, "service_interval_days must be an integer, or null to disable the schedule");
+    }
+    if (typeof service_interval_days === "number" && service_interval_days <= 0) {
+      throw new HttpError(400, "service_interval_days must be a positive integer");
+    }
+
+    const result = await pool.query(
+      `UPDATE assets a SET service_interval_days = $2 WHERE a.id = $1 RETURNING a.*, ${NEXT_SERVICE_DUE_SQL}`,
+      [req.params.id, service_interval_days],
+    );
+    if (!result.rows[0]) throw new HttpError(404, "Asset not found");
+    res.json(result.rows[0]);
+  }),
+);
+
+// Records that maintenance just happened, resetting the interval's clock.
+// Doesn't auto-resolve an open maintenance_due alert -- same as checkouts
+// don't auto-resolve 'overdue' on return, resolution stays a deliberate
+// human action via PATCH /alerts/:id/resolve.
+assetsRouter.post(
+  "/assets/:id/log-service",
+  asyncHandler(async (req, res) => {
+    const result = await pool.query(
+      `UPDATE assets a SET last_serviced_at = now() WHERE a.id = $1 RETURNING a.*, ${NEXT_SERVICE_DUE_SQL}`,
+      [req.params.id],
+    );
+    const asset = result.rows[0];
+    if (!asset) throw new HttpError(404, "Asset not found");
+    await insertNotification(pool, "routine", `${asset.name} logged as serviced.`, "asset", asset.id);
     res.json(asset);
   }),
 );

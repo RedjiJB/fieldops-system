@@ -11,6 +11,64 @@ const rowStyle = {
 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const };
 
+// Calendar-interval maintenance schedule, inline per row -- matches this
+// page's plain row+inline-control style, no modal/expand-toggle like
+// OpsOverviewPage's order rows.
+function MaintenanceControls({
+  asset,
+  onSetSchedule,
+  onLogService,
+}: {
+  asset: Asset;
+  onSetSchedule: (asset: Asset, days: number | null) => void;
+  onLogService: (asset: Asset) => void;
+}) {
+  const [draft, setDraft] = useState(asset.service_interval_days?.toString() ?? "");
+
+  const dueDate = asset.next_service_due ? new Date(asset.next_service_due) : null;
+  const overdue = dueDate ? dueDate.getTime() < Date.now() : false;
+
+  function submit() {
+    const trimmed = draft.trim();
+    if (trimmed === "") {
+      onSetSchedule(asset, null);
+      return;
+    }
+    const days = Number(trimmed);
+    if (!Number.isInteger(days) || days <= 0) return;
+    onSetSchedule(asset, days);
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#888", marginTop: 2 }}>
+      {dueDate ? (
+        <span style={overdue ? { color: "#c0392b", fontWeight: "bold" } : undefined}>
+          {overdue ? "Maintenance overdue: " : "Next service due: "}
+          {dueDate.toLocaleDateString()}
+        </span>
+      ) : (
+        <span>No maintenance schedule</span>
+      )}
+      <input
+        type="number"
+        min={1}
+        placeholder="days"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        style={{ width: 60, padding: 2 }}
+      />
+      <button onClick={submit} style={{ fontSize: 12 }}>
+        Set interval
+      </button>
+      {asset.service_interval_days != null && (
+        <button onClick={() => onLogService(asset)} style={{ fontSize: 12 }}>
+          Log service
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
@@ -61,6 +119,25 @@ export function AssetsPage() {
       setAssets((prev) => prev.map((a) => (a.id === asset.id ? { ...a, ...updated } : a)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update asset status");
+    }
+  }
+
+  async function onSetSchedule(asset: Asset, days: number | null) {
+    try {
+      const updated = await api.setAssetMaintenanceSchedule(asset.id, days);
+      setAssets((prev) => prev.map((a) => (a.id === asset.id ? { ...a, ...updated } : a)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update maintenance schedule");
+    }
+  }
+
+  async function onLogService(asset: Asset) {
+    if (!window.confirm(`Log "${asset.name}" as serviced today?`)) return;
+    try {
+      const updated = await api.logAssetService(asset.id);
+      setAssets((prev) => prev.map((a) => (a.id === asset.id ? { ...a, ...updated } : a)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to log service");
     }
   }
 
@@ -151,33 +228,36 @@ export function AssetsPage() {
           </div>
         )}
         {visibleAssets.map((a) => (
-          <div key={a.id} style={rowStyle}>
-            <span>
-              <input
-                type="checkbox"
-                checked={selectedIds.has(a.id)}
-                onChange={() => toggleSelected(a.id)}
-                style={{ marginRight: 8 }}
-              />
-              <strong>{a.name}</strong>
-              <span style={{ color: "#888" }}> ({a.category})</span>
-              <span style={{ color: "#888" }}>
-                {" "}
-                — {a.current_site_name ?? "no site on record"}
-                {a.current_holder_name ? `, held by ${a.current_holder_name}` : ""}
+          <div key={a.id} style={{ ...rowStyle, flexDirection: "column", alignItems: "stretch" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(a.id)}
+                  onChange={() => toggleSelected(a.id)}
+                  style={{ marginRight: 8 }}
+                />
+                <strong>{a.name}</strong>
+                <span style={{ color: "#888" }}> ({a.category})</span>
+                <span style={{ color: "#888" }}>
+                  {" "}
+                  — {a.current_site_name ?? "no site on record"}
+                  {a.current_holder_name ? `, held by ${a.current_holder_name}` : ""}
+                </span>
               </span>
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <em>{a.status}</em>
-              <select value="" onChange={(e) => e.target.value && onChangeStatus(a, e.target.value)}>
-                <option value="">Change status…</option>
-                {ASSET_DIRECTLY_SETTABLE_STATUSES.filter((s) => s !== a.status).map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <em>{a.status}</em>
+                <select value="" onChange={(e) => e.target.value && onChangeStatus(a, e.target.value)}>
+                  <option value="">Change status…</option>
+                  {ASSET_DIRECTLY_SETTABLE_STATUSES.filter((s) => s !== a.status).map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </div>
+            <MaintenanceControls asset={a} onSetSchedule={onSetSchedule} onLogService={onLogService} />
           </div>
         ))}
       </section>

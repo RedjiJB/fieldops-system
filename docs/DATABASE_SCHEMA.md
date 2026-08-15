@@ -21,7 +21,16 @@ CREATE TABLE assets (
   status          asset_status NOT NULL DEFAULT 'unconfirmed',
   last_verified_at TIMESTAMPTZ,
   verified_by     UUID REFERENCES crew_members(id),
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Added in 0056. Preventive maintenance, calendar-interval only -- no
+  -- usage/mileage/hours tracking exists on assets (deliberately the smaller
+  -- of two possible designs, see ROADMAP.md/backlog). NULL
+  -- service_interval_days means no schedule is configured, not "due now".
+  -- "next service due" is computed at query time
+  -- (COALESCE(last_serviced_at, created_at) + service_interval_days), not
+  -- stored -- see GET /assets in API.md.
+  service_interval_days INTEGER,
+  last_serviced_at       TIMESTAMPTZ
 );
 ```
 
