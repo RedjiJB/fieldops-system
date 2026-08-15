@@ -448,6 +448,8 @@ CREATE TABLE notifications (
 
 Not everything hardcoded in `exceptions.ts` moved here — `STALE_TELEMETRY_MINUTES` (60) and `VEHICLE_DARK_HOURS` (3, the silence threshold that triggers a `vehicle_dark` check at all) stayed fixed constants, deliberately: they're detection-sensitivity tuning, not the kind of policy call ("should this page management instantly, and who") this page is for. `vehicle_dark_critical` is a different knob entirely — it only controls whether an already-detected `vehicle_dark` alert is `critical` (pages instantly) or `routine` (digest-only), via a `criticalOverride` param `raiseAlert` now accepts; every other alert type still uses the static `CRITICAL_ALERT_TYPES` set in `exceptions.ts`, unchanged.
 
+`daily_overtime_hours`/`break_required_after_hours` (added `0062`) are a different category from the rest of this table — they don't drive an alert at all, only the `overtime`/`missed_break` booleans `fetchSessionsInRange` (`backend/src/lib/timeclock.ts`) computes on every timeclock session, consumed by `GET /timesheets/sessions`, `GET /reports/timesheets.csv`, and `TimesheetsPage.tsx`. Deliberately not wired into the exceptions worker or any WhatsApp push — overtime/missed-break is a payroll-period review concern, not a right-now incident, so it stays visible where hours actually get reviewed rather than adding a new alert type/paging path for it.
+
 ```sql
 CREATE TABLE notification_settings (
   escalation_threshold_minutes INTEGER NOT NULL DEFAULT 20,
@@ -459,6 +461,13 @@ CREATE TABLE notification_settings (
   delay_buffer_minutes         INTEGER NOT NULL DEFAULT 30,
   rain_probability_threshold   INTEGER NOT NULL DEFAULT 70,
   wind_speed_threshold_kmh     INTEGER NOT NULL DEFAULT 40,
+  -- Added in 0062. Drive the overtime/missed_break flags computed on
+  -- timeclock sessions (backend/src/lib/timeclock.ts's computeSessions) --
+  -- shown on the Timesheets page and in timesheets.csv, not paged; a
+  -- payroll-review signal, not an active-incident alert like the rest of
+  -- this table.
+  daily_overtime_hours         INTEGER NOT NULL DEFAULT 8,
+  break_required_after_hours   INTEGER NOT NULL DEFAULT 5,
   updated_at                   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```

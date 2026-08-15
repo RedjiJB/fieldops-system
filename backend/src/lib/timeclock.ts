@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from "pg";
+import { getNotificationSettings } from "./notificationSettings.js";
 
 export type TimeclockEventType = "in" | "break_start" | "break_end" | "out";
 
@@ -19,7 +20,17 @@ export type TimeclockSession = {
   site_ids: string[];
   geofence_verified: boolean; // every constituent event was geofence-verified
   incomplete: boolean;
+  overtime: boolean; // gross shift span (not net) exceeds dailyOvertimeHours -- always false while incomplete
+  missed_break: boolean; // gross shift span exceeds breakRequiredAfterHours with zero recorded break -- always false while incomplete
 };
+
+export type OvertimeBreakThresholds = { dailyOvertimeHours: number; breakRequiredAfterHours: number };
+
+// Defaults mirror notification_settings' own column defaults
+// (0062_overtime_break_settings.sql) -- only used if a caller doesn't
+// fetch real settings (computeSessions itself stays a pure function, no DB
+// access), so callers should prefer passing the real configured values.
+const DEFAULT_THRESHOLDS: OvertimeBreakThresholds = { dailyOvertimeHours: 8, breakRequiredAfterHours: 5 };
 
 function toMs(t: string | Date): number {
   return t instanceof Date ? t.getTime() : new Date(t).getTime();
@@ -32,7 +43,10 @@ function toMs(t: string | Date): number {
 // a close time -- this mirrors the session's "crew claims need verification,
 // not silent acceptance" principle: an unclosed session is a real gap, not
 // something to paper over with an estimate.
-export function computeSessions(rows: TimeclockEntryRow[]): TimeclockSession[] {
+export function computeSessions(
+  rows: TimeclockEntryRow[],
+  thresholds: OvertimeBreakThresholds = DEFAULT_THRESHOLDS,
+): TimeclockSession[] {
   const byCrew = new Map<string, TimeclockEntryRow[]>();
   for (const row of rows) {
     const list = byCrew.get(row.crew_member_id) ?? [];
@@ -57,6 +71,14 @@ export function computeSessions(rows: TimeclockEntryRow[]): TimeclockSession[] {
     }
 
     function pushSession(endedAtMs: number | null) {
+      // Gross shift span (clock-in to clock-out), not net worked time --
+      // "5 consecutive hours" / "an 8-hour shift" language describes the
+      // shift itself, and net time already has any break subtracted out,
+      // which would make a compliant break look like it shortened the
+      // shift below the threshold that triggered needing one in the first
+      // place. Only evaluated for a closed session -- an open-ended
+      // incomplete one has no defensible duration to threshold against.
+      const grossHours = endedAtMs === null ? null : (endedAtMs - startedAt) / 3600 / 1000;
       sessions.push({
         crew_member_id: crewMemberId,
         started_at: new Date(startedAt).toISOString(),
@@ -66,6 +88,8 @@ export function computeSessions(rows: TimeclockEntryRow[]): TimeclockSession[] {
         site_ids: siteIds,
         geofence_verified: geofenceVerified,
         incomplete: endedAtMs === null,
+        overtime: grossHours !== null && grossHours > thresholds.dailyOvertimeHours,
+        missed_break: grossHours !== null && grossHours > thresholds.breakRequiredAfterHours && breakSeconds === 0,
       });
     }
 
@@ -142,15 +166,21 @@ export async function fetchSessionsInRange(
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  const result = await db.query(
-    `SELECT crew_member_id, event_type, site_id, timestamp, geofence_verified
-     FROM timeclock_entries
-     ${where}
-     ORDER BY crew_member_id, timestamp`,
-    params,
-  );
+  const [result, settings] = await Promise.all([
+    db.query(
+      `SELECT crew_member_id, event_type, site_id, timestamp, geofence_verified
+       FROM timeclock_entries
+       ${where}
+       ORDER BY crew_member_id, timestamp`,
+      params,
+    ),
+    getNotificationSettings(db),
+  ]);
 
-  let sessions = computeSessions(result.rows);
+  let sessions = computeSessions(result.rows, {
+    dailyOvertimeHours: settings.daily_overtime_hours,
+    breakRequiredAfterHours: settings.break_required_after_hours,
+  });
 
   if (date_from) {
     const from = new Date(`${date_from}T00:00:00.000Z`).getTime();

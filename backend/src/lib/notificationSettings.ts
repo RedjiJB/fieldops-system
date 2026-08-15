@@ -15,10 +15,18 @@ export type NotificationSettings = {
   delay_buffer_minutes: number;
   rain_probability_threshold: number;
   wind_speed_threshold_kmh: number;
+  daily_overtime_hours: number;
+  break_required_after_hours: number;
   updated_at: string;
 };
 
-export async function getNotificationSettings(client: Pool | PoolClient): Promise<NotificationSettings> {
+// Pick<..., "query"> rather than the full Pool | PoolClient -- matches
+// lib/notify.ts's/lib/timeclock.ts's own Queryable convention, widened here
+// so callers passing that narrower type (e.g. fetchSessionsInRange) don't
+// need a cast.
+export async function getNotificationSettings(
+  client: Pick<Pool | PoolClient, "query">,
+): Promise<NotificationSettings> {
   const result = await client.query("SELECT * FROM notification_settings LIMIT 1");
   return result.rows[0];
 }

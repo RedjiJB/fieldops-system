@@ -19,6 +19,8 @@ type FormState = {
   delay_buffer_minutes: string;
   rain_probability_threshold: string;
   wind_speed_threshold_kmh: string;
+  daily_overtime_hours: string;
+  break_required_after_hours: string;
 };
 
 function toFormState(settings: NotificationSettings): FormState {
@@ -32,6 +34,8 @@ function toFormState(settings: NotificationSettings): FormState {
     delay_buffer_minutes: String(settings.delay_buffer_minutes),
     rain_probability_threshold: String(settings.rain_probability_threshold),
     wind_speed_threshold_kmh: String(settings.wind_speed_threshold_kmh),
+    daily_overtime_hours: String(settings.daily_overtime_hours),
+    break_required_after_hours: String(settings.break_required_after_hours),
   };
 }
 
@@ -125,6 +129,8 @@ export function NotificationSettingsPage() {
         delay_buffer_minutes: positiveInt(form.delay_buffer_minutes, "Delay buffer"),
         rain_probability_threshold: positiveInt(form.rain_probability_threshold, "Rain probability threshold"),
         wind_speed_threshold_kmh: positiveInt(form.wind_speed_threshold_kmh, "Wind speed threshold"),
+        daily_overtime_hours: positiveInt(form.daily_overtime_hours, "Daily overtime threshold"),
+        break_required_after_hours: positiveInt(form.break_required_after_hours, "Break-required threshold"),
       };
       const updated = await api.updateNotificationSettings(patch);
       setSettings(updated);
@@ -240,6 +246,25 @@ export function NotificationSettingsPage() {
               value={form.wind_speed_threshold_kmh}
               onChange={(v) => setForm({ ...form, wind_speed_threshold_kmh: v })}
               suffix="km/h"
+            />
+
+            <h3 style={{ fontSize: 14, marginTop: 24 }}>Overtime / break compliance</h3>
+            <p style={{ ...helpStyle, margin: "0 0 12px" }}>
+              Shown on the Timesheets page, not paged — a payroll-review flag, not an active-incident alert.
+            </p>
+            <NumberField
+              label="Daily overtime"
+              help="A shift (clock-in to clock-out span) longer than this gets flagged overtime."
+              value={form.daily_overtime_hours}
+              onChange={(v) => setForm({ ...form, daily_overtime_hours: v })}
+              suffix="hours"
+            />
+            <NumberField
+              label="Break required after"
+              help="A shift longer than this with zero recorded break gets flagged missed break."
+              value={form.break_required_after_hours}
+              onChange={(v) => setForm({ ...form, break_required_after_hours: v })}
+              suffix="hours"
             />
 
             <button onClick={save} disabled={saving} style={{ marginTop: 8 }}>

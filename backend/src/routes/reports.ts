@@ -250,6 +250,8 @@ reportsRouter.get(
       { header: "Sites", value: (s) => s.site_ids.map((id) => siteNameById.get(id) ?? id).join("; ") },
       { header: "Geofence Verified", value: (s) => s.geofence_verified },
       { header: "Status", value: (s) => (s.incomplete ? "incomplete" : "complete") },
+      { header: "Overtime", value: (s) => s.overtime },
+      { header: "Missed Break", value: (s) => s.missed_break },
     ]);
     sendCsv(res, "timesheets.csv", csv);
   }),

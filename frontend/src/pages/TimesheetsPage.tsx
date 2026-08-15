@@ -63,7 +63,8 @@ export function TimesheetsPage() {
         <h2 style={{ fontSize: 16 }}>Timesheets</h2>
         <p style={{ color: "#888", fontSize: 13 }}>
           Clock-in/out sessions computed from raw timeclock events. A session with no matching clock-out is flagged
-          "incomplete" rather than guessed — pay rates, corrections, and pay periods aren't handled here.
+          "incomplete" rather than guessed. Overtime/missed-break flags use the thresholds set on the Notification
+          Settings page — pay rates, corrections, and pay periods aren't handled here.
         </p>
         {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
@@ -95,6 +96,8 @@ export function TimesheetsPage() {
                   {s.ended_at ? new Date(s.ended_at).toLocaleString() : "no clock-out"}
                   <span style={{ color: "#888" }}> — break {formatBreak(s.break_seconds)}</span>
                   {!s.geofence_verified && <span style={{ color: "#c9902f" }}> — geofence unverified</span>}
+                  {s.overtime && <span style={{ color: "#c0392b" }}> — overtime</span>}
+                  {s.missed_break && <span style={{ color: "#c9902f" }}> — missed break</span>}
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {s.incomplete ? (

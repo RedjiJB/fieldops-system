@@ -191,6 +191,8 @@ export type NotificationSettings = {
   delay_buffer_minutes: number;
   rain_probability_threshold: number;
   wind_speed_threshold_kmh: number;
+  daily_overtime_hours: number;
+  break_required_after_hours: number;
   updated_at: string;
 };
 
@@ -516,6 +518,8 @@ export type TimeclockSession = {
   site_ids: string[];
   geofence_verified: boolean;
   incomplete: boolean;
+  overtime: boolean;
+  missed_break: boolean;
 };
 
 export type Document = {

@@ -41,6 +41,8 @@ notificationSettingsRouter.patch(
       delay_buffer_minutes,
       rain_probability_threshold,
       wind_speed_threshold_kmh,
+      daily_overtime_hours,
+      break_required_after_hours,
     } = req.body;
 
     const positiveIntFields: Record<string, number | undefined> = {
@@ -49,6 +51,8 @@ notificationSettingsRouter.patch(
       order_stall_hours,
       idle_hours,
       delay_buffer_minutes,
+      daily_overtime_hours,
+      break_required_after_hours,
     };
     for (const [field, value] of Object.entries(positiveIntFields)) {
       if (value !== undefined && (!Number.isInteger(value) || value <= 0)) {
@@ -96,6 +100,8 @@ notificationSettingsRouter.patch(
          delay_buffer_minutes = COALESCE($7, delay_buffer_minutes),
          rain_probability_threshold = COALESCE($8, rain_probability_threshold),
          wind_speed_threshold_kmh = COALESCE($9, wind_speed_threshold_kmh),
+         daily_overtime_hours = COALESCE($10, daily_overtime_hours),
+         break_required_after_hours = COALESCE($11, break_required_after_hours),
          updated_at = now()
        RETURNING *`,
       [
@@ -108,6 +114,8 @@ notificationSettingsRouter.patch(
         delay_buffer_minutes ?? null,
         rain_probability_threshold ?? null,
         wind_speed_threshold_kmh ?? null,
+        daily_overtime_hours ?? null,
+        break_required_after_hours ?? null,
       ],
     );
     res.json(result.rows[0]);

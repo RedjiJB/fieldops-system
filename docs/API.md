@@ -193,7 +193,7 @@ CSV downloads, all filterable by `date_from`/`date_to` (widened internally where
 | `GET` | `/reports/vendor-spend.csv?date_from=&date_to=` | Same grouping as the JSON route above, as a CSV |
 | `GET` | `/reports/model-usage?date_from=&date_to=` | JSON — `model_usage_daily` grouped by provider/model/month (`{provider, model, month, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, total_tokens, cost_usd}`). Not admin-gated, same precedent as vendor-spend above — operational API cost, not wage/cash-handling data. Powers `ReportsPage.tsx`'s on-screen table, not just the CSV below. |
 | `GET` | `/reports/model-usage.csv?date_from=&date_to=` | Same grouping as the JSON route above, as a CSV |
-| `GET` | `/reports/timesheets.csv?date_from=&date_to=&crew_member_id=` | Computed timeclock sessions (see below) — incomplete sessions export with a blank hours column and `Status = incomplete`, never a guessed number |
+| `GET` | `/reports/timesheets.csv?date_from=&date_to=&crew_member_id=` | Computed timeclock sessions (see below) — incomplete sessions export with a blank hours column and `Status = incomplete`, never a guessed number. Also includes `Overtime`/`Missed Break` columns (see `/notification-settings`' thresholds below) |
 | `GET` | `/reports/period-close?date_from=&date_to=` | JSON rollup for month/quarter close — completed jobs, hours by crew member, spend by category, missing receipts, anomalies (alerts). `date_from`/`date_to` are **required** (400 if either is missing, unlike the routes above); `admin`-only unconditionally, both dashboard and service-token — no agent tool for this one |
 | `GET` | `/reports/period-close.csv?date_from=&date_to=` | Same rollup as **multi-section CSV**: a summary-totals row, then one flat table per section (Completed Jobs, Hours by Crew Member, Spend by Category, Missing Receipts, Anomalies), each with its own title row. Meant for a human/bookkeeper to scan or copy-paste section by section — not one flat table to re-parse programmatically |
 
@@ -203,7 +203,7 @@ Pairs raw `timeclock_entries` events (`in`/`break_start`/`break_end`/`out`) into
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/timesheets/sessions?crew_member_id=&date_from=&date_to=` | Computed sessions in range, incomplete ones included (flagged, not filtered out) |
+| `GET` | `/timesheets/sessions?crew_member_id=&date_from=&date_to=` | Computed sessions in range, incomplete ones included (flagged, not filtered out). Each session carries `overtime`/`missed_break` booleans, computed against the configurable thresholds below — always `false` while `incomplete` |
 
 ## Vehicles & Location
 
@@ -263,7 +263,7 @@ Backs the dashboard's Notification Settings page — see [DATABASE_SCHEMA.md](DA
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/notification-settings` | Current settings. Dual-path auth like `GET /notifications/pending` — dashboard session must be admin, service token passes through ungated (`openclaw/notifier/deliver-notifications.mjs` fetches this every cron run for `critical_notification_roles`) |
-| `PATCH` | `/notification-settings` | Partial update — **admin only**, no agent-facing write path. Body: any subset of `escalation_threshold_minutes`, `max_escalations`, `vehicle_dark_critical`, `critical_notification_roles` (non-empty array of valid `crew_members.role` values), `order_stall_hours`, `idle_hours`, `delay_buffer_minutes`, `rain_probability_threshold` (0–100), `wind_speed_threshold_kmh`. All numeric fields must be positive integers. |
+| `PATCH` | `/notification-settings` | Partial update — **admin only**, no agent-facing write path. Body: any subset of `escalation_threshold_minutes`, `max_escalations`, `vehicle_dark_critical`, `critical_notification_roles` (non-empty array of valid `crew_members.role` values), `order_stall_hours`, `idle_hours`, `delay_buffer_minutes`, `rain_probability_threshold` (0–100), `wind_speed_threshold_kmh`, `daily_overtime_hours`, `break_required_after_hours`. All numeric fields must be positive integers. The last two don't drive an alert — they only control the `overtime`/`missed_break` flags on `/timesheets/sessions` and `/reports/timesheets.csv`. |
 
 ## Confirmations
 
