@@ -295,7 +295,16 @@ async function approveAssetVerification(client: PoolClient, pc: any): Promise<st
   return result.rows[0].id;
 }
 
-async function approvePurchaseOrderFulfillment(client: PoolClient, pc: any): Promise<string> {
+// fulfilled_by/fulfilled_by_user_id record the *reviewer* who approved
+// this, not the crew member who originally submitted the fulfillment
+// claim (pc.crew_member_id) -- "who approved this spend" is the whole
+// point of an approval trail, so this deliberately mirrors reviewed_by/
+// reviewed_by_user_id below rather than pc's own submitter.
+async function approvePurchaseOrderFulfillment(
+  client: PoolClient,
+  pc: any,
+  reviewer: { reviewedBy: string | null; reviewedByUserId: string | null },
+): Promise<string> {
   const { purchase_order_id } = pc.payload;
   const existing = await client.query("SELECT * FROM purchase_orders WHERE id = $1 FOR UPDATE", [
     purchase_order_id,
@@ -310,8 +319,11 @@ async function approvePurchaseOrderFulfillment(client: PoolClient, pc: any): Pro
   }
 
   const result = await client.query(
-    `UPDATE purchase_orders SET status = 'fulfilled' WHERE id = $1 RETURNING id`,
-    [purchase_order_id],
+    `UPDATE purchase_orders
+     SET status = 'fulfilled', fulfilled_at = now(),
+         fulfilled_by = $2, fulfilled_by_user_id = $3
+     WHERE id = $1 RETURNING id`,
+    [purchase_order_id, reviewer.reviewedBy, reviewer.reviewedByUserId],
   );
   return result.rows[0].id;
 }
@@ -350,7 +362,7 @@ confirmationsRouter.patch(
       } else if (pc.action_type === "asset_verification") {
         resultId = await approveAssetVerification(client, pc);
       } else if (pc.action_type === "purchase_order_fulfillment") {
-        resultId = await approvePurchaseOrderFulfillment(client, pc);
+        resultId = await approvePurchaseOrderFulfillment(client, pc, reviewer);
       } else {
         throw new HttpError(500, `Unknown action_type: ${pc.action_type}`);
       }

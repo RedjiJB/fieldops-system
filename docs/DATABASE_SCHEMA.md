@@ -200,14 +200,26 @@ CREATE TABLE vendors (
 CREATE TYPE po_status AS ENUM ('compiled', 'sent_to_office', 'forwarded_by_office', 'fulfilled');
 
 CREATE TABLE purchase_orders (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  vendor_id  UUID REFERENCES vendors(id),
-  order_id   UUID REFERENCES orders(id), -- which order this was compiled from; nullable, added in 0037, pre-migration rows have none
-  status     po_status NOT NULL DEFAULT 'compiled',
-  cost       NUMERIC,
-  eta        DATE,
-  sent_to    TEXT, -- info@thesodboys.ca, or a specific picker's contact
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vendor_id            UUID REFERENCES vendors(id),
+  order_id             UUID REFERENCES orders(id), -- which order this was compiled from; nullable, added in 0037, pre-migration rows have none
+  status               po_status NOT NULL DEFAULT 'compiled',
+  cost                 NUMERIC,
+  eta                  DATE,
+  sent_to              TEXT, -- info@thesodboys.ca, or a specific picker's contact
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Added in 0055. Only the fulfillment step has an actor -- compiled/sent
+  -- have none yet (see ARCHITECTURE.md's Activity Log note). fulfilled_by_*
+  -- follows the same dual-path convention as every other actor pair in this
+  -- schema: PATCH /purchase-orders/:id/fulfilled (dashboard-direct) sets only
+  -- fulfilled_by_user_id; the agent's mark_purchase_order_fulfilled tool
+  -- never calls that route -- it always goes through the two-party
+  -- pending_confirmations approval instead, which sets both columns from the
+  -- *approving reviewer* (mirrors reviewed_by/reviewed_by_user_id), not the
+  -- crew member who originally submitted the fulfillment claim.
+  fulfilled_at         TIMESTAMPTZ,
+  fulfilled_by         UUID REFERENCES crew_members(id),
+  fulfilled_by_user_id UUID REFERENCES users(id)
 );
 
 CREATE TABLE purchase_order_items (

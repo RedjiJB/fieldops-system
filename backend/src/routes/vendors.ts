@@ -96,11 +96,14 @@ vendorsRouter.get(
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const result = await pool.query(
-      `SELECT po.*, v.name AS vendor_name, o.site_id, s.name AS site_name
+      `SELECT po.*, v.name AS vendor_name, o.site_id, s.name AS site_name,
+              COALESCE(cm.name, u.name) AS fulfilled_by_name
        FROM purchase_orders po
        LEFT JOIN vendors v ON v.id = po.vendor_id
        LEFT JOIN orders o ON o.id = po.order_id
        LEFT JOIN sites s ON s.id = o.site_id
+       LEFT JOIN crew_members cm ON cm.id = po.fulfilled_by
+       LEFT JOIN users u ON u.id = po.fulfilled_by_user_id
        ${where}
        ORDER BY po.created_at DESC`,
       params,
@@ -113,11 +116,14 @@ vendorsRouter.get(
   "/purchase-orders/:id",
   asyncHandler(async (req, res) => {
     const poResult = await pool.query(
-      `SELECT po.*, v.name AS vendor_name, o.site_id, s.name AS site_name
+      `SELECT po.*, v.name AS vendor_name, o.site_id, s.name AS site_name,
+              COALESCE(cm.name, u.name) AS fulfilled_by_name
        FROM purchase_orders po
        LEFT JOIN vendors v ON v.id = po.vendor_id
        LEFT JOIN orders o ON o.id = po.order_id
        LEFT JOIN sites s ON s.id = o.site_id
+       LEFT JOIN crew_members cm ON cm.id = po.fulfilled_by
+       LEFT JOIN users u ON u.id = po.fulfilled_by_user_id
        WHERE po.id = $1`,
       [req.params.id],
     );
@@ -175,9 +181,18 @@ vendorsRouter.patch(
     // the Documents module (ROADMAP.md phase 7, not yet built — there's no
     // purchase_order_id column on documents yet to link the two). Until that
     // exists, fulfillment is a direct state transition without that linkage.
+    //
+    // fulfilled_by_user_id only ever gets set here -- the agent's
+    // mark_purchase_order_fulfilled tool always routes through the two-party
+    // confirm-before-execute pilot instead (see confirmations.ts's
+    // approvePurchaseOrderFulfillment), never this route directly, so a
+    // crew-side actor never applies here.
     const result = await pool.query(
-      `UPDATE purchase_orders SET status = 'fulfilled' WHERE id = $1 RETURNING *`,
-      [req.params.id],
+      `UPDATE purchase_orders
+       SET status = 'fulfilled', fulfilled_at = now(),
+           fulfilled_by_user_id = $2
+       WHERE id = $1 RETURNING *`,
+      [req.params.id, req.auth?.type === "user" ? req.auth.userId : null],
     );
     res.json(result.rows[0]);
   }),

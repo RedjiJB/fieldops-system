@@ -305,6 +305,8 @@ export type PurchaseOrder = {
   eta: string | null;
   sent_to: string | null;
   created_at: string;
+  fulfilled_at: string | null;
+  fulfilled_by_name: string | null;
 };
 
 export type PurchaseOrderDetail = PurchaseOrder & { items: PurchaseOrderItem[] };

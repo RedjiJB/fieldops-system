@@ -8,8 +8,9 @@ const DEFAULT_LIMIT = 100;
 
 // One event shape (event_type, occurred_at, actor_name, description) per
 // branch, unioned across every table that already carries an actor +
-// timestamp. orders/purchase_orders have no actor column yet, so their
-// transitions don't appear here -- see the plan's scope note.
+// timestamp. orders and most of the purchase_order lifecycle (compiled,
+// sent) still have no actor column, so those transitions don't appear here
+// -- only fulfillment does, since that's the one step with an actor today.
 const EVENTS_QUERY = `
   WITH events AS (
     SELECT 'job_started' AS event_type, j.started_at AS occurred_at,
@@ -87,6 +88,17 @@ const EVENTS_QUERY = `
     FROM documents d
     LEFT JOIN crew_members cm ON cm.id = d.uploaded_by
     WHERE d.uploaded_at IS NOT NULL
+
+    UNION ALL
+    SELECT 'po_fulfilled', po.fulfilled_at,
+           COALESCE(cm.name, u.name),
+           'Marked purchase order fulfilled' || CASE WHEN v.name IS NOT NULL THEN ' (' || v.name || ')' ELSE '' END
+             || CASE WHEN po.cost IS NOT NULL THEN ' -- $' || po.cost::text ELSE '' END
+    FROM purchase_orders po
+    LEFT JOIN vendors v ON v.id = po.vendor_id
+    LEFT JOIN crew_members cm ON cm.id = po.fulfilled_by
+    LEFT JOIN users u ON u.id = po.fulfilled_by_user_id
+    WHERE po.fulfilled_at IS NOT NULL
   )
   SELECT * FROM events
   WHERE ($1::text IS NULL OR event_type = $1)

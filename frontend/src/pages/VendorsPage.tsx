@@ -207,6 +207,12 @@ function PurchaseOrdersSection() {
                 {detail.eta ? ` — eta ${detail.eta}` : ""}
                 {detail.sent_to ? ` — sent to ${detail.sent_to}` : ""}
               </p>
+              {detail.fulfilled_at && (
+                <p style={{ color: "#888" }}>
+                  Fulfilled {new Date(detail.fulfilled_at).toLocaleString()}
+                  {detail.fulfilled_by_name ? ` by ${detail.fulfilled_by_name}` : ""}
+                </p>
+              )}
 
               <h3 style={{ fontSize: 14 }}>Items</h3>
               {detail.items.map((item) => (

@@ -134,7 +134,7 @@ Company card purchases, petty cash spend, mileage claims, and reimbursable recei
 | `GET` | `/purchase-orders` | List purchase orders, joined to vendor name and (if compiled from an order) the requesting site; filter by `status`/`vendor_id` |
 | `GET` | `/purchase-orders/:id` | Get a single purchase order with its line items |
 | `POST` | `/purchase-orders/:id/send` | Send compiled PO info to `info@` or a specified picker contact — no direct vendor contact |
-| `PATCH` | `/purchase-orders/:id/fulfilled` | Mark fulfilled once a receipt photo is logged |
+| `PATCH` | `/purchase-orders/:id/fulfilled` | Mark fulfilled once a receipt photo is logged. Sets `fulfilled_at` + `fulfilled_by_user_id`; the agent's `mark_purchase_order_fulfilled` tool never calls this directly, it always routes through the two-party pending-confirmations approval below, which sets `fulfilled_by`/`fulfilled_by_user_id` from the approving reviewer instead |
 
 ## Crew Members
 
@@ -171,11 +171,11 @@ Surfaced by a real gap: nothing in the original spec could look up or register a
 
 ## Activity Log
 
-A read-only, cross-table feed of state changes that already carry a recorded actor — distinct from `/notifications` (the priority-tiered delivery feed `OpsOverviewPage`'s "Activity" section shows). `orders`/`purchase_orders` transitions have no actor column yet, so they don't appear here.
+A read-only, cross-table feed of state changes that already carry a recorded actor — distinct from `/notifications` (the priority-tiered delivery feed `OpsOverviewPage`'s "Activity" section shows). `orders` transitions and most of the `purchase_orders` lifecycle (compiled, sent) have no actor column yet, so they don't appear here — only `fulfilled` does (see `po_fulfilled` below), since that's the one step with a recorded actor today.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/activity?event_type=&since=&limit=` | Unioned feed: job started/completed, checkout created/returned, asset verified, alert resolved, notification acknowledged, document uploaded. Sorted newest first, `limit` defaults to 100 |
+| `GET` | `/activity?event_type=&since=&limit=` | Unioned feed: job started/completed, checkout created/returned, asset verified, alert resolved, notification acknowledged, document uploaded, PO fulfilled (`po_fulfilled`). Sorted newest first, `limit` defaults to 100 |
 
 ## Reports & Exports
 
