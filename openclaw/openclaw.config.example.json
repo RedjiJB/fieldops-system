@@ -23,7 +23,7 @@
       "create_order", "list_orders", "update_order_status", "compile_purchase_order",
       "request_transfer", "update_transfer_status",
       "list_vendors", "add_vendor", "send_purchase_order", "mark_purchase_order_fulfilled",
-      "list_crew_members", "register_crew_member",
+      "list_crew_members", "register_crew_member", "set_preferred_language",
       "list_job_types", "create_job", "list_jobs",
       "assign_shift", "assign_shifts_batch", "confirm_shift", "list_shifts",
       "log_timeclock_event", "submit_mileage_claim", "get_crew_status",

@@ -7,6 +7,7 @@ Configure `backendUrl` (defaults to `http://localhost:3000/api/v1`) via the plug
 All 62 tools from every docs/API.md group are wired up and smoke-tested against the live backend:
 
 - **Assets & Inventory** — `list_assets`, `get_asset`, `register_asset`, `verify_asset`, `update_asset_status`, `list_consumables`, `adjust_consumable_quantity`, `get_site_inventory`
+- **Crew** — `list_crew_members` (`phone` filter resolves a WhatsApp sender to a `crew_member_id`), `register_crew_member`, `set_preferred_language` (`en`/`fr` — agent conversation only, doesn't translate the dashboard or system-generated notification templates)
 - **Loadouts & Checkout** — `list_loadouts`, `create_loadout`, `resolve_loadout`, `checkout_asset`, `return_checkout`, `list_overdue_checkouts`
 - **Orders & Transfers** — `create_order`, `list_orders`, `update_order_status`, `compile_purchase_order`, `request_transfer`, `update_transfer_status`
 - **Vendors & Purchase Orders** — `list_vendors`, `add_vendor`, `send_purchase_order`, `mark_purchase_order_fulfilled`

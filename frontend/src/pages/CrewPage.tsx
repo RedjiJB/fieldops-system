@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, CREW_ROLES, type CrewMember } from "../api/client";
+import { api, CREW_ROLES, PREFERRED_LANGUAGES, type CrewMember } from "../api/client";
+
+const LANGUAGE_LABELS: Record<(typeof PREFERRED_LANGUAGES)[number], string> = { en: "English", fr: "French" };
 
 const sectionStyle = { padding: 16 };
 const rowStyle = {
@@ -19,6 +21,7 @@ export function CrewPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftRole, setDraftRole] = useState<CrewMember["role"]>("crew");
+  const [draftLanguage, setDraftLanguage] = useState<CrewMember["preferred_language"]>(null);
   const [error, setError] = useState<string | null>(null);
 
   function reload() {
@@ -42,11 +45,19 @@ export function CrewPage() {
     setEditingId(member.id);
     setDraftName(member.name);
     setDraftRole(member.role);
+    setDraftLanguage(member.preferred_language);
   }
 
   async function saveEdit(member: CrewMember) {
     try {
-      const updated = await api.updateCrewMember(member.id, { name: draftName, role: draftRole });
+      // preferred_language has no clear-to-null path on the backend (same
+      // COALESCE-only convention as name/role/active on this route) --
+      // omitting it here when unset just leaves whatever was there before.
+      const updated = await api.updateCrewMember(member.id, {
+        name: draftName,
+        role: draftRole,
+        ...(draftLanguage ? { preferred_language: draftLanguage } : {}),
+      });
       setCrew((prev) => prev.map((c) => (c.id === member.id ? { ...c, ...updated } : c)));
       setEditingId(null);
     } catch (err) {
@@ -107,6 +118,17 @@ export function CrewPage() {
                     </option>
                   ))}
                 </select>
+                <select
+                  value={draftLanguage ?? ""}
+                  onChange={(e) => setDraftLanguage((e.target.value || null) as CrewMember["preferred_language"])}
+                >
+                  <option value="">No language preference</option>
+                  {PREFERRED_LANGUAGES.map((l) => (
+                    <option key={l} value={l}>
+                      {LANGUAGE_LABELS[l]}
+                    </option>
+                  ))}
+                </select>
                 <button onClick={() => saveEdit(c)}>Save</button>
                 <button onClick={() => setEditingId(null)}>Cancel</button>
               </span>
@@ -117,6 +139,7 @@ export function CrewPage() {
                   <span style={{ color: "#888" }}>
                     {" "}
                     — {c.phone} — {c.role}
+                    {c.preferred_language ? ` — ${LANGUAGE_LABELS[c.preferred_language]}` : ""}
                     {!c.active ? " — inactive" : ""}
                   </span>
                 </span>

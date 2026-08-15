@@ -623,6 +623,23 @@ export default defineToolPlugin({
       },
     }),
 
+    tool({
+      name: "set_preferred_language",
+      label: "Set Preferred Language",
+      description:
+        "Record which language to converse with a crew member in going forward (English or French). Call this once a crew member indicates a preference — e.g. they write to you in French, or ask you to reply in French. Resolve them to a crew_member_id first (per 'Resolving who's messaging you') if you don't already have it. Doesn't need confirmation first -- this only changes how you talk to them, it doesn't move inventory/money/schedule.",
+      parameters: Type.Object({
+        crew_member_id: Type.String(),
+        preferred_language: Type.Union([Type.Literal("en"), Type.Literal("fr")]),
+      }),
+      async execute({ crew_member_id, preferred_language }, config) {
+        return callBackend(config, `/crew-members/${crew_member_id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ preferred_language }),
+        });
+      },
+    }),
+
     // --- Scheduling & Check-in ---
 
     tool({

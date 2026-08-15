@@ -194,6 +194,8 @@ export type NotificationSettings = {
   updated_at: string;
 };
 
+export const PREFERRED_LANGUAGES = ["en", "fr"] as const;
+
 export type CrewMember = {
   id: string;
   name: string;
@@ -201,6 +203,7 @@ export type CrewMember = {
   role: (typeof CREW_ROLES)[number];
   active: boolean;
   created_at: string;
+  preferred_language: (typeof PREFERRED_LANGUAGES)[number] | null;
 };
 
 // Foreman/management/owner-tier crew-session views (see docs/API.md's "My

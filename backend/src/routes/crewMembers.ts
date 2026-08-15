@@ -13,6 +13,14 @@ export const crewMembersRouter = Router();
 // management on the confirmation-approval gate (see confirmations.ts).
 const CREW_ROLES = ["crew", "foreman", "yard", "management", "owner"] as const;
 
+// Agent-facing only (see 0058_crew_preferred_language.sql) -- doesn't
+// translate the dashboard UI or system-generated notification templates.
+// Ottawa is bilingual; en/fr covers the actual backlog ask. Plain TEXT in
+// the DB, same reasoning as CREW_ROLES above -- enforced here, not a
+// Postgres enum, since this is small and app-layer validation is already
+// the established pattern for exactly this kind of field on this table.
+const PREFERRED_LANGUAGES = ["en", "fr"] as const;
+
 crewMembersRouter.get(
   "/crew-members",
   asyncHandler(async (req, res) => {
@@ -76,17 +84,23 @@ crewMembersRouter.post(
 crewMembersRouter.patch(
   "/crew-members/:id",
   asyncHandler(async (req, res) => {
-    const { name, role, active } = req.body;
+    const { name, role, active, preferred_language } = req.body;
     if (role !== undefined && !CREW_ROLES.includes(role)) {
       throw new HttpError(400, `role must be one of: ${CREW_ROLES.join(", ")}`);
     }
+    if (preferred_language !== undefined && preferred_language !== null && !PREFERRED_LANGUAGES.includes(preferred_language)) {
+      throw new HttpError(400, `preferred_language must be one of: ${PREFERRED_LANGUAGES.join(", ")}, or null`);
+    }
 
+    // Same COALESCE-only convention as name/role/active above -- none of
+    // this route's fields support an explicit clear-to-null today.
     const result = await pool.query(
       `UPDATE crew_members
-       SET name = COALESCE($2, name), role = COALESCE($3, role), active = COALESCE($4, active)
+       SET name = COALESCE($2, name), role = COALESCE($3, role), active = COALESCE($4, active),
+           preferred_language = COALESCE($5, preferred_language)
        WHERE id = $1
        RETURNING *`,
-      [req.params.id, name ?? null, role ?? null, active ?? null],
+      [req.params.id, name ?? null, role ?? null, active ?? null, preferred_language ?? null],
     );
     if (!result.rows[0]) throw new HttpError(404, "Crew member not found");
     res.json(result.rows[0]);

@@ -248,7 +248,8 @@ CREATE TABLE crew_members (
   phone       TEXT UNIQUE NOT NULL, -- WhatsApp identity
   role        TEXT NOT NULL DEFAULT 'crew', -- crew, foreman, yard, management, owner (foreman replaced crew_lead in 0048, a pure rename -- it never gated anything; owner is admin-equivalent-or-greater wherever requireAdmin/the confirmation-approval gate check role)
   active      BOOLEAN NOT NULL DEFAULT true,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  preferred_language TEXT -- added in 0058; 'en'/'fr' or NULL (no preference set). Agent-facing only -- the WhatsApp agent converses in this language once known (see openclaw/agent-workspace/AGENTS.md's "Language" section), but it doesn't translate the dashboard UI or system-generated notification templates (alerts, dispatch, etc.), both explicitly out of scope for this pass
 );
 
 CREATE TYPE shift_status AS ENUM ('assigned', 'confirmed', 'declined', 'no_show'); -- 'declined' covers the API's confirm-or-decline flow

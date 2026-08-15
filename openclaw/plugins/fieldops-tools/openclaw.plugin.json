@@ -50,6 +50,7 @@
       "mark_purchase_order_fulfilled",
       "list_crew_members",
       "register_crew_member",
+      "set_preferred_language",
       "list_job_types",
       "create_job",
       "list_jobs",

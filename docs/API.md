@@ -147,6 +147,7 @@ Surfaced by a real gap: nothing in the original spec could look up or register a
 | `GET` | `/crew-members?phone=&role=&active=` | List/filter crew members — `phone` lookup is how the agent resolves a message sender to a crew_member_id |
 | `GET` | `/crew-members/:id` | Crew member detail |
 | `POST` | `/crew-members` | Register a new crew member |
+| `PATCH` | `/crew-members/:id` | Partial update — `name`/`role`/`active`/`preferred_language` (`en`/`fr`, or omit to leave unchanged — no explicit clear-to-null on any field here) |
 
 ## Scheduling & Check-in
 
