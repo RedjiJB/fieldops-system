@@ -3,6 +3,17 @@ import { pool } from "../db/pool.js";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, matches the login cookie's Max-Age
 const LOGIN_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes -- bounds the interception window, not the resulting session's
+// A fresh link every time someone asks, but not on demand faster than this --
+// keeps a crew member from being able to spam-generate WhatsApp messages
+// (each request sends one) or from a repeated ask silently invalidating a
+// link the person hasn't tapped yet.
+const LOGIN_TOKEN_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+
+export class LoginTokenCooldownError extends Error {
+  constructor(public retryAfterSeconds: number) {
+    super(`A login link was already sent recently -- try again in ${retryAfterSeconds}s`);
+  }
+}
 
 export function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -51,7 +62,25 @@ export async function deleteSession(token: string): Promise<void> {
   await pool.query("DELETE FROM sessions WHERE token_hash = $1", [sha256Hex(token)]);
 }
 
+// Throws LoginTokenCooldownError (never silently reuses or silently
+// refuses) if this crew member already has a token issued within the
+// cooldown window -- checked against created_at regardless of whether that
+// earlier token was ever redeemed, so the cooldown can't be bypassed by
+// tapping the old link first.
 export async function createLoginToken(crewMemberId: string): Promise<string> {
+  const recent = await pool.query(
+    `SELECT created_at FROM login_tokens
+     WHERE crew_member_id = $1 AND created_at > now() - make_interval(secs => $2)
+     ORDER BY created_at DESC LIMIT 1`,
+    [crewMemberId, LOGIN_TOKEN_COOLDOWN_MS / 1000],
+  );
+  const lastIssuedAt: Date | undefined = recent.rows[0]?.created_at;
+  if (lastIssuedAt) {
+    const elapsedMs = Date.now() - lastIssuedAt.getTime();
+    const retryAfterSeconds = Math.ceil((LOGIN_TOKEN_COOLDOWN_MS - elapsedMs) / 1000);
+    if (retryAfterSeconds > 0) throw new LoginTokenCooldownError(retryAfterSeconds);
+  }
+
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + LOGIN_TOKEN_TTL_MS);
   await pool.query("INSERT INTO login_tokens (token_hash, crew_member_id, expires_at) VALUES ($1, $2, $3)", [

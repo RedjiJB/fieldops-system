@@ -5,7 +5,7 @@ import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
 import { verifyPassword } from "../lib/password.js";
-import { createSession, deleteSession, createLoginToken, redeemLoginToken } from "../lib/session.js";
+import { createSession, deleteSession, createLoginToken, redeemLoginToken, LoginTokenCooldownError } from "../lib/session.js";
 import { requireAuth, SESSION_COOKIE_NAME } from "../middleware/auth.js";
 
 export const authRouter = Router();
@@ -96,8 +96,16 @@ authRouter.post(
     if (req.auth?.type !== "service") throw new HttpError(403, "Only the agent service token can do this");
     const { crew_member_id } = req.body;
     if (!crew_member_id) throw new HttpError(400, "crew_member_id is required");
-    const token = await createLoginToken(crew_member_id);
-    res.json({ token });
+    try {
+      const token = await createLoginToken(crew_member_id);
+      res.json({ token });
+    } catch (err) {
+      if (err instanceof LoginTokenCooldownError) {
+        res.status(429).json({ error: err.message, retry_after_seconds: err.retryAfterSeconds });
+        return;
+      }
+      throw err;
+    }
   }),
 );
 

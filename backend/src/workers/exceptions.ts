@@ -20,6 +20,7 @@ const CRITICAL_ALERT_TYPES = new Set([
   "weather",
   "loadout_gap",
   "dashboard_unreachable",
+  "cron_job_failed",
 ]);
 
 const ALERT_MESSAGES: Record<string, string> = {
@@ -31,6 +32,7 @@ const ALERT_MESSAGES: Record<string, string> = {
   dashboard_unreachable: "🚨 The dashboard's public URL is unreachable — the Quick Tunnel may be down.",
   maintenance_due: "An asset's preventive maintenance interval has elapsed.",
   backup_failed: "🚨 The nightly database backup failed or hasn't run recently.",
+  cron_job_failed: "🚨 A scheduled check failed to run.",
 };
 
 // Nightly backup, ~24h cadence -- 30h gives a night's worth of slack before

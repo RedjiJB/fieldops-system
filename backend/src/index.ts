@@ -11,6 +11,7 @@ import { checkoutsRouter } from "./routes/checkouts.js";
 import { confirmationsRouter } from "./routes/confirmations.js";
 import { consumablesRouter } from "./routes/consumables.js";
 import { crewMembersRouter } from "./routes/crewMembers.js";
+import { cronFailureRouter } from "./routes/cronFailure.js";
 import { documentsRouter } from "./routes/documents.js";
 import { jobsRouter } from "./routes/jobs.js";
 import { loadoutsRouter } from "./routes/loadouts.js";
@@ -49,6 +50,7 @@ app.get("/health", async (_req, res) => {
 });
 
 app.use("/api/v1", authRouter);
+app.use("/api/v1", cronFailureRouter);
 app.use("/api/v1", requireAuth);
 app.use("/api/v1", assetsRouter);
 app.use("/api/v1", consumablesRouter);
