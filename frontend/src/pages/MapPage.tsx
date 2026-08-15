@@ -20,15 +20,34 @@ const defaultIcon = L.icon({
 
 const DEFAULT_CENTER: [number, number] = [45.4215, -75.6972]; // Ottawa — matches the crew's real service area
 
+const POLL_INTERVAL_MS = 15000;
+
 export function MapPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  // Vehicle position is the one thing on this dashboard that's actually
+  // moving in the real world while someone's looking at it -- polling here
+  // matters more than most pages. The underlying data is WhatsApp
+  // share-driven and historically sparse in practice (see
+  // docs/EXCEPTION_HANDLING.md's vehicle_dark note), so this won't produce
+  // a smoothly animating map, but a marker's position updates within
+  // POLL_INTERVAL_MS of new telemetry landing, not only on manual refresh.
   useEffect(() => {
-    api
-      .vehicles()
-      .then(setVehicles)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load vehicles"));
+    function reload() {
+      api
+        .vehicles()
+        .then((v) => {
+          setVehicles(v);
+          setLastUpdated(new Date());
+          setError(null);
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : "Failed to load vehicles"));
+    }
+    reload();
+    const interval = setInterval(reload, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, []);
 
   const located = vehicles.filter((v) => v.latest_location);
@@ -36,6 +55,11 @@ export function MapPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       {error && <div style={{ padding: 8, color: "#c0392b" }}>{error}</div>}
+      {lastUpdated && (
+        <div style={{ padding: "4px 8px", fontSize: 12, color: "#888" }}>
+          Live — updated {lastUpdated.toLocaleTimeString()}
+        </div>
+      )}
       <div style={{ flex: 1 }}>
         <MapContainer center={DEFAULT_CENTER} zoom={11} style={{ height: "100%", width: "100%" }}>
           <TileLayer
