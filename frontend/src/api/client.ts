@@ -466,6 +466,15 @@ export type ModelUsageRow = {
   cost_usd: number;
 };
 
+export type ClaimOutcomeRow = {
+  crew_member_id: string;
+  crew_member_name: string;
+  approved_count: number;
+  rejected_count: number;
+  disputed_count: number;
+  total_count: number;
+};
+
 export const CONFIRMATION_ACTION_TYPES = [
   "timeclock_event",
   "consumable_adjustment",
@@ -789,6 +798,13 @@ export const api = {
     if (filters.date_to) params.set("date_to", filters.date_to);
     const qs = params.toString();
     return request<ModelUsageRow[]>(`/reports/model-usage${qs ? `?${qs}` : ""}`);
+  },
+  claimOutcomesSummary: (filters: { date_from?: string; date_to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.date_from) params.set("date_from", filters.date_from);
+    if (filters.date_to) params.set("date_to", filters.date_to);
+    const qs = params.toString();
+    return request<ClaimOutcomeRow[]>(`/reports/claim-outcomes${qs ? `?${qs}` : ""}`);
   },
   approveSpendRecord: (id: string, ratePerKm?: number) =>
     request<SpendRecord>(`/spend-records/${id}/approve`, {

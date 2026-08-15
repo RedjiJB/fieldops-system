@@ -222,6 +222,75 @@ reportsRouter.get(
   }),
 );
 
+// Per-crew-member counts of how their spend/mileage claims have been
+// decided -- not punitive, not automated into an alert, just quiet data
+// for management to notice patterns in if they want to. Admin-gated
+// (unlike vendor-spend/model-usage above): this is about an individual
+// person's track record, not a material/API cost, closer to Payroll's
+// sensitivity than Reports' other CSVs.
+//
+// Rejected/disputed mileage claims are UNIONed in from pending_confirmations
+// separately -- approveMileageClaim only ever inserts into spend_records on
+// approval (see confirmations.ts), so a claim that was rejected and never
+// disputed has no spend_records row to count at all. Without this branch, a
+// crew member whose every mileage claim was rejected would misleadingly
+// show a perfect record just because nothing landed in the table being
+// counted. Current status only, not event history -- a claim that went
+// rejected -> disputed -> approved is counted once, as approved, matching
+// how every other table in this schema treats status as current state.
+async function buildClaimOutcomesSummary(date_from?: string, date_to?: string) {
+  const result = await pool.query(
+    `WITH outcomes AS (
+       SELECT crew_member_id, status FROM spend_records
+       WHERE crew_member_id IS NOT NULL AND status IN ('approved', 'rejected', 'disputed')
+         AND ($1::date IS NULL OR occurred_at >= $1)
+         AND ($2::date IS NULL OR occurred_at < ($2::date + interval '1 day'))
+       UNION ALL
+       SELECT crew_member_id, status FROM pending_confirmations
+       WHERE action_type = 'mileage_claim' AND status IN ('rejected', 'disputed')
+         AND ($1::date IS NULL OR created_at >= $1)
+         AND ($2::date IS NULL OR created_at < ($2::date + interval '1 day'))
+     )
+     SELECT o.crew_member_id, cm.name AS crew_member_name,
+            COUNT(*) FILTER (WHERE o.status = 'approved') AS approved_count,
+            COUNT(*) FILTER (WHERE o.status = 'rejected') AS rejected_count,
+            COUNT(*) FILTER (WHERE o.status = 'disputed') AS disputed_count,
+            COUNT(*) AS total_count
+     FROM outcomes o
+     JOIN crew_members cm ON cm.id = o.crew_member_id
+     GROUP BY o.crew_member_id, cm.name
+     ORDER BY cm.name`,
+    [date_from ?? null, date_to ?? null],
+  );
+  return result.rows;
+}
+
+reportsRouter.get(
+  "/reports/claim-outcomes",
+  asyncHandler(async (req, res) => {
+    requireAdmin(req);
+    const { date_from, date_to } = req.query;
+    res.json(await buildClaimOutcomesSummary(date_from as string | undefined, date_to as string | undefined));
+  }),
+);
+
+reportsRouter.get(
+  "/reports/claim-outcomes.csv",
+  asyncHandler(async (req, res) => {
+    requireAdmin(req);
+    const { date_from, date_to } = req.query;
+    const rows = await buildClaimOutcomesSummary(date_from as string | undefined, date_to as string | undefined);
+    const csv = toCsv(rows, [
+      { header: "Crew Member", value: (r) => r.crew_member_name },
+      { header: "Approved", value: (r) => r.approved_count },
+      { header: "Rejected", value: (r) => r.rejected_count },
+      { header: "Disputed", value: (r) => r.disputed_count },
+      { header: "Total", value: (r) => r.total_count },
+    ]);
+    sendCsv(res, "claim-outcomes.csv", csv);
+  }),
+);
+
 reportsRouter.get(
   "/reports/timesheets.csv",
   asyncHandler(async (req, res) => {

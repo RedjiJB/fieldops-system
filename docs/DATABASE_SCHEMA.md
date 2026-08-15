@@ -615,6 +615,8 @@ CREATE TABLE spend_records (
 );
 ```
 
+`GET /reports/claim-outcomes` (see [API.md](API.md#reports--exports)) is a quiet, admin-only, non-automated report on how each crew member's spend/mileage claims have been decided (approved/rejected/disputed counts) — not an alert, not a score, not wired into anything else. Exists because a claim's outcome is otherwise only visible one row at a time; nothing else in this schema aggregates it per person.
+
 ## Confirmations
 
 Two-party confirm-before-execute — a **pilot**, not a full cutover: only 6 of the agent's 58 tools route through this (`log_timeclock_event`, `adjust_consumable_quantity`, `return_checkout`, `submit_mileage_claim`, `verify_asset`, `mark_purchase_order_fulfilled`) — self-reported physical-reality/money claims where the crew member's own confirmation isn't independent verification of anything (hours, material-usage, damage/condition claims, mileage, asset condition, delivery receipt). The other mutating tools are unchanged — the crew member's own confirmation is still sufficient for those. Added in `0043_pending_confirmations.sql`; `action_type` widened to 6 values in `0045_pending_confirmations_more_action_types.sql`. See [API.md](API.md#confirmations) and [ARCHITECTURE.md](ARCHITECTURE.md).
