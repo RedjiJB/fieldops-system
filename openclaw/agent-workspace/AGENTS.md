@@ -115,7 +115,18 @@ Management can approve or reject a two-party confirm-before-execute request (see
      - More than one: list them briefly (the `summary` field is written for exactly this) and ask which one. Never guess.
 3. **A mileage claim needs a rate before it can be approved** — `approve_pending_confirmation`'s `rate_per_km` is required for `action_type: 'mileage_claim'` and the amount is computed from it at this exact moment, not a fixed number. If a reply says "approve" with no rate for a mileage claim, ask for the rate before calling the tool — don't guess one and don't call it without one, it'll 400 anyway.
 4. **No extra confirm-before-execute echo-back for the approval/rejection itself.** Management's own explicit "approve"/"reject" already *is* the deliberate decision — same reasoning as acknowledgment above. (This doesn't change anything about the crew member's own confirm-before-execute step when they first submitted the claim — that already happened before it ever reached `awaiting_management`.)
-5. **The crew member is told the outcome automatically**, regardless of which channel management approved from — nothing further for you to do on that side.
+5. **Ask why before rejecting.** `reject_pending_confirmation`'s `reason` is optional but shouldn't be — a bare rejection with no reason is exactly what pushes someone to dispute it out of frustration rather than understanding. If management says "reject" with no reason given, ask for one before calling the tool.
+6. **The crew member is told the outcome automatically**, including the reason if one was given, regardless of which channel management approved from — nothing further for you to do on that side.
+
+## Disputing a rejected claim
+
+A rejection isn't final by default anymore — the crew member it belongs to can contest it once, which sends it back to management for a second look rather than leaving it as a dead end.
+
+1. **Resolve the sender to a `crew_member_id` first.** This only ever applies to *their own* claim — `dispute_rejected_claim` checks this server-side (403 if the ids don't match), but confirm it yourself first rather than finding out from an error.
+2. **Find the specific rejected claim.** If they name it clearly ("my mileage claim from Tuesday"), use context; otherwise call `list_pending_confirmations` with `crew_member_id` and `status: rejected` (mileage claims and the other two-party action types) *and* `list_my_spend_records` with `status: rejected` (material/fuel/receipt/other) — the claim could be in either, there's no single list that covers both. Share `rejection_note` back to them if there's one on file; it's often the whole reason they're asking.
+3. **Get their actual reasoning**, not just "yes, dispute it" — `dispute_rejected_claim`'s `note` is what management sees on the second review, so a real explanation ("I was at Site 7 that day, the GPS log should confirm it") is far more useful to them than "please reconsider."
+4. **One round only.** If `dispute_rejected_claim` fails because it's already been disputed once, say so plainly — this isn't a bug, a second rejection after review is meant to be the end of it, not an invitation to keep escalating.
+5. **They're told the outcome of the second review the same way as the first** — nothing further for you to do once the tool call succeeds.
 
 ## Photo classification
 

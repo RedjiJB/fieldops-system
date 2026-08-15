@@ -1096,6 +1096,47 @@ export default defineToolPlugin({
       },
     }),
 
+    tool({
+      name: "list_my_spend_records",
+      label: "List My Spend Records",
+      description:
+        "List a crew member's own spend records (material/fuel/receipt/other -- for mileage claims use list_pending_confirmations instead, they're tracked separately until approved). Use this when they're asking about a claim's status, or looking for a rejected one to dispute (status: 'rejected', then dispute_rejected_claim). rejection_note has management's reason if status is 'rejected'; dispute_note/disputed_at are set once it's gone through one dispute round.",
+      parameters: Type.Object({
+        crew_member_id: Type.String(),
+        status: Type.Optional(
+          Type.Union(["pending", "approved", "rejected", "disputed"].map((s) => Type.Literal(s))),
+        ),
+      }),
+      async execute({ crew_member_id, status }, config) {
+        const params = new URLSearchParams({ crew_member_id });
+        if (status) params.set("status", status);
+        return callBackend(config, `/spend-records?${params.toString()}`);
+      },
+    }),
+
+    tool({
+      name: "dispute_rejected_claim",
+      label: "Dispute Rejected Claim",
+      description:
+        "Let a crew member respond to a rejected claim instead of the decision just being final -- use when they push back on a rejection (a mileage claim, or a spend record like a material/fuel/receipt claim). Only works once per claim (one dispute round) and only on a claim that's actually rejected right now. claim_type must match where you found it: 'pending_confirmation' for a mileage claim from list_pending_confirmations, 'spend_record' for anything from list_my_spend_records. crew_member_id must be the claim's own owner -- the backend rejects it otherwise (403), so don't call this on someone else's claim. This puts it back in front of management for a second look and pages them; the crew member will be told the outcome the same way as the first decision.",
+      parameters: Type.Object({
+        claim_type: Type.Union([Type.Literal("pending_confirmation"), Type.Literal("spend_record")]),
+        claim_id: Type.String(),
+        crew_member_id: Type.String(),
+        note: Type.String({ description: "The crew member's own words on why the rejection should be reconsidered." }),
+      }),
+      async execute({ claim_type, claim_id, crew_member_id, note }, config) {
+        const path =
+          claim_type === "pending_confirmation"
+            ? `/pending-confirmations/${claim_id}/dispute`
+            : `/spend-records/${claim_id}/dispute`;
+        return callBackend(config, path, {
+          method: "PATCH",
+          body: JSON.stringify({ dispute_note: note, crew_member_id }),
+        });
+      },
+    }),
+
     // --- System ---
 
     tool({
@@ -1250,19 +1291,23 @@ export default defineToolPlugin({
       name: "list_pending_confirmations",
       label: "List Pending Confirmations",
       description:
-        "List two-party confirm-before-execute requests (hours, material-usage claims, checkout damage/condition claims, mileage claims) awaiting management review. whatsapp_message_id matches one by the WhatsApp message id its paging notification was sent under, if the inbound message was a quoted reply to it — see AGENTS.md's 'Approving pending confirmations over WhatsApp' for the full resolution order (id-match first, then status=awaiting_management and act only if exactly one is open).",
+        "List two-party confirm-before-execute requests (hours, material-usage claims, checkout damage/condition claims, mileage claims) awaiting management review, or check the status of ones already decided. whatsapp_message_id matches one by the WhatsApp message id its paging notification was sent under, if the inbound message was a quoted reply to it — see AGENTS.md's 'Approving pending confirmations over WhatsApp' for the full resolution order (id-match first, then status=awaiting_management and act only if exactly one is open). Pass crew_member_id to see one crew member's own requests, e.g. when they're asking about something they submitted, or looking for a rejected one to dispute (status: 'rejected', then dispute_rejected_claim). status 'disputed' means it already went through one round and is awaiting a second look.",
       parameters: Type.Object({
         status: Type.Optional(
-          Type.Union(["awaiting_management", "approved", "rejected", "expired"].map((s) => Type.Literal(s))),
+          Type.Union(
+            ["awaiting_management", "approved", "rejected", "expired", "disputed"].map((s) => Type.Literal(s)),
+          ),
         ),
         whatsapp_message_id: Type.Optional(
           Type.String({ description: "The quoted message's id, if the inbound message was a WhatsApp reply." }),
         ),
+        crew_member_id: Type.Optional(Type.String()),
       }),
-      async execute({ status, whatsapp_message_id }, config) {
+      async execute({ status, whatsapp_message_id, crew_member_id }, config) {
         const params = new URLSearchParams();
         if (status) params.set("status", status);
         if (whatsapp_message_id) params.set("whatsapp_message_id", whatsapp_message_id);
+        if (crew_member_id) params.set("crew_member_id", crew_member_id);
         const qs = params.toString();
         return callBackend(config, `/pending-confirmations${qs ? `?${qs}` : ""}`);
       },
@@ -1290,15 +1335,16 @@ export default defineToolPlugin({
       name: "reject_pending_confirmation",
       label: "Reject Pending Confirmation",
       description:
-        "Reject a pending confirmation on management's behalf. Only a crew member with role 'management' can call this (the backend enforces it — 403 otherwise). The crew member who originally submitted it is told automatically — nothing further to do here. 400 if already reviewed.",
+        "Reject a pending confirmation on management's behalf. Only a crew member with role 'management' can call this (the backend enforces it — 403 otherwise). The crew member who originally submitted it is told automatically, including the reason if one was given — ask management why before calling this, a bare rejection with no reason invites the same pushback dispute_rejected_claim exists to handle. 400 if already reviewed.",
       parameters: Type.Object({
         id: Type.String(),
         reviewed_by: Type.String({ description: "The management crew member's UUID rejecting it." }),
+        reason: Type.Optional(Type.String({ description: "Why it's being rejected, in management's own words." })),
       }),
-      async execute({ id, reviewed_by }, config) {
+      async execute({ id, reviewed_by, reason }, config) {
         return callBackend(config, `/pending-confirmations/${id}/reject`, {
           method: "PATCH",
-          body: JSON.stringify({ reviewed_by }),
+          body: JSON.stringify({ reviewed_by, reason }),
         });
       },
     }),

@@ -120,7 +120,7 @@ confirmationsRouter.get(
   "/pending-confirmations",
   asyncHandler(async (req, res) => {
     if (req.auth?.type === "user") requireAdmin(req);
-    const { status, whatsapp_message_id } = req.query;
+    const { status, whatsapp_message_id, crew_member_id } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (status) {
@@ -130,6 +130,10 @@ confirmationsRouter.get(
     if (whatsapp_message_id) {
       params.push(whatsapp_message_id);
       conditions.push(`n.whatsapp_message_id = $${params.length}`);
+    }
+    if (crew_member_id) {
+      params.push(crew_member_id);
+      conditions.push(`pc.crew_member_id = $${params.length}`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const result = await pool.query(
@@ -328,6 +332,11 @@ async function approvePurchaseOrderFulfillment(
   return result.rows[0].id;
 }
 
+// 'disputed' is reviewable by the same route as 'awaiting_management' -- a
+// contested rejection goes back through the exact same approve/reject
+// decision, not a separate code path. See 0062_dispute_appeal_path.sql.
+const REVIEWABLE_STATUSES = ["awaiting_management", "disputed"];
+
 confirmationsRouter.patch(
   "/pending-confirmations/:id/approve",
   asyncHandler(async (req, res) => {
@@ -343,7 +352,7 @@ confirmationsRouter.patch(
       ]);
       const pc = existing.rows[0];
       if (!pc) throw new HttpError(404, "Pending confirmation not found");
-      if (pc.status !== "awaiting_management") {
+      if (!REVIEWABLE_STATUSES.includes(pc.status)) {
         throw new HttpError(400, "This confirmation has already been reviewed");
       }
 
@@ -397,23 +406,78 @@ confirmationsRouter.patch(
   "/pending-confirmations/:id/reject",
   asyncHandler(async (req, res) => {
     const reviewer = await resolveReviewer(req);
+    const { reason } = req.body;
 
     const existing = await pool.query("SELECT * FROM pending_confirmations WHERE id = $1", [req.params.id]);
     const pc = existing.rows[0];
     if (!pc) throw new HttpError(404, "Pending confirmation not found");
-    if (pc.status !== "awaiting_management") {
+    if (!REVIEWABLE_STATUSES.includes(pc.status)) {
       throw new HttpError(400, "This confirmation has already been reviewed");
     }
 
     const result = await pool.query(
-      `UPDATE pending_confirmations SET status = 'rejected', reviewed_by = $2, reviewed_by_user_id = $3, reviewed_at = now()
+      `UPDATE pending_confirmations
+       SET status = 'rejected', rejection_note = $2, reviewed_by = $3, reviewed_by_user_id = $4, reviewed_at = now()
        WHERE id = $1 RETURNING *`,
-      [req.params.id, reviewer.reviewedBy, reviewer.reviewedByUserId],
+      [req.params.id, reason ?? null, reviewer.reviewedBy, reviewer.reviewedByUserId],
     );
     await pool.query(
       `UPDATE notifications SET acknowledged_at = now(), acknowledged_by = $2, acknowledged_by_user_id = $3
        WHERE id = $1 AND acknowledged_at IS NULL`,
       [pc.notification_id, reviewer.reviewedBy, reviewer.reviewedByUserId],
+    );
+
+    res.json(result.rows[0]);
+  }),
+);
+
+// Same "give the submitter a real path back" reasoning as
+// spend-records/:id/dispute -- bounded to one round via disputed_at as a
+// permanent marker, and re-review happens through the same approve/reject
+// routes above (REVIEWABLE_STATUSES), not a separate code path. Only the
+// pending_confirmation's own original submitter can dispute it -- checked
+// against crew_member_id, never trusted from elsewhere in the body.
+confirmationsRouter.patch(
+  "/pending-confirmations/:id/dispute",
+  asyncHandler(async (req, res) => {
+    const { dispute_note, crew_member_id } = req.body;
+    if (!dispute_note) throw new HttpError(400, "dispute_note is required");
+
+    const existing = await pool.query("SELECT * FROM pending_confirmations WHERE id = $1", [req.params.id]);
+    const pc = existing.rows[0];
+    if (!pc) throw new HttpError(404, "Pending confirmation not found");
+
+    if (req.auth?.type === "user") {
+      requireAdmin(req);
+    } else if (req.auth?.type === "service") {
+      if (!crew_member_id) throw new HttpError(400, "crew_member_id is required");
+      if (crew_member_id !== pc.crew_member_id) {
+        throw new HttpError(403, "Only the crew member this request belongs to can dispute it");
+      }
+    } else {
+      throw new HttpError(403, "Not authorized");
+    }
+
+    if (pc.status !== "rejected") throw new HttpError(400, "Only a rejected confirmation can be disputed");
+    if (pc.disputed_at) throw new HttpError(400, "This confirmation has already gone through one dispute round");
+
+    // crew_notified_at reset to NULL -- it's already set from the original
+    // rejection's delivery, and /pending-confirmations/unnotified only ever
+    // looks at that column, not status. Without resetting it, the outcome
+    // of the second review would never reach the crew member at all.
+    const result = await pool.query(
+      `UPDATE pending_confirmations
+       SET status = 'disputed', dispute_note = $2, disputed_at = now(), crew_notified_at = NULL
+       WHERE id = $1 RETURNING *`,
+      [req.params.id, dispute_note],
+    );
+
+    await insertNotification(
+      pool,
+      "critical",
+      `A rejected ${pc.action_type.replace(/_/g, " ")} request was disputed and needs a second look: ${dispute_note}`,
+      "pending_confirmation_dispute",
+      req.params.id,
     );
 
     res.json(result.rows[0]);

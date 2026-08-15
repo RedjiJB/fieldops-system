@@ -17,6 +17,7 @@ const STATUS_COLORS: Record<string, string> = {
   approved: "#2e7d32",
   rejected: "#c0392b",
   expired: "#888",
+  disputed: "#a0522d",
 };
 
 function ReviewControl({
@@ -27,6 +28,7 @@ function ReviewControl({
   onDone: (c: PendingConfirmation) => void;
 }) {
   const [rate, setRate] = useState("");
+  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const isMileage = confirmation.action_type === "mileage_claim";
 
@@ -50,7 +52,7 @@ function ReviewControl({
 
   async function reject() {
     try {
-      onDone(await api.rejectPendingConfirmation(confirmation.id));
+      onDone(await api.rejectPendingConfirmation(confirmation.id, reason.trim() || undefined));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject");
     }
@@ -69,6 +71,16 @@ function ReviewControl({
           style={{ width: 70 }}
         />
       )}
+      {/* Optional, but a bare rejection with no reason is exactly what
+          pushes someone to dispute out of frustration rather than
+          understanding -- see AGENTS.md's "Approving pending confirmations
+          over WhatsApp" step 5, same reasoning applies here. */}
+      <input
+        placeholder="Reason (optional)"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        style={{ width: 140 }}
+      />
       <button onClick={approve}>Approve</button>
       <button onClick={reject}>Reject</button>
       {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
@@ -140,8 +152,12 @@ export function ConfirmationsPage() {
                 {c.reviewed_by_name ? ` — reviewed by ${c.reviewed_by_name}` : ""}
               </span>
               <span style={{ marginLeft: 8, color: STATUS_COLORS[c.status], fontWeight: "bold" }}>{c.status}</span>
+              {c.status === "rejected" && c.rejection_note && (
+                <div style={{ color: "#888", fontSize: 13 }}>Reason: {c.rejection_note}</div>
+              )}
+              {c.dispute_note && <div style={{ color: "#a0522d", fontSize: 13 }}>Dispute: {c.dispute_note}</div>}
             </span>
-            {c.status === "awaiting_management" && (
+            {(c.status === "awaiting_management" || c.status === "disputed") && (
               <ReviewControl
                 confirmation={c}
                 onDone={(updated) => setConfirmations((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))}

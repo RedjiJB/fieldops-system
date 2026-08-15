@@ -26,8 +26,21 @@ async function backendFetch(path, init) {
 }
 
 function messageFor(pc) {
-  if (pc.status === "approved") return `✅ Approved: ${pc.summary}`;
-  if (pc.status === "rejected") return `❌ Not approved: ${pc.summary}`;
+  // disputed_at means this rejection already went through one dispute round
+  // -- the outcome being delivered now is the *second* review, not the
+  // first, so say so and don't invite a second dispute (there isn't one).
+  const secondReview = pc.status === "rejected" && pc.disputed_at;
+  if (pc.status === "approved") {
+    return pc.disputed_at
+      ? `✅ Approved on review: ${pc.summary}`
+      : `✅ Approved: ${pc.summary}`;
+  }
+  if (pc.status === "rejected") {
+    const reason = pc.rejection_note ? ` Reason: ${pc.rejection_note}` : "";
+    return secondReview
+      ? `❌ Still not approved after review: ${pc.summary}.${reason}`
+      : `❌ Not approved: ${pc.summary}.${reason} If you think this is wrong, reply and I can send it back for another look.`;
+  }
   return `⏱️ No response in time, expired: ${pc.summary}`;
 }
 

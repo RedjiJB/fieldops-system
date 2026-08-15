@@ -262,6 +262,7 @@ function NewSpendRecordForm({
 
 function ApproveControl({ record, onDone }: { record: SpendRecord; onDone: (r: SpendRecord) => void }) {
   const [rate, setRate] = useState("");
+  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function approve() {
@@ -284,7 +285,7 @@ function ApproveControl({ record, onDone }: { record: SpendRecord; onDone: (r: S
 
   async function reject() {
     try {
-      onDone(await api.rejectSpendRecord(record.id));
+      onDone(await api.rejectSpendRecord(record.id, reason.trim() || undefined));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject");
     }
@@ -303,6 +304,16 @@ function ApproveControl({ record, onDone }: { record: SpendRecord; onDone: (r: S
           style={{ width: 70 }}
         />
       )}
+      {/* Not required -- but a bare rejection with no reason is exactly
+          what pushes a crew member to file a dispute out of frustration
+          rather than understanding, so the field is right next to the
+          button that needs it. */}
+      <input
+        placeholder="Reason (optional)"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        style={{ width: 140 }}
+      />
       <button onClick={approve}>Approve</button>
       <button onClick={reject}>Reject</button>
       {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
@@ -427,14 +438,27 @@ export function SpendingPage() {
               <span
                 style={{
                   marginLeft: 8,
-                  color: r.status === "rejected" ? "#c0392b" : r.status === "pending" ? "#c9902f" : "#888",
-                  fontWeight: r.status === "pending" ? "bold" : "normal",
+                  color:
+                    r.status === "rejected"
+                      ? "#c0392b"
+                      : r.status === "disputed"
+                        ? "#a0522d"
+                        : r.status === "pending"
+                          ? "#c9902f"
+                          : "#888",
+                  fontWeight: r.status === "pending" || r.status === "disputed" ? "bold" : "normal",
                 }}
               >
                 {r.status}
               </span>
+              {r.status === "rejected" && r.rejection_note && (
+                <div style={{ color: "#888", fontSize: 13 }}>Reason: {r.rejection_note}</div>
+              )}
+              {r.dispute_note && <div style={{ color: "#a0522d", fontSize: 13 }}>Dispute: {r.dispute_note}</div>}
             </span>
-            {r.status === "pending" && <ApproveControl record={r} onDone={(updated) => setRecords((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))} />}
+            {(r.status === "pending" || r.status === "disputed") && (
+              <ApproveControl record={r} onDone={(updated) => setRecords((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))} />
+            )}
           </div>
         ))}
       </section>

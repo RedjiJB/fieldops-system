@@ -375,7 +375,7 @@ export type MoneyInstrument = {
 
 export const SPEND_METHODS = ["cash", "company_card", "personal_reimbursed"] as const;
 export const SPEND_CATEGORIES = ["material", "fuel", "mileage", "receipt", "other"] as const;
-export const SPEND_STATUSES = ["pending", "approved", "rejected"] as const;
+export const SPEND_STATUSES = ["pending", "approved", "rejected", "disputed"] as const;
 
 export type SpendRecord = {
   id: string;
@@ -400,6 +400,9 @@ export type SpendRecord = {
   reviewed_by_user_id: string | null;
   reviewed_by_name: string | null;
   reviewed_at: string | null;
+  rejection_note: string | null;
+  dispute_note: string | null;
+  disputed_at: string | null;
   created_at: string;
 };
 
@@ -471,7 +474,13 @@ export const CONFIRMATION_ACTION_TYPES = [
   "asset_verification",
   "purchase_order_fulfillment",
 ] as const;
-export const CONFIRMATION_STATUSES = ["awaiting_management", "approved", "rejected", "expired"] as const;
+export const CONFIRMATION_STATUSES = [
+  "awaiting_management",
+  "approved",
+  "rejected",
+  "expired",
+  "disputed",
+] as const;
 
 export type PendingConfirmation = {
   id: string;
@@ -486,6 +495,9 @@ export type PendingConfirmation = {
   reviewed_by_user_id: string | null;
   reviewed_by_name: string | null;
   reviewed_at: string | null;
+  rejection_note: string | null;
+  dispute_note: string | null;
+  disputed_at: string | null;
   result_id: string | null;
   crew_notified_at: string | null;
   created_at: string;
@@ -783,8 +795,11 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(ratePerKm !== undefined ? { rate_per_km: ratePerKm } : {}),
     }),
-  rejectSpendRecord: (id: string) =>
-    request<SpendRecord>(`/spend-records/${id}/reject`, { method: "PATCH" }),
+  rejectSpendRecord: (id: string, reason?: string) =>
+    request<SpendRecord>(`/spend-records/${id}/reject`, {
+      method: "PATCH",
+      body: JSON.stringify(reason ? { reason } : {}),
+    }),
   pendingConfirmations: (status?: string) =>
     request<PendingConfirmation[]>(`/pending-confirmations${status ? `?status=${status}` : ""}`),
   approvePendingConfirmation: (id: string, ratePerKm?: number) =>
@@ -792,6 +807,9 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(ratePerKm !== undefined ? { rate_per_km: ratePerKm } : {}),
     }),
-  rejectPendingConfirmation: (id: string) =>
-    request<PendingConfirmation>(`/pending-confirmations/${id}/reject`, { method: "PATCH" }),
+  rejectPendingConfirmation: (id: string, reason?: string) =>
+    request<PendingConfirmation>(`/pending-confirmations/${id}/reject`, {
+      method: "PATCH",
+      body: JSON.stringify(reason ? { reason } : {}),
+    }),
 };

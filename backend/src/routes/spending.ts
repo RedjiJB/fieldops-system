@@ -3,6 +3,7 @@ import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
 import { requireAdmin } from "../lib/roles.js";
+import { insertNotification } from "../lib/notify.js";
 
 export const spendingRouter = Router();
 
@@ -173,10 +174,17 @@ spendingRouter.post(
   }),
 );
 
+// Dual-path like GET /spend-records/missing-receipts below: a dashboard
+// session must be admin, but the service token passes through ungated so
+// the agent can look up a crew member's own claims for them (e.g. to find
+// the id of a rejected one worth disputing) -- the agent's own identity
+// resolution in AGENTS.md is what keeps this scoped to the resolved
+// sender's own claims, same trust boundary every crew-write tool already
+// relies on, not a new one invented here.
 spendingRouter.get(
   "/spend-records",
   asyncHandler(async (req, res) => {
-    requireAdmin(req);
+    if (req.auth?.type === "user") requireAdmin(req);
     const { category, method, status, crew_member_id, date_from, date_to } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
@@ -272,6 +280,11 @@ spendingRouter.get(
   }),
 );
 
+// 'disputed' is reviewable by the same route as 'pending' -- a contested
+// rejection goes back through the exact same approve/reject decision, not
+// a separate code path. See 0062_dispute_appeal_path.sql.
+const REVIEWABLE_STATUSES = ["pending", "disputed"];
+
 spendingRouter.patch(
   "/spend-records/:id/approve",
   asyncHandler(async (req, res) => {
@@ -281,7 +294,7 @@ spendingRouter.patch(
     const existing = await pool.query("SELECT * FROM spend_records WHERE id = $1", [req.params.id]);
     const record = existing.rows[0];
     if (!record) throw new HttpError(404, "Spend record not found");
-    if (record.status !== "pending") throw new HttpError(400, "This record has already been reviewed");
+    if (!REVIEWABLE_STATUSES.includes(record.status)) throw new HttpError(400, "This record has already been reviewed");
 
     let amount = record.amount;
     if (record.category === "mileage") {
@@ -306,17 +319,68 @@ spendingRouter.patch(
   "/spend-records/:id/reject",
   asyncHandler(async (req, res) => {
     const auth = requireAdmin(req);
+    const { reason } = req.body;
 
     const existing = await pool.query("SELECT * FROM spend_records WHERE id = $1", [req.params.id]);
     const record = existing.rows[0];
     if (!record) throw new HttpError(404, "Spend record not found");
-    if (record.status !== "pending") throw new HttpError(400, "This record has already been reviewed");
+    if (!REVIEWABLE_STATUSES.includes(record.status)) throw new HttpError(400, "This record has already been reviewed");
 
     const result = await pool.query(
-      `UPDATE spend_records SET status = 'rejected', reviewed_by_user_id = $2, reviewed_at = now()
+      `UPDATE spend_records
+       SET status = 'rejected', rejection_note = $2, reviewed_by_user_id = $3, reviewed_at = now()
        WHERE id = $1 RETURNING *`,
-      [req.params.id, auth.userId],
+      [req.params.id, reason ?? null, auth.userId],
     );
+    res.json(result.rows[0]);
+  }),
+);
+
+// Gives the crew member a real path back after a rejection, instead of it
+// being final with no recourse. Bounded to one round: disputed_at is a
+// permanent marker once set, so even if the second review also ends in
+// rejection, dispute is not offered again -- see 0062's comment. Dual-path
+// like GET /spend-records/missing-receipts: a dashboard admin can file this
+// on a crew member's behalf, or the agent can via the service token for the
+// crew member the claim actually belongs to (never someone else's).
+spendingRouter.patch(
+  "/spend-records/:id/dispute",
+  asyncHandler(async (req, res) => {
+    const { dispute_note, crew_member_id } = req.body;
+    if (!dispute_note) throw new HttpError(400, "dispute_note is required");
+
+    const existing = await pool.query("SELECT * FROM spend_records WHERE id = $1", [req.params.id]);
+    const record = existing.rows[0];
+    if (!record) throw new HttpError(404, "Spend record not found");
+
+    if (req.auth?.type === "user") {
+      requireAdmin(req);
+    } else if (req.auth?.type === "service") {
+      if (!crew_member_id) throw new HttpError(400, "crew_member_id is required");
+      if (crew_member_id !== record.crew_member_id) {
+        throw new HttpError(403, "Only the crew member this claim belongs to can dispute it");
+      }
+    } else {
+      throw new HttpError(403, "Not authorized");
+    }
+
+    if (record.status !== "rejected") throw new HttpError(400, "Only a rejected record can be disputed");
+    if (record.disputed_at) throw new HttpError(400, "This record has already gone through one dispute round");
+
+    const result = await pool.query(
+      `UPDATE spend_records SET status = 'disputed', dispute_note = $2, disputed_at = now()
+       WHERE id = $1 RETURNING *`,
+      [req.params.id, dispute_note],
+    );
+
+    await insertNotification(
+      pool,
+      "critical",
+      `A rejected ${record.category} claim was disputed and needs a second look: ${dispute_note}`,
+      "spend_record_dispute",
+      req.params.id,
+    );
+
     res.json(result.rows[0]);
   }),
 );

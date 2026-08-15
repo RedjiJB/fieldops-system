@@ -583,11 +583,18 @@ CREATE TABLE money_instrument_custody (
 -- rate is set at approval, and a reimbursable receipt is a claim that needs
 -- sign-off before being trusted, per this session's "crew claims need
 -- independent verification" principle.
+--
+-- 'disputed' (added in 0062_dispute_appeal_path.sql) means a 'rejected' row
+-- was contested once by the crew member it belongs to -- not a return to
+-- 'pending', deliberately: collapsing back would erase the fact a rejection
+-- happened and was contested. disputed_at is a permanent marker once set,
+-- even if the second review (via the same approve/reject routes) also ends
+-- in rejection -- that's what bounds this to exactly one appeal round.
 CREATE TABLE spend_records (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   category              TEXT NOT NULL, -- app-validated: material, fuel, mileage, receipt, other
   method                TEXT NOT NULL CHECK (method IN ('cash', 'company_card', 'personal_reimbursed')),
-  status                TEXT NOT NULL DEFAULT 'approved' CHECK (status IN ('pending', 'approved', 'rejected')),
+  status                TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'disputed')) DEFAULT 'approved',
   amount                NUMERIC CHECK (amount IS NULL OR amount >= 0), -- null only while a pending mileage claim awaits a rate
   distance_km           NUMERIC CHECK (distance_km IS NULL OR distance_km >= 0), -- mileage only
   rate_per_km           NUMERIC CHECK (rate_per_km IS NULL OR rate_per_km >= 0), -- set at approval, mileage only
@@ -601,6 +608,9 @@ CREATE TABLE spend_records (
   reviewed_by           UUID REFERENCES crew_members(id), -- added in 0044
   reviewed_by_user_id   UUID REFERENCES users(id),
   reviewed_at           TIMESTAMPTZ,
+  rejection_note        TEXT, -- added in 0062; set by PATCH .../reject's {reason?}
+  dispute_note          TEXT, -- added in 0062; the crew member's own words, set by PATCH .../dispute
+  disputed_at           TIMESTAMPTZ, -- added in 0062; permanent marker, see comment above
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
@@ -613,6 +623,8 @@ A pending confirmation is backed by a real `critical` row in `notifications` (`n
 
 `reviewed_by`/`reviewed_by_user_id` (added in `0044_pending_confirmations_reviewed_by.sql`) are a dual-path pair — management can review from the dashboard (`reviewed_by_user_id`, an `admin` or `owner` session) or WhatsApp (`reviewed_by`, a crew member whose `role IN ('management', 'owner')`; the backend 403s otherwise — the first place `crew_members.role` is checked anywhere in this codebase, and as of `0048_crew_role_foreman_owner.sql` the gate covers `owner` alongside `management`). The linked notification's `acknowledged_by`/`acknowledged_by_user_id` are set the same way when a review happens.
 
+`disputed` (added in `0062_dispute_appeal_path.sql`, same migration and same reasoning as `spend_records`' above) lets the original submitter (`crew_member_id`) contest a `rejected` row once — `PATCH .../dispute` resets `crew_notified_at` to `NULL` when it fires, since `GET /pending-confirmations/unnotified` keys off that column, not `status`; without the reset the outcome of the second review would never reach them.
+
 ```sql
 CREATE TABLE pending_confirmations (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -620,11 +632,14 @@ CREATE TABLE pending_confirmations (
   summary              TEXT NOT NULL, -- agent-authored, human-readable -- what the manager sees, on the dashboard or in a WhatsApp list
   payload              JSONB NOT NULL, -- args needed to execute the action once approved
   crew_member_id       UUID NOT NULL REFERENCES crew_members(id),
-  status               TEXT NOT NULL DEFAULT 'awaiting_management' CHECK (status IN ('awaiting_management', 'approved', 'rejected', 'expired')),
+  status               TEXT NOT NULL CHECK (status IN ('awaiting_management', 'approved', 'rejected', 'expired', 'disputed')) DEFAULT 'awaiting_management',
   notification_id      UUID NOT NULL REFERENCES notifications(id),
   reviewed_by          UUID REFERENCES crew_members(id), -- added in 0044; WhatsApp path, role='management' enforced
   reviewed_by_user_id  UUID REFERENCES users(id), -- dashboard path
   reviewed_at          TIMESTAMPTZ,
+  rejection_note       TEXT, -- added in 0062; set by PATCH .../reject's {reason?}
+  dispute_note         TEXT, -- added in 0062; the crew member's own words, set by PATCH .../dispute
+  disputed_at          TIMESTAMPTZ, -- added in 0062; permanent marker -- see spend_records' comment above
   result_id            UUID, -- id of the row actually created once approved (e.g. the new timeclock_entries row)
   crew_notified_at     TIMESTAMPTZ, -- set once the outcome has been sent back to the crew member over WhatsApp
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now()

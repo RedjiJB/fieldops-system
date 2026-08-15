@@ -159,6 +159,10 @@ export function CrewPortalPage() {
           <div key={sr.id} style={rowStyle}>
             <span>
               {sr.category} — {new Date(sr.occurred_at).toLocaleDateString()}
+              {sr.status === "rejected" && sr.rejection_note && (
+                <div style={labelStyle}>Reason: {sr.rejection_note}</div>
+              )}
+              {sr.dispute_note && <div style={labelStyle}>Disputed: {sr.dispute_note}</div>}
             </span>
             <span style={labelStyle}>
               {sr.status}
