@@ -393,6 +393,26 @@ CREATE TABLE backup_status (
 );
 ```
 
+## model_usage_daily
+
+Per-day/provider/model token and cost aggregate. The underlying data (every agent turn's token usage and cost) already existed per-turn in each session's `.jsonl` transcript on the Pi host — it was just never aggregated anywhere, so "what did this cost this month" had no answer. `openclaw/notifier/sync-model-usage.mjs` (host-side, only place with filesystem access to those transcripts) recomputes the full aggregate for a rolling lookback window (default 90 days) from scratch on every run and `UPSERT`s it via `POST /system/model-usage` — stateless by design, not an incremental accumulator, so a missed run or an edited transcript both self-heal on the next run rather than drifting. `GET /reports/model-usage`/`.csv` and the agent's `get_model_usage_summary` tool are the readers.
+
+```sql
+CREATE TABLE model_usage_daily (
+  date               DATE NOT NULL,
+  provider           TEXT NOT NULL,
+  model              TEXT NOT NULL,
+  input_tokens       BIGINT NOT NULL DEFAULT 0,
+  output_tokens      BIGINT NOT NULL DEFAULT 0,
+  cache_read_tokens  BIGINT NOT NULL DEFAULT 0,
+  cache_write_tokens BIGINT NOT NULL DEFAULT 0,
+  reasoning_tokens   BIGINT NOT NULL DEFAULT 0,
+  total_tokens       BIGINT NOT NULL DEFAULT 0,
+  cost_usd           NUMERIC NOT NULL DEFAULT 0,
+  PRIMARY KEY (date, provider, model)
+);
+```
+
 ## notifications
 
 A single event log feeding two consumers: `critical` rows get pushed to management on WhatsApp within a minute by `openclaw/notifier/`; `routine` rows are only ever pulled by the digest agent's `list_notifications` tool. `message` is pre-formatted, human-readable text set by whichever backend code inserted the row (asset status changes, newly-raised alerts, order status changes) — this table has no writer-facing REST endpoint, only reader/delivery/acknowledgment endpoints (see [API.md](API.md)).

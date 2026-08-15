@@ -1120,6 +1120,24 @@ export default defineToolPlugin({
       },
     }),
 
+    tool({
+      name: "get_model_usage_summary",
+      label: "Get Model Usage Summary",
+      description:
+        "Get token usage and API cost, grouped by provider/model/month, when asked what this is costing or how much has been used. date_from/date_to filter the range (omit for all recorded history). Figures come from a nightly aggregation of real session transcripts, not an estimate.",
+      parameters: Type.Object({
+        date_from: Type.Optional(Type.String({ description: "ISO date." })),
+        date_to: Type.Optional(Type.String({ description: "ISO date." })),
+      }),
+      async execute({ date_from, date_to }, config) {
+        const params = new URLSearchParams();
+        if (date_from) params.set("date_from", date_from);
+        if (date_to) params.set("date_to", date_to);
+        const qs = params.toString();
+        return callBackend(config, `/reports/model-usage${qs ? `?${qs}` : ""}`);
+      },
+    }),
+
     // The one tool in this plugin that doesn't just call the backend for
     // its core action -- the OpenClaw gateway (and this plugin, running
     // inside it) is a native systemd service on the Pi host, not a

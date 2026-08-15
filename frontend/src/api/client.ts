@@ -448,6 +448,19 @@ export type VendorSpendRow = {
   total_cost: number;
 };
 
+export type ModelUsageRow = {
+  provider: string;
+  model: string;
+  month: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  reasoning_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+};
+
 export const CONFIRMATION_ACTION_TYPES = [
   "timeclock_event",
   "consumable_adjustment",
@@ -753,6 +766,13 @@ export const api = {
     if (filters.date_to) params.set("date_to", filters.date_to);
     const qs = params.toString();
     return request<VendorSpendRow[]>(`/reports/vendor-spend${qs ? `?${qs}` : ""}`);
+  },
+  modelUsageSummary: (filters: { date_from?: string; date_to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.date_from) params.set("date_from", filters.date_from);
+    if (filters.date_to) params.set("date_to", filters.date_to);
+    const qs = params.toString();
+    return request<ModelUsageRow[]>(`/reports/model-usage${qs ? `?${qs}` : ""}`);
   },
   approveSpendRecord: (id: string, ratePerKm?: number) =>
     request<SpendRecord>(`/spend-records/${id}/approve`, {

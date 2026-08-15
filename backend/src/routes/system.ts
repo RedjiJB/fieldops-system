@@ -123,3 +123,71 @@ systemRouter.post(
     res.json({ ok: true });
   }),
 );
+
+// Reported by openclaw/notifier/sync-model-usage.mjs, which recomputes the
+// full aggregate itself from the .jsonl session transcripts on the Pi host
+// (the backend has no access to those files) -- this route is a dumb
+// UPSERT sink, all the aggregation logic lives in the script, same division
+// of responsibility as backup-database.mjs above.
+systemRouter.post(
+  "/system/model-usage",
+  asyncHandler(async (req, res) => {
+    requireServiceToken(req);
+    const { rows } = req.body;
+    if (!Array.isArray(rows)) throw new HttpError(400, "rows (array) is required");
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      for (const row of rows) {
+        const {
+          date,
+          provider,
+          model,
+          input_tokens,
+          output_tokens,
+          cache_read_tokens,
+          cache_write_tokens,
+          reasoning_tokens,
+          total_tokens,
+          cost_usd,
+        } = row;
+        if (!date || !provider || !model) {
+          throw new HttpError(400, "each row requires date, provider, model");
+        }
+        await client.query(
+          `INSERT INTO model_usage_daily
+             (date, provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, total_tokens, cost_usd)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           ON CONFLICT (date, provider, model) DO UPDATE SET
+             input_tokens = EXCLUDED.input_tokens,
+             output_tokens = EXCLUDED.output_tokens,
+             cache_read_tokens = EXCLUDED.cache_read_tokens,
+             cache_write_tokens = EXCLUDED.cache_write_tokens,
+             reasoning_tokens = EXCLUDED.reasoning_tokens,
+             total_tokens = EXCLUDED.total_tokens,
+             cost_usd = EXCLUDED.cost_usd`,
+          [
+            date,
+            provider,
+            model,
+            input_tokens ?? 0,
+            output_tokens ?? 0,
+            cache_read_tokens ?? 0,
+            cache_write_tokens ?? 0,
+            reasoning_tokens ?? 0,
+            total_tokens ?? 0,
+            cost_usd ?? 0,
+          ],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+    res.json({ ok: true, rowsUpserted: rows.length });
+  }),
+);

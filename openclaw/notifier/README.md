@@ -39,6 +39,12 @@ Runs nightly, `docker compose exec -T postgres pg_dump -U fieldops fieldops`, gz
 
 Built after discovering `docs/DEPLOYMENT.md`'s previously-documented crontab-based nightly backup had never actually been installed anywhere on the live Pi — no crontab, no backup files, silently absent the whole time this deployment existed. `backup_status.last_success_at` (see `docs/DATABASE_SCHEMA.md#backup_status`) not advancing is exactly what that same failure mode looks like from Postgres's side, which is what the exceptions worker's `checkBackupStale` watches for — see `docs/EXCEPTION_HANDLING.md`.
 
+## `sync-model-usage.mjs`
+
+Runs nightly, scans every `~/.openclaw/agents/*/sessions/*.jsonl` transcript file for assistant messages with a `usage` block (already present on every turn -- this script only aggregates, it captures nothing new), sums input/output/cache/reasoning tokens and cost by (local date, provider, model) over a rolling lookback window (`MODEL_USAGE_LOOKBACK_DAYS`, default 90), and `POST /system/model-usage`s the whole recomputed set. Stateless -- no "already processed" offset tracked, the full window is recomputed and `UPSERT`ed every run, which is simpler and self-healing at the cost of some redundant work each run (cheap at this scale). Dates are computed in `MODEL_USAGE_TZ` (default `America/Toronto`, matching the IANA timezone this stack's other cron jobs are already declared against), not UTC -- a turn near local midnight needs to land on the day the business experienced it, same class of bug `0032_database_timezone.sql` fixed for the exceptions worker's own checks.
+
+Built after realizing every agent turn already returns full token/cost usage, but nothing persisted it anywhere queryable -- `openclaw audit`'s own event log is deliberately `metadata_only` (no usage/cost fields), confirmed by inspecting it directly; the real numbers only ever lived inside each session's own transcript file.
+
 ## Environment variables
 
 - `BACKEND_URL` — defaults to `http://localhost:3000/api/v1`
@@ -98,6 +104,15 @@ openclaw cron add --name fieldops-backup --display-name "Database Backup" \
   --command "node ~/fieldops-system/openclaw/notifier/backup-database.mjs" \
   --command-env "AGENT_SERVICE_TOKEN=<real token>" \
   --cron "0 3 * * *" --timeout-seconds 300 --no-deliver
+```
+
+`sync-model-usage.mjs` installs nightly too, no `OPENCLAW_BIN` needed (no `openclaw`/`docker` CLI involved, just filesystem reads and `fetch`):
+
+```bash
+openclaw cron add --name fieldops-model-usage --display-name "Model Usage Sync" \
+  --command "node ~/fieldops-system/openclaw/notifier/sync-model-usage.mjs" \
+  --command-env "AGENT_SERVICE_TOKEN=<real token>" \
+  --cron "30 3 * * *" --timeout-seconds 120 --no-deliver
 ```
 
 ## Live reply-id check (do once, not blocking)

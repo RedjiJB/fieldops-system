@@ -171,6 +171,57 @@ reportsRouter.get(
   }),
 );
 
+// Rows are computed and UPSERTed wholesale by
+// openclaw/notifier/sync-model-usage.mjs from .jsonl session transcripts on
+// the Pi host -- this just groups what's already stored by month. Not
+// admin-gated, same precedent as buildVendorSpendSummary above: this is
+// operational API cost, not wage/cash-handling data.
+async function buildModelUsageSummary(date_from?: string, date_to?: string) {
+  const result = await pool.query(
+    `SELECT provider, model, date_trunc('month', date) AS month,
+            SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens,
+            SUM(cache_read_tokens) AS cache_read_tokens, SUM(cache_write_tokens) AS cache_write_tokens,
+            SUM(reasoning_tokens) AS reasoning_tokens, SUM(total_tokens) AS total_tokens,
+            SUM(cost_usd) AS cost_usd
+     FROM model_usage_daily
+     WHERE ($1::date IS NULL OR date >= $1)
+       AND ($2::date IS NULL OR date < ($2::date + interval '1 day'))
+     GROUP BY provider, model, date_trunc('month', date)
+     ORDER BY date_trunc('month', date) DESC, cost_usd DESC`,
+    [date_from ?? null, date_to ?? null],
+  );
+  return result.rows;
+}
+
+reportsRouter.get(
+  "/reports/model-usage",
+  asyncHandler(async (req, res) => {
+    const { date_from, date_to } = req.query;
+    res.json(await buildModelUsageSummary(date_from as string | undefined, date_to as string | undefined));
+  }),
+);
+
+reportsRouter.get(
+  "/reports/model-usage.csv",
+  asyncHandler(async (req, res) => {
+    const { date_from, date_to } = req.query;
+    const rows = await buildModelUsageSummary(date_from as string | undefined, date_to as string | undefined);
+    const csv = toCsv(rows, [
+      { header: "Provider", value: (r) => r.provider },
+      { header: "Model", value: (r) => r.model },
+      { header: "Month", value: (r) => dateOnlyOrNull(r.month) },
+      { header: "Input Tokens", value: (r) => r.input_tokens },
+      { header: "Output Tokens", value: (r) => r.output_tokens },
+      { header: "Cache Read Tokens", value: (r) => r.cache_read_tokens },
+      { header: "Cache Write Tokens", value: (r) => r.cache_write_tokens },
+      { header: "Reasoning Tokens", value: (r) => r.reasoning_tokens },
+      { header: "Total Tokens", value: (r) => r.total_tokens },
+      { header: "Cost (USD)", value: (r) => r.cost_usd },
+    ]);
+    sendCsv(res, "model-usage.csv", csv);
+  }),
+);
+
 reportsRouter.get(
   "/reports/timesheets.csv",
   asyncHandler(async (req, res) => {
