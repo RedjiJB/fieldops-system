@@ -520,6 +520,15 @@ export const api = {
   mySiteOrders: () => request<MySiteOrder[]>("/me/site-orders"),
   vehicles: () => request<Vehicle[]>("/vehicles"),
   shiftsToday: () => request<Shift[]>(`/shifts?date=${todayIso()}`),
+  createShiftsBatch: (
+    shifts: {
+      crew_member_id: string;
+      site_id: string;
+      date: string;
+      start_time?: string;
+      end_time?: string;
+    }[],
+  ) => request<Shift[]>("/shifts/batch", { method: "POST", body: JSON.stringify({ shifts }) }),
   unresolvedAlerts: () => request<Alert[]>("/alerts?resolved=false"),
   orders: () => request<Order[]>("/orders"),
   orderDetail: (id: string) => request<OrderDetail>(`/orders/${id}`),

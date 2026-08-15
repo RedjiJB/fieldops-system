@@ -18,11 +18,17 @@ export function AssetsPage() {
   const [siteId, setSiteId] = useState("");
   const [category, setCategory] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkApplying, setBulkApplying] = useState(false);
 
   function reload() {
     api
       .assets({ status: status || undefined, site_id: siteId || undefined, category: category || undefined })
-      .then(setAssets)
+      .then((a) => {
+        setAssets(a);
+        setSelectedIds(new Set());
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load assets"));
   }
 
@@ -32,6 +38,14 @@ export function AssetsPage() {
 
   useEffect(reload, [status, siteId, category]);
 
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
   async function onChangeStatus(asset: Asset, newStatus: string) {
     if (!window.confirm(`Change "${asset.name}" status to "${newStatus}"?`)) return;
     try {
@@ -39,6 +53,33 @@ export function AssetsPage() {
       setAssets((prev) => prev.map((a) => (a.id === asset.id ? { ...a, ...updated } : a)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update asset status");
+    }
+  }
+
+  // Same directly-settable restriction as the per-row dropdown -- "available"
+  // is never offered, since only verify_asset can put an asset there (see
+  // AGENTS.md's business rules). Independent per-asset operations, so one
+  // failure doesn't block the rest -- reports a partial-failure count.
+  async function onBulkChangeStatus() {
+    if (!bulkStatus || selectedIds.size === 0) return;
+    const ids = [...selectedIds];
+    if (!window.confirm(`Change ${ids.length} selected asset${ids.length === 1 ? "" : "s"} to "${bulkStatus}"?`)) return;
+    setBulkApplying(true);
+    setError(null);
+    try {
+      const results = await Promise.allSettled(ids.map((id) => api.updateAssetStatus(id, bulkStatus)));
+      const updatedById = new Map<string, Asset>();
+      ids.forEach((id, i) => {
+        const r = results[i];
+        if (r.status === "fulfilled") updatedById.set(id, r.value);
+      });
+      const failedCount = results.filter((r) => r.status === "rejected").length;
+      setAssets((prev) => prev.map((a) => (updatedById.has(a.id) ? { ...a, ...updatedById.get(a.id) } : a)));
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !updatedById.has(id))));
+      if (failedCount > 0) setError(`${failedCount} of ${ids.length} assets failed to update.`);
+      else setBulkStatus("");
+    } finally {
+      setBulkApplying(false);
     }
   }
 
@@ -79,9 +120,31 @@ export function AssetsPage() {
         </div>
 
         {assets.length === 0 && <p style={{ color: "#888" }}>No assets match these filters.</p>}
+        {selectedIds.size > 0 && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, color: "#888" }}>{selectedIds.size} selected</span>
+            <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
+              <option value="">Set status to…</option>
+              {ASSET_DIRECTLY_SETTABLE_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <button onClick={onBulkChangeStatus} disabled={!bulkStatus || bulkApplying}>
+              {bulkApplying ? "Applying…" : "Apply"}
+            </button>
+          </div>
+        )}
         {assets.map((a) => (
           <div key={a.id} style={rowStyle}>
             <span>
+              <input
+                type="checkbox"
+                checked={selectedIds.has(a.id)}
+                onChange={() => toggleSelected(a.id)}
+                style={{ marginRight: 8 }}
+              />
               <strong>{a.name}</strong>
               <span style={{ color: "#888" }}> ({a.category})</span>
               <span style={{ color: "#888" }}>
