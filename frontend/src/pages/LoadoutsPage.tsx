@@ -1,3 +1,4 @@
+import { Boxes } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   api,
@@ -8,6 +9,8 @@ import {
   type LoadoutDetail,
   type NewLoadoutItem,
 } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
+import { Button } from "../components/Button";
 
 const pageStyle = { display: "flex", flex: 1, overflow: "hidden" };
 const listColStyle = { width: 320, borderRight: "1px solid var(--color-border)", overflowY: "auto" as const, padding: 16 };
@@ -290,7 +293,7 @@ export function LoadoutsPage() {
           + New loadout
         </button>
 
-        {loadouts.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No loadouts match this filter.</p>}
+        {loadouts.length === 0 && <EmptyState icon={Boxes} title="No loadouts match this filter" description="Create a loadout to define a standard kit for a job type." />}
         {loadouts.map((l) => (
           <div
             key={l.id}
@@ -324,7 +327,7 @@ export function LoadoutsPage() {
             </div>
 
             <h3 style={{ fontSize: 14 }}>Items</h3>
-            {createItems.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No items added yet.</p>}
+            {createItems.length === 0 && <EmptyState icon={Boxes} title="No items added yet" description="Add assets or consumables to build this loadout." />}
             {createItems.map((it, idx) => (
               <div key={idx} style={rowStyle}>
                 <span>
@@ -341,7 +344,7 @@ export function LoadoutsPage() {
             </div>
 
             <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-              <button className="btn-primary" onClick={submitCreate}>Create loadout</button>
+              <Button variant="primary" onClick={submitCreate}>Create loadout</Button>
               <button onClick={() => setCreating(false)}>Cancel</button>
             </div>
           </>
@@ -362,7 +365,7 @@ export function LoadoutsPage() {
                     </option>
                   ))}
                 </select>
-                <button className="btn-primary" onClick={saveHeader}>Save</button>
+                <Button variant="primary" onClick={saveHeader}>Save</Button>
                 <button onClick={() => setEditingHeader(false)}>Cancel</button>
               </div>
             ) : (
@@ -382,7 +385,7 @@ export function LoadoutsPage() {
             )}
 
             <h3 style={{ fontSize: 14 }}>Items</h3>
-            {detail.items.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No items in this loadout.</p>}
+            {detail.items.length === 0 && <EmptyState icon={Boxes} title="No items in this loadout" description="Add an item below to define what this kit contains." />}
             {detail.items.map((item) => (
               <div key={item.id} style={rowStyle}>
                 <span>{item.item_name}</span>

@@ -91,13 +91,17 @@ export async function createLoginToken(crewMemberId: string): Promise<string> {
   return token;
 }
 
-// Single-use: the UPDATE only matches a row that hasn't been used yet, so a
-// replayed token (already redeemed, or expired) returns null rather than
-// silently minting a second session.
+// Not single-use, deliberately -- the 10-minute cooldown on createLoginToken
+// (above) is what bounds link issuance ("fresh link per request, not on
+// demand"), not one-shot redemption. Tapping the same link twice in 15
+// minutes (reopening it, a second device, a flaky first load) just logs in
+// again rather than failing with a confusing "expired" error for a link
+// that's clearly still fresh. used_at now records *last* use, not "already
+// used" -- nothing gates on it; it's kept for visibility only.
 export async function redeemLoginToken(token: string): Promise<string | null> {
   const result = await pool.query(
     `UPDATE login_tokens SET used_at = now()
-     WHERE token_hash = $1 AND expires_at > now() AND used_at IS NULL
+     WHERE token_hash = $1 AND expires_at > now()
      RETURNING crew_member_id`,
     [sha256Hex(token)],
   );

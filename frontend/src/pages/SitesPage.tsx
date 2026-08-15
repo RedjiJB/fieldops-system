@@ -1,5 +1,8 @@
+import { Building2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, SITE_TYPES, type Site } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
+import { Button } from "../components/Button";
 
 const rowStyle = {
   display: "flex",
@@ -115,7 +118,7 @@ export function SitesPage() {
           </select>
         </div>
 
-        {visibleSites.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No sites match this filter.</p>}
+        {visibleSites.length === 0 && <EmptyState icon={Building2} title="No sites match this filter" description="Try clearing the filter, or register a site over WhatsApp." />}
         {visibleSites.map((s) => (
           <div key={s.id} style={rowStyle}>
             {editingId === s.id && draft ? (
@@ -179,7 +182,7 @@ export function SitesPage() {
                 </span>
                 <span />
                 <span style={{ display: "flex", gap: 8 }}>
-                  <button className="btn-primary" onClick={() => saveEdit(s)}>Save</button>
+                  <Button variant="primary" onClick={() => saveEdit(s)}>Save</Button>
                   <button
                     onClick={() => {
                       setEditingId(null);

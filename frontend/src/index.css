@@ -401,7 +401,13 @@ button:disabled.btn-danger {
   .app-topbar {
     display: flex;
   }
-  .sidebar {
+  /* :not(.mobile-open) here is NOT redundant -- it matches the 900px
+     rule's specificity (0,2,0). Written as a bare `.sidebar` (0,1,0) it
+     LOSES to the tablet rule above despite coming later in the file, and
+     the drawer stays a 56px fixed rail overlapping the page content --
+     which is exactly the bug this replaced (the left ~56px of every
+     screen was covered on a phone). */
+  .sidebar:not(.mobile-open) {
     position: fixed;
     inset: 0 auto 0 0;
     z-index: 20;
@@ -409,6 +415,9 @@ button:disabled.btn-danger {
     border-right: none;
   }
   .sidebar.mobile-open {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 20;
     width: 240px;
     border-right: 1px solid var(--color-border);
     box-shadow: 0 0 0 100vmax rgba(20, 24, 32, 0.35);
@@ -763,4 +772,56 @@ button:disabled.btn-danger {
 .brand-logo-login {
   height: 64px;
   margin: 0 auto 8px;
+}
+
+/* ---------------------------------------------------------------------
+   Phone overrides -- deliberately LAST in this file.
+   These target the same single-class selectors as the component blocks
+   above (.card, .stat-card, .page-header), so they only win on source
+   order. Placed with the other breakpoints further up, the base rules
+   defined later silently overrode every one of them -- the media query
+   was live, it just lost. Keep this block at the bottom.
+   --------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  /* 20px gutters each side of a 375px screen spends 11% of the width on
+     margin alone. */
+  .card {
+    margin: 8px 12px;
+    padding: 14px;
+  }
+  .kpi-row {
+    padding: 12px;
+    gap: 8px;
+  }
+  /* 2-up rather than 1-up -- four full-width tiles pushed the first real
+     content ~380px down, so a phone opened on nothing but KPI numbers. */
+  .stat-card {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    padding: 12px;
+  }
+  .stat-card-value {
+    font-size: 19px;
+  }
+  .stat-card-label {
+    font-size: 10px;
+  }
+  .page-header {
+    padding: 14px 12px 2px;
+  }
+  .tab-strip {
+    padding: 0 12px;
+    overflow-x: auto;
+  }
+  /* Filter bars are desktop-width flex rows of selects/inputs; let each
+     control keep a usable width and wrap instead of being squeezed. */
+  .card select,
+  .card input:not([type="checkbox"]):not([type="radio"]) {
+    max-width: 100%;
+  }
+  /* Real <table> pages (Reports, Compliance, Payroll) -- keep the table
+     itself scrollable rather than letting it widen the page body. */
+  .data-table {
+    min-width: 520px;
+  }
 }

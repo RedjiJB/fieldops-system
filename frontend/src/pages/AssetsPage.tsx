@@ -1,5 +1,8 @@
+import { Package } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, ASSET_DIRECTLY_SETTABLE_STATUSES, type Asset } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
+import { Button } from "../components/Button";
 import { StatusBadge } from "../components/StatusBadge";
 
 const rowStyle = {
@@ -217,7 +220,7 @@ export function AssetsPage() {
           />
         </div>
 
-        {visibleAssets.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No assets match these filters.</p>}
+        {visibleAssets.length === 0 && <EmptyState icon={Package} title="No assets match these filters" description="Try clearing a filter, or register an asset over WhatsApp." />}
         {selectedIds.size > 0 && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 13, color: "var(--color-text-muted)" }}>{selectedIds.size} selected</span>
@@ -229,9 +232,9 @@ export function AssetsPage() {
                 </option>
               ))}
             </select>
-            <button className="btn-primary" onClick={onBulkChangeStatus} disabled={!bulkStatus || bulkApplying}>
+            <Button variant="primary" onClick={onBulkChangeStatus} disabled={!bulkStatus || bulkApplying}>
               {bulkApplying ? "Applying…" : "Apply"}
-            </button>
+            </Button>
           </div>
         )}
         {visibleAssets.map((a) => (

@@ -1,5 +1,7 @@
+import { Clock } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api, type CrewMember, type TimeclockSession } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
 import { StatusBadge } from "../components/StatusBadge";
 
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const, alignItems: "center" };
@@ -85,7 +87,7 @@ export function TimesheetsPage() {
           </label>
         </div>
 
-        {grouped.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No sessions match these filters.</p>}
+        {grouped.length === 0 && <EmptyState icon={Clock} title="No sessions match these filters" description="Clock-ins are recorded over WhatsApp and show up here." />}
         {grouped.map(([crewId, crewSessions]) => (
           <div key={crewId} style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 14, marginBottom: 4 }}>{nameById.get(crewId) ?? crewId}</h3>

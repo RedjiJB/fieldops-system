@@ -1,5 +1,8 @@
+import { CheckSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, CONFIRMATION_STATUSES, type PendingConfirmation } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
+import { Button } from "../components/Button";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
 
@@ -81,8 +84,8 @@ function ReviewControl({
         onChange={(e) => setReason(e.target.value)}
         style={{ width: 140 }}
       />
-      <button className="btn-primary" onClick={approve}>Approve</button>
-      <button className="btn-danger" onClick={reject}>Reject</button>
+      <Button variant="primary" onClick={approve}>Approve</Button>
+      <Button variant="danger" onClick={reject}>Reject</Button>
       {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </span>
   );
@@ -141,7 +144,7 @@ export function ConfirmationsPage() {
           </select>
         </div>
 
-        {confirmations.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No confirmations match this filter.</p>}
+        {confirmations.length === 0 && <EmptyState icon={CheckSquare} title="No confirmations match this filter" description="Requests awaiting your approval will appear here." />}
         {confirmations.map((c) => (
           <div key={c.id} style={rowStyle}>
             <span>

@@ -1,5 +1,8 @@
+import { UserCog } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, USER_ROLES, type User } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
+import { Button } from "../components/Button";
 import { useAuth } from "../context/AuthContext";
 
 const rowStyle = {
@@ -97,7 +100,7 @@ function ResetPasswordInline({ user }: { user: User }) {
         onChange={(e) => setNewPassword(e.target.value)}
         style={{ width: 140 }}
       />
-      <button className="btn-primary" onClick={submit}>Save</button>
+      <Button variant="primary" onClick={submit}>Save</Button>
       <button onClick={() => setOpen(false)}>Cancel</button>
       {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </span>
@@ -160,7 +163,7 @@ export function UsersPage() {
 
         {isAdmin && <NewUserForm onCreated={(u) => setUsers((prev) => [...prev, u])} />}
 
-        {users.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No users on file.</p>}
+        {users.length === 0 && <EmptyState icon={UserCog} title="No users on file" description="Dashboard logins are separate from crew members." />}
         {users.map((u) => (
           <div key={u.id} style={rowStyle}>
             {isAdmin && editingId === u.id ? (
@@ -174,7 +177,7 @@ export function UsersPage() {
                     </option>
                   ))}
                 </select>
-                <button className="btn-primary" onClick={() => saveEdit(u)}>Save</button>
+                <Button variant="primary" onClick={() => saveEdit(u)}>Save</Button>
                 <button onClick={() => setEditingId(null)}>Cancel</button>
               </span>
             ) : (

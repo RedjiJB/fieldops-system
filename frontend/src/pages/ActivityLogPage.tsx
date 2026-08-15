@@ -1,5 +1,7 @@
+import { Activity } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ACTIVITY_EVENT_TYPES, api, type ActivityEvent } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
 
 const rowStyle = {
   display: "flex",
@@ -58,7 +60,7 @@ export function ActivityLogPage() {
           <input type="date" value={since} onChange={(e) => setSince(e.target.value)} />
         </div>
 
-        {events.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No activity matches these filters.</p>}
+        {events.length === 0 && <EmptyState icon={Activity} title="No activity matches these filters" description="Try widening the date range or clearing a filter." />}
         {events.map((e, idx) => (
           <div key={idx} style={rowStyle}>
             <span>

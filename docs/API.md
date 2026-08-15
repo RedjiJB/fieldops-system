@@ -15,8 +15,8 @@ As of `0051`/`0052`, there are two parallel ways to end up with a session cookie
 | `POST` | `/auth/login` | `{email, password}` → sets an `HttpOnly` session cookie. Public. Response: `{identityType: "dashboard", id, email, name, role}` |
 | `POST` | `/auth/logout` | Deletes the current session (either type), clears the cookie. |
 | `GET` | `/auth/me` | Current session identity, or 401. `{identityType: "dashboard", id, email, name, role}` or `{identityType: "crew", id, name, role}` |
-| `POST` | `/auth/login-token` | `{crew_member_id}` → `{token}`, a raw 15-minute single-use magic-link token (only its hash is stored). **Service token only** — called by the agent's `send_dashboard_login_link` tool, never directly by a browser. |
-| `GET` | `/auth/redeem?token=` | Public. Redeems a login token: 401 ("expired or already been used") if invalid/expired/already-used, otherwise sets a crew session cookie and redirects to `/`. Hit by a real browser navigation from a tapped WhatsApp link, not an API client. |
+| `POST` | `/auth/login-token` | `{crew_member_id}` → `{token}`, a raw 15-minute magic-link token (only its hash is stored, not single-use — can be redeemed more than once within its expiry). **Service token only** — called by the agent's `send_dashboard_login_link` tool, never directly by a browser. 429 (`{error, retry_after_seconds}`) if this crew member already had a token issued within the last 10 minutes — a fresh link per request, but rate-limited, not on-demand spam. |
+| `GET` | `/auth/redeem?token=` | Public. Redeems a login token: 401 ("expired or already been used") if invalid/expired, otherwise sets a crew session cookie and redirects to `/`. Hit by a real browser navigation from a tapped WhatsApp link, not an API client. |
 
 Dashboard accounts can also now be created/managed from the dashboard itself (see Users below) — the CLI script still works but is no longer the only way.
 

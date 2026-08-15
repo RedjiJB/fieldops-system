@@ -1,5 +1,8 @@
+import { Receipt, Store } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, PO_STATUSES, type PurchaseOrder, type PurchaseOrderDetail, type Vendor } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
+import { Button } from "../components/Button";
 import { StatusBadge } from "../components/StatusBadge";
 
 function poStatusTone(status: (typeof PO_STATUSES)[number]): "neutral" | "warn" | "good" {
@@ -59,7 +62,7 @@ function VendorsSection() {
       <h2>Vendors</h2>
       {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</div>}
 
-      {vendors.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No vendors on file.</p>}
+      {vendors.length === 0 && <EmptyState icon={Store} title="No vendors on file" description="Add a vendor to compile purchase orders against them." />}
       {vendors.map((v) => (
         <div key={v.id} style={rowStyle}>
           {editingId === v.id && draft ? (
@@ -87,7 +90,7 @@ function VendorsSection() {
                 placeholder="Lead time (days)"
                 style={{ width: 130 }}
               />
-              <button className="btn-primary" onClick={() => saveEdit(v)}>Save</button>
+              <Button variant="primary" onClick={() => saveEdit(v)}>Save</Button>
               <button onClick={() => setEditingId(null)}>Cancel</button>
             </span>
           ) : (
@@ -183,7 +186,7 @@ function PurchaseOrdersSection() {
 
       <div style={poLayoutStyle}>
         <div style={poListColStyle}>
-          {orders.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No purchase orders match this filter.</p>}
+          {orders.length === 0 && <EmptyState icon={Receipt} title="No purchase orders match this filter" description="Compiled purchase orders will appear here." />}
           {orders.map((po) => (
             <div
               key={po.id}
@@ -231,12 +234,12 @@ function PurchaseOrdersSection() {
               {detail.status === "compiled" && (
                 <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                   <input placeholder="Sent to" value={sentTo} onChange={(e) => setSentTo(e.target.value)} />
-                  <button className="btn-primary" onClick={send}>Send</button>
+                  <Button variant="primary" onClick={send}>Send</Button>
                 </div>
               )}
               {(detail.status === "sent_to_office" || detail.status === "forwarded_by_office") && (
                 <div style={{ marginTop: 12 }}>
-                  <button className="btn-primary" onClick={markFulfilled}>Mark fulfilled</button>
+                  <Button variant="primary" onClick={markFulfilled}>Mark fulfilled</Button>
                 </div>
               )}
             </>

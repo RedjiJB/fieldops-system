@@ -1,5 +1,7 @@
+import { Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, type Trip, type Vehicle } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
 
 const rowStyle = {
   display: "flex",
@@ -63,7 +65,7 @@ export function VehicleHistoryPage() {
           </select>
         </div>
 
-        {vehicleId && trips.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No trips on record for this vehicle.</p>}
+        {vehicleId && trips.length === 0 && <EmptyState icon={Truck} title="No trips on record for this vehicle" description="Trips started over WhatsApp will appear here." />}
         {trips.map((t) => (
           <div key={t.id} style={rowStyle}>
             <span>

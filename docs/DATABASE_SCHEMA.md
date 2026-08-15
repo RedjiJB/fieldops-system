@@ -515,11 +515,16 @@ CREATE TABLE sessions (
 );
 
 -- The magic-link redeem table (0052). Short-lived (15 min, set at mint time
--- by createLoginToken) and single-use (used_at set on redemption; an
--- already-used or expired token fails redeemLoginToken). Minted only via
--- POST /auth/login-token (service-token only, called by the agent's
--- send_dashboard_login_link tool), redeemed via the public GET /auth/redeem,
--- which trades it for a real 30-day sessions row via createSession.
+-- by createLoginToken) but NOT single-use -- redeemLoginToken only checks
+-- expires_at, so the same link works for every tap within its 15-minute
+-- window; used_at records the most recent redemption for visibility, it
+-- doesn't gate anything. What bounds issuance instead is a 10-minute
+-- cooldown per crew_member_id in createLoginToken itself (throws
+-- LoginTokenCooldownError) -- a fresh token every time someone asks, just
+-- not on demand faster than that. Minted only via POST /auth/login-token
+-- (service-token only, called by the agent's send_dashboard_login_link
+-- tool), redeemed via the public GET /auth/redeem, which trades it for a
+-- real 30-day sessions row via createSession.
 CREATE TABLE login_tokens (
   token_hash     TEXT PRIMARY KEY,
   crew_member_id UUID NOT NULL REFERENCES crew_members(id) ON DELETE CASCADE,

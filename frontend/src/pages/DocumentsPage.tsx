@@ -1,5 +1,7 @@
+import { FileText, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, DOCUMENT_TYPES, type Document } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
 
 const rowStyle = {
   display: "flex",
@@ -62,7 +64,7 @@ export function DocumentsPage() {
 
       <section className="card">
         <h2>Expiring soon (next {EXPIRING_WITHIN_DAYS} days)</h2>
-        {expiring.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>Nothing expiring or overdue.</p>}
+        {expiring.length === 0 && <EmptyState icon={ShieldCheck} title="Nothing expiring or overdue" description="Every document on file is currently in date." />}
         {expiring.map((d) => (
           <DocumentRow key={d.id} doc={d} />
         ))}
@@ -80,7 +82,7 @@ export function DocumentsPage() {
             ))}
           </select>
         </div>
-        {documents.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No documents match this filter.</p>}
+        {documents.length === 0 && <EmptyState icon={FileText} title="No documents match this filter" description="Documents uploaded over WhatsApp will appear here." />}
         {documents.map((d) => (
           <DocumentRow key={d.id} doc={d} />
         ))}

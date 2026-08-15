@@ -1,5 +1,8 @@
+import { Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, CREW_ROLES, PREFERRED_LANGUAGES, type CrewMember } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
+import { Button } from "../components/Button";
 
 const LANGUAGE_LABELS: Record<(typeof PREFERRED_LANGUAGES)[number], string> = { en: "English", fr: "French" };
 
@@ -104,7 +107,7 @@ export function CrewPage() {
           </select>
         </div>
 
-        {visibleCrew.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No crew members match these filters.</p>}
+        {visibleCrew.length === 0 && <EmptyState icon={Users} title="No crew members match these filters" description="Try clearing a filter, or register a crew member over WhatsApp." />}
         {visibleCrew.map((c) => (
           <div key={c.id} style={rowStyle}>
             {editingId === c.id ? (
@@ -128,7 +131,7 @@ export function CrewPage() {
                     </option>
                   ))}
                 </select>
-                <button className="btn-primary" onClick={() => saveEdit(c)}>Save</button>
+                <Button variant="primary" onClick={() => saveEdit(c)}>Save</Button>
                 <button onClick={() => setEditingId(null)}>Cancel</button>
               </span>
             ) : (

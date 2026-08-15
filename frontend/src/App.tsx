@@ -120,14 +120,23 @@ function Dashboard() {
   const groups = isAdmin ? [...NAV_GROUPS, ADMIN_NAV_GROUP] : NAV_GROUPS;
   const activeItem = groups.flatMap((g) => g.items).find((i) => i.tab === tab);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   // Closing the mobile drawer on outside-click, same pattern the old
   // admin dropdown used -- tapping the dimmed backdrop (the drawer's
   // box-shadow trick in index.css) should dismiss it like any drawer.
+  //
+  // The menuBtnRef exclusion is load-bearing, not defensive: the hamburger
+  // lives in .app-topbar, outside the sidebar, so without it a tap on the
+  // open drawer's X fired mousedown (this handler -> close) and then click
+  // (the button's own toggle -> reopen), leaving the drawer stuck open with
+  // no way to dismiss it except selecting a nav item.
   useEffect(() => {
     if (!mobileOpen) return;
     function onClickOutside(e: MouseEvent) {
-      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (menuBtnRef.current?.contains(target)) return;
+      if (sidebarRef.current && !sidebarRef.current.contains(target)) {
         setMobileOpen(false);
       }
     }
@@ -171,7 +180,13 @@ function Dashboard() {
       </div>
       <div className="app-content">
         <div className="app-topbar">
-          <button className="app-topbar-menu-btn" onClick={() => setMobileOpen((v) => !v)}>
+          <button
+            ref={menuBtnRef}
+            className="app-topbar-menu-btn"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((v) => !v)}
+          >
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
           <strong>{activeItem?.label ?? "Sod Boys Ltd"}</strong>

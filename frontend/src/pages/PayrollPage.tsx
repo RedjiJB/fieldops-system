@@ -1,5 +1,8 @@
+import { Users, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, PAY_TYPES, type PayProfile, type Payout, type ReconciliationRow } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
+import { Button } from "../components/Button";
 import { useAuth } from "../context/AuthContext";
 
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const, alignItems: "center" };
@@ -59,9 +62,9 @@ function PayProfileRow({ profile, onSaved }: { profile: PayProfile; onSaved: (p:
           onChange={(e) => setHourlyRate(e.target.value)}
           style={{ width: 100 }}
         />
-        <button className="btn-primary" onClick={save} disabled={saving}>
+        <Button variant="primary" onClick={save} disabled={saving}>
           Save
-        </button>
+        </Button>
         {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
       </span>
     </div>
@@ -129,7 +132,7 @@ function NewPayoutForm({
         Paid at (optional, defaults to now)
         <input type="datetime-local" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} />
       </label>
-      <button className="btn-primary" onClick={submit}>+ Record payout</button>
+      <Button variant="primary" onClick={submit}>+ Record payout</Button>
       {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </div>
   );
@@ -210,7 +213,7 @@ export function PayrollPage() {
         </p>
         {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
-        {profiles.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No crew members on file.</p>}
+        {profiles.length === 0 && <EmptyState icon={Users} title="No crew members on file" description="Register a crew member to set up their pay profile." />}
         {profiles.map((p) => (
           <PayProfileRow
             key={p.crew_member_id}
@@ -246,7 +249,7 @@ export function PayrollPage() {
           </label>
         </div>
 
-        {payouts.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No payouts match these filters.</p>}
+        {payouts.length === 0 && <EmptyState icon={Wallet} title="No payouts match these filters" description="Record a payout above, or widen the date range." />}
         {payouts.map((p) => (
           <div key={p.id} style={rowStyle}>
             <span>

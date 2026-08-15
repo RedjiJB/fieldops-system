@@ -1,3 +1,4 @@
+import { CreditCard, Receipt } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   api,
@@ -10,6 +11,8 @@ import {
   type MoneyInstrument,
   type SpendRecord,
 } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
+import { Button } from "../components/Button";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
 
@@ -314,8 +317,8 @@ function ApproveControl({ record, onDone }: { record: SpendRecord; onDone: (r: S
         onChange={(e) => setReason(e.target.value)}
         style={{ width: 140 }}
       />
-      <button className="btn-primary" onClick={approve}>Approve</button>
-      <button className="btn-danger" onClick={reject}>Reject</button>
+      <Button variant="primary" onClick={approve}>Approve</Button>
+      <Button variant="danger" onClick={reject}>Reject</Button>
       {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </span>
   );
@@ -378,7 +381,7 @@ export function SpendingPage() {
 
         <NewInstrumentForm onCreated={(mi) => setInstruments((prev) => [...prev, mi])} />
 
-        {instruments.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No money instruments on file.</p>}
+        {instruments.length === 0 && <EmptyState icon={CreditCard} title="No money instruments on file" description="Add a company card or petty cash float to track spend against." />}
         {instruments.map((mi) => (
           <InstrumentRow
             key={mi.id}
@@ -423,7 +426,7 @@ export function SpendingPage() {
           </select>
         </div>
 
-        {records.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No spend records match these filters.</p>}
+        {records.length === 0 && <EmptyState icon={Receipt} title="No spend records match these filters" description="Claims submitted over WhatsApp will appear here." />}
         {records.map((r) => (
           <div key={r.id} style={rowStyle}>
             <span>
