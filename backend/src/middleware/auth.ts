@@ -1,9 +1,22 @@
+import { timingSafeEqual } from "node:crypto";
 import { parse as parseCookie } from "cookie";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
 import { findSessionIdentity } from "../lib/session.js";
 
 export const SESSION_COOKIE_NAME = "fieldops_session";
+
+// A plain === comparison short-circuits on the first mismatched byte,
+// which leaks a timing signal an attacker could in principle use to guess
+// the service token one character at a time. timingSafeEqual always
+// compares every byte -- the length check up front is fine to leak (the
+// expected length isn't a secret, and timingSafeEqual requires equal-length
+// buffers anyway or it throws).
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+}
 
 // Accepts the agent's static service token (Authorization: Bearer), a real
 // dashboard user's session cookie, or (as of the crew-dashboard-access
@@ -15,7 +28,7 @@ export const SESSION_COOKIE_NAME = "fieldops_session";
 export const requireAuth = asyncHandler(async (req, _res, next) => {
   const authHeader = req.headers.authorization;
   const serviceToken = process.env.AGENT_SERVICE_TOKEN;
-  if (serviceToken && authHeader === `Bearer ${serviceToken}`) {
+  if (serviceToken && authHeader && timingSafeStringEqual(authHeader, `Bearer ${serviceToken}`)) {
     req.auth = { type: "service" };
     next();
     return;
