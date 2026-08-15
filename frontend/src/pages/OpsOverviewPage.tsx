@@ -1,3 +1,4 @@
+import { AlertTriangle, Bell, CalendarCheck, Package } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   api,
@@ -10,6 +11,9 @@ import {
   type Shift,
   type Site,
 } from "../api/client";
+import { Button } from "../components/Button";
+import { EmptyState } from "../components/EmptyState";
+import { StatCard } from "../components/StatCard";
 import { StatusBadge } from "../components/StatusBadge";
 
 function todayIso(): string {
@@ -131,9 +135,9 @@ function BulkShiftAssignSection({ onAssigned }: { onAssigned: () => void }) {
       ))}
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         <button onClick={addRow}>+ Add row</button>
-        <button className="btn-primary" onClick={submit} disabled={submitting}>
-          {submitting ? "Assigning…" : `Assign ${rows.length} shift${rows.length === 1 ? "" : "s"}`}
-        </button>
+        <Button variant="primary" onClick={submit} loading={submitting}>
+          {`Assign ${rows.length} shift${rows.length === 1 ? "" : "s"}`}
+        </Button>
       </div>
     </section>
   );
@@ -202,7 +206,7 @@ function OrderItemsPanel({ orderId }: { orderId: string }) {
             onChange={(e) => setDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
             style={{ width: 80 }}
           />
-          <button className="btn-primary" onClick={() => save(item.id)}>Save</button>
+          <Button variant="primary" size="sm" onClick={() => save(item.id)}>Save</Button>
         </div>
       ))}
     </div>
@@ -354,27 +358,29 @@ export function OpsOverviewPage() {
       {error && <div style={{ padding: 8, color: "var(--color-status-bad)" }}>{error}</div>}
 
       <div className="kpi-row">
-        <div className="kpi-card">
-          <span className="kpi-card-label">Today's shifts</span>
-          <span className="kpi-card-value">{shifts.length}</span>
-        </div>
-        <div className={`kpi-card${alerts.length > 0 ? " status-bad" : ""}`}>
-          <span className="kpi-card-label">Unresolved alerts</span>
-          <span className="kpi-card-value">{alerts.length}</span>
-        </div>
-        <div className="kpi-card">
-          <span className="kpi-card-label">Order pipeline</span>
-          <span className="kpi-card-value">{orders.length}</span>
-        </div>
-        <div className={`kpi-card${criticalOpenCount > 0 ? " status-bad" : ""}`}>
-          <span className="kpi-card-label">Critical, unacknowledged</span>
-          <span className="kpi-card-value">{criticalOpenCount}</span>
-        </div>
+        <StatCard label="Today's shifts" value={shifts.length} icon={CalendarCheck} tone="blue" />
+        <StatCard
+          label="Unresolved alerts"
+          value={alerts.length}
+          icon={AlertTriangle}
+          tone={alerts.length > 0 ? "danger" : "default"}
+          tintValue={alerts.length > 0}
+        />
+        <StatCard label="Order pipeline" value={orders.length} icon={Package} tone="default" />
+        <StatCard
+          label="Critical, unacknowledged"
+          value={criticalOpenCount}
+          icon={Bell}
+          tone={criticalOpenCount > 0 ? "danger" : "default"}
+          tintValue={criticalOpenCount > 0}
+        />
       </div>
 
       <section className="card">
         <h2>Today's shifts</h2>
-        {shifts.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No shifts scheduled today.</p>}
+        {shifts.length === 0 && (
+          <EmptyState icon={CalendarCheck} title="No shifts scheduled today" description="Assign a shift below to get today's roster started." />
+        )}
         {shifts.map((s) => (
           <div key={s.id} style={rowStyle}>
             <span>
@@ -390,7 +396,7 @@ export function OpsOverviewPage() {
 
       <section className="card">
         <h2>Unresolved alerts</h2>
-        {alerts.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No unresolved alerts.</p>}
+        {alerts.length === 0 && <EmptyState icon={AlertTriangle} title="No unresolved alerts" description="Everything the exceptions worker checks is currently clear." />}
         {selectedAlertIds.size > 0 && (
           <div style={{ marginBottom: 8 }}>
             <button onClick={onBulkResolve} disabled={bulkResolving}>
@@ -418,7 +424,7 @@ export function OpsOverviewPage() {
 
       <section className="card">
         <h2>Order pipeline</h2>
-        {orders.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No orders.</p>}
+        {orders.length === 0 && <EmptyState icon={Package} title="No orders in the pipeline" description="Orders requested from a site will show up here." />}
         {orders.map((o) => {
           const next = nextStatus(o.status);
           const expanded = expandedOrderId === o.id;
@@ -436,7 +442,7 @@ export function OpsOverviewPage() {
                   <span style={{ color: "var(--color-text-muted)" }}> — requested by {o.requester_name ?? "Unknown"} — </span>
                   <StatusBadge label={o.status} tone={orderStatusTone(o.status)} />
                 </span>
-                {next && <button className="btn-primary" onClick={() => onAdvance(o)}>Advance to: {next}</button>}
+                {next && <Button variant="primary" size="sm" onClick={() => onAdvance(o)}>Advance to: {next}</Button>}
               </div>
               {expanded && <OrderItemsPanel orderId={o.id} />}
             </div>
@@ -446,7 +452,7 @@ export function OpsOverviewPage() {
 
       <section className="card">
         <h2>Activity (last 24h)</h2>
-        {notifications.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>Nothing logged in the last 24 hours.</p>}
+        {notifications.length === 0 && <EmptyState icon={Bell} title="Nothing logged in the last 24 hours" />}
         {selectedNotificationIds.size > 0 && (
           <div style={{ marginBottom: 8 }}>
             <button onClick={onBulkAcknowledge} disabled={bulkAcknowledging}>

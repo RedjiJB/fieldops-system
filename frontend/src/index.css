@@ -13,38 +13,87 @@
   --color-text-muted: #5c6659;
   --color-text-faint: #86917f;
 
-  /* Accent pulled from the Sod Boys mark: field green for brand/actions,
-     sun gold as a sparing secondary highlight (active-nav glow, the
-     login card's top edge) -- never used for body text or as a status
-     color, so it stays a true accent rather than fighting the palette. */
+  /* Every color that ever needs alpha (hover washes, focus rings, tinted
+     card backgrounds) gets a channel triplet alongside its hex -- CSS
+     can't extract r/g/b out of an opaque hex var(), so rgb(var(--x-ch) /
+     0.1) is the only way to get e.g. "accent at 10%" without a second,
+     drifting hardcoded color. Same pattern OCE's own token file uses,
+     for the same reason. */
   --color-accent: #2e8b3f;
+  --color-accent-ch: 46 139 63;
   --color-accent-hover: #256e33;
   --color-accent-soft: #e6f4e8;
+  /* Sun gold from the mark -- sparing secondary highlight only (never
+     body text, never a status color), so it stays an accent rather than
+     fighting the palette. */
   --color-accent-2: #f2a71b;
 
-  /* Status/traffic-light convention -- used for order status, alert
-     priority, compliance state, maintenance due, etc. Good is teal
-     rather than the same green as --color-accent, deliberately, so a
-     "good" pill never reads as just "the brand color" -- semantic and
-     brand color stay visually distinct even though both land in the
-     green family. */
+  /* Status/traffic-light convention. Good is teal rather than the same
+     green as --color-accent, deliberately, so a "good" pill never reads
+     as just "the brand color" -- semantic and brand color stay visually
+     distinct even though both land in the green family. */
   --color-status-good: #0d8f7a;
+  --color-status-good-ch: 13 143 122;
   --color-status-good-soft: #e3f5f1;
   --color-status-warn: #e8830c;
+  --color-status-warn-ch: 232 131 12;
   --color-status-warn-soft: #fdf1e0;
   --color-status-bad: #d92626;
+  --color-status-bad-ch: 217 38 38;
   --color-status-bad-soft: #fbe8e8;
   --color-status-neutral: #5c6659;
+  --color-status-neutral-ch: 92 102 89;
   --color-status-neutral-soft: #ebede9;
 
   --sidebar-width: 232px;
   --sidebar-width-collapsed: 56px;
 
-  --radius: 10px;
+  /* Radius scale -- smallest for inline chips/inputs, largest for full
+     page-level cards. */
+  --radius-xs: 4px;
   --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
   --radius-pill: 999px;
-  --shadow-card: 0 1px 2px rgba(20, 30, 18, 0.05), 0 1px 1px rgba(20, 30, 18, 0.04);
-  --shadow-raised: 0 4px 16px rgba(20, 30, 18, 0.10), 0 1px 2px rgba(20, 30, 18, 0.06);
+  /* Kept as aliases -- both names are used across the app already;
+     --radius/--radius-sm map onto the new scale rather than forcing a
+     rename everywhere at once. */
+  --radius: var(--radius-lg);
+
+  /* Five-level shadow scale, all deliberately subtle -- a card should
+     read as "sits slightly above the page," never a drop-shadow. */
+  --shadow-xs: 0 1px 2px rgba(20, 30, 18, 0.04);
+  --shadow-sm: 0 1px 2px rgba(20, 30, 18, 0.05), 0 1px 1px rgba(20, 30, 18, 0.04);
+  --shadow-md: 0 2px 6px rgba(20, 30, 18, 0.07), 0 1px 2px rgba(20, 30, 18, 0.05);
+  --shadow-lg: 0 8px 20px rgba(20, 30, 18, 0.09), 0 2px 6px rgba(20, 30, 18, 0.06);
+  --shadow-xl: 0 16px 40px rgba(20, 30, 18, 0.12), 0 4px 10px rgba(20, 30, 18, 0.07);
+  /* Kept as aliases for the same reason as --radius above. */
+  --shadow-card: var(--shadow-sm);
+  --shadow-raised: var(--shadow-lg);
+
+  /* 4px base spacing unit -- component internals should land on this
+     grid (4/8/12/16/20/24/32...) rather than arbitrary values. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Deliberately smaller than typical defaults -- this is what makes a
+     dense operational dashboard read as considered rather than sparse. */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+
+  --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 350ms;
 }
 
 * {
@@ -77,7 +126,7 @@ input:focus-visible,
 select:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 button {
@@ -87,7 +136,9 @@ button {
   background: var(--color-surface);
   color: var(--color-text);
   font-weight: 500;
-  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+  transition: border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
 button:hover:not(:disabled) {
   border-color: var(--color-accent);
@@ -98,9 +149,24 @@ button:disabled {
 }
 
 /* Button variants -- OCE's primary actions (Save, Advance, Assign) are
-   solid-fill; everything else stays the neutral outline style above.
-   Applied selectively to each page's main call-to-action, not every
-   button, so the hierarchy actually means something. */
+   solid-fill with a hover lift; everything else stays the neutral outline
+   style above. Applied selectively to each page's main call-to-action, not
+   every button, so the hierarchy actually means something. */
+.btn-primary,
+.btn-danger {
+  will-change: transform;
+  box-shadow: var(--shadow-xs);
+}
+.btn-primary:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-md);
+}
+.btn-primary:active:not(:disabled),
+.btn-danger:active:not(:disabled) {
+  transform: scale(0.98);
+  box-shadow: var(--shadow-xs);
+}
 .btn-primary {
   background: var(--color-accent);
   border-color: var(--color-accent);
@@ -132,6 +198,50 @@ button:disabled {
 button:disabled.btn-primary,
 button:disabled.btn-danger {
   opacity: 0.5;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Size modifiers -- for the Button component; bare buttons across the app
+   stay at the default (unsized) padding, unaffected. */
+.btn-sm {
+  padding: 5px 10px;
+  font-size: var(--text-sm);
+}
+.btn-md {
+  padding: 8px 14px;
+  font-size: var(--text-base);
+}
+.btn-lg {
+  padding: 11px 18px;
+  font-size: var(--text-base);
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.6s linear infinite;
+  vertical-align: -0.15em;
+}
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-primary:hover:not(:disabled),
+  .btn-danger:hover:not(:disabled),
+  .btn-primary:active:not(:disabled),
+  .btn-danger:active:not(:disabled) {
+    transform: none;
+  }
+  .btn-spinner {
+    animation-duration: 1.5s;
+  }
 }
 
 /* App shell: fixed-width sidebar + flexible content column. Sidebar
@@ -378,6 +488,22 @@ button:disabled.btn-danger {
   background: var(--color-status-neutral-soft);
   color: var(--color-status-neutral);
 }
+.status-pill.status-blue {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+.status-pill.status-outline {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-strong);
+}
+.status-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
 
 /* Page header -- title + optional action row, sits above a page's cards.
    Not every page uses one (some, like Documents, put the filter bar
@@ -407,11 +533,167 @@ button:disabled.btn-danger {
   box-shadow: var(--shadow-card);
   margin: 12px 20px;
   padding: 16px;
+  transition: box-shadow var(--duration-base) var(--ease-standard), transform var(--duration-base) var(--ease-standard);
 }
 .card h2 {
   font-size: 15px;
   font-weight: 700;
   margin: 0 0 10px;
+}
+.card-hoverable {
+  cursor: pointer;
+}
+.card-hoverable:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.card-hoverable:active {
+  transform: translateY(0);
+}
+.card-hoverable:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .card-hoverable:hover,
+  .card-hoverable:active {
+    transform: none;
+  }
+}
+
+/* StatCard -- the Overview page's KPI tiles, upgraded from the plain
+   .kpi-card boxes: an icon in a tinted 32px chip, an optional delta line,
+   tone driving both the value color and the chip tint so "everything is
+   default-gray until something's wrong" reads correctly at a glance. */
+.stat-card {
+  flex: 1 1 180px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.stat-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.stat-card-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+.stat-card-value {
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  line-height: 1.15;
+}
+.stat-card-sub {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.stat-card-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat-card-delta.delta-up {
+  color: var(--color-status-good);
+}
+.stat-card-delta.delta-down {
+  color: var(--color-status-bad);
+}
+.stat-card-icon-chip {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stat-card.tone-default .stat-card-icon-chip {
+  background: var(--color-status-neutral-soft);
+  color: var(--color-status-neutral);
+}
+.stat-card.tone-blue .stat-card-icon-chip {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+.stat-card.tone-success .stat-card-icon-chip {
+  background: var(--color-status-good-soft);
+  color: var(--color-status-good);
+}
+.stat-card.tone-warning .stat-card-icon-chip {
+  background: var(--color-status-warn-soft);
+  color: var(--color-status-warn);
+}
+.stat-card.tone-danger .stat-card-icon-chip {
+  background: var(--color-status-bad-soft);
+  color: var(--color-status-bad);
+}
+.stat-card.tint-value.tone-success .stat-card-value {
+  color: var(--color-status-good);
+}
+.stat-card.tint-value.tone-warning .stat-card-value {
+  color: var(--color-status-warn);
+}
+.stat-card.tint-value.tone-danger .stat-card-value {
+  color: var(--color-status-bad);
+}
+.stat-card.tint-value.tone-blue .stat-card-value {
+  color: var(--color-accent);
+}
+
+/* EmptyState -- icon in a 56px chip with an inset shadow (reads as
+   pressed-in, not a flat gray square), then title/description/CTA. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+}
+.empty-state-icon-chip {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-xl);
+  background: var(--color-status-neutral-soft);
+  color: var(--color-text-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 2px 4px rgba(20, 30, 18, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.6);
+  margin-bottom: var(--space-1);
+}
+.empty-state-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+.empty-state-description {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 32ch;
+  margin: 0;
+}
+.empty-state-action {
+  margin-top: var(--space-2);
 }
 
 /* Data table -- for the pages that render real <table> markup (Reports,
