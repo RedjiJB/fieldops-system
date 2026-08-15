@@ -15,6 +15,7 @@ export function CrewPage() {
   const [crew, setCrew] = useState<CrewMember[]>([]);
   const [role, setRole] = useState("");
   const [active, setActive] = useState("");
+  const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftRole, setDraftRole] = useState<CrewMember["role"]>("crew");
@@ -28,6 +29,14 @@ export function CrewPage() {
   }
 
   useEffect(reload, [role, active]);
+
+  // Client-side, not a server round-trip -- crew lists here are small
+  // enough (dozens, not thousands) that filtering the already-loaded array
+  // is simpler than adding a ?name= query param, and updates instantly as
+  // you type with no extra request.
+  const visibleCrew = search.trim()
+    ? crew.filter((c) => c.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : crew;
 
   function startEdit(member: CrewMember) {
     setEditingId(member.id);
@@ -64,6 +73,12 @@ export function CrewPage() {
         <h2 style={{ fontSize: 16 }}>Crew</h2>
 
         <div style={filterBarStyle}>
+          <input
+            placeholder="Search by name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ padding: 4 }}
+          />
           <select value={role} onChange={(e) => setRole(e.target.value)}>
             <option value="">All roles</option>
             {CREW_ROLES.map((r) => (
@@ -79,8 +94,8 @@ export function CrewPage() {
           </select>
         </div>
 
-        {crew.length === 0 && <p style={{ color: "#888" }}>No crew members match these filters.</p>}
-        {crew.map((c) => (
+        {visibleCrew.length === 0 && <p style={{ color: "#888" }}>No crew members match these filters.</p>}
+        {visibleCrew.map((c) => (
           <div key={c.id} style={rowStyle}>
             {editingId === c.id ? (
               <span style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>

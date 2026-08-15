@@ -43,6 +43,7 @@ function toDraft(s: Site): Draft {
 export function SitesPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [type, setType] = useState("");
+  const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +56,10 @@ export function SitesPage() {
   }
 
   useEffect(reload, [type]);
+
+  const visibleSites = search.trim()
+    ? sites.filter((s) => s.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : sites;
 
   function startEdit(site: Site) {
     setEditingId(site.id);
@@ -95,6 +100,12 @@ export function SitesPage() {
         </p>
 
         <div style={filterBarStyle}>
+          <input
+            placeholder="Search by name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ padding: 4 }}
+          />
           <select value={type} onChange={(e) => setType(e.target.value)}>
             <option value="">All types</option>
             {SITE_TYPES.map((t) => (
@@ -105,8 +116,8 @@ export function SitesPage() {
           </select>
         </div>
 
-        {sites.length === 0 && <p style={{ color: "#888" }}>No sites match this filter.</p>}
-        {sites.map((s) => (
+        {visibleSites.length === 0 && <p style={{ color: "#888" }}>No sites match this filter.</p>}
+        {visibleSites.map((s) => (
           <div key={s.id} style={rowStyle}>
             {editingId === s.id && draft ? (
               <span style={editGridStyle}>

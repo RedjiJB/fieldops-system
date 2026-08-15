@@ -17,6 +17,7 @@ export function AssetsPage() {
   const [status, setStatus] = useState("");
   const [siteId, setSiteId] = useState("");
   const [category, setCategory] = useState("");
+  const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState("");
@@ -37,6 +38,13 @@ export function AssetsPage() {
   }, []);
 
   useEffect(reload, [status, siteId, category]);
+
+  // Name search stays client-side and separate from category above --
+  // category is a server-side exact-match filter, this is a live substring
+  // match over whatever's already loaded.
+  const visibleAssets = search.trim()
+    ? assets.filter((a) => a.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : assets;
 
   function toggleSelected(id: string) {
     setSelectedIds((prev) => {
@@ -94,6 +102,12 @@ export function AssetsPage() {
         </p>
 
         <div style={filterBarStyle}>
+          <input
+            placeholder="Search by name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ padding: 4 }}
+          />
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">All statuses</option>
             <option value="available">available</option>
@@ -119,7 +133,7 @@ export function AssetsPage() {
           />
         </div>
 
-        {assets.length === 0 && <p style={{ color: "#888" }}>No assets match these filters.</p>}
+        {visibleAssets.length === 0 && <p style={{ color: "#888" }}>No assets match these filters.</p>}
         {selectedIds.size > 0 && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 13, color: "#888" }}>{selectedIds.size} selected</span>
@@ -136,7 +150,7 @@ export function AssetsPage() {
             </button>
           </div>
         )}
-        {assets.map((a) => (
+        {visibleAssets.map((a) => (
           <div key={a.id} style={rowStyle}>
             <span>
               <input
