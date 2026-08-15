@@ -126,6 +126,51 @@ reportsRouter.get(
   }),
 );
 
+// Not admin-gated, matching PATCH /order-items/:id's own precedent (see
+// orders.ts) -- purchase_orders.cost is operational cost data, same as
+// material cost elsewhere in this app, not wage/cash-handling data.
+// Shared between the JSON route (on-screen Reports table) and the CSV
+// route, same "build once, both consumers" pattern as
+// buildPeriodCloseSummary above.
+async function buildVendorSpendSummary(date_from?: string, date_to?: string) {
+  const result = await pool.query(
+    `SELECT v.name AS vendor_name, date_trunc('month', po.created_at) AS month,
+            COUNT(*) AS po_count, SUM(po.cost) AS total_cost
+     FROM purchase_orders po
+     JOIN vendors v ON v.id = po.vendor_id
+     WHERE po.cost IS NOT NULL
+       AND ($1::date IS NULL OR po.created_at >= $1)
+       AND ($2::date IS NULL OR po.created_at < ($2::date + interval '1 day'))
+     GROUP BY v.name, date_trunc('month', po.created_at)
+     ORDER BY date_trunc('month', po.created_at) DESC, total_cost DESC`,
+    [date_from ?? null, date_to ?? null],
+  );
+  return result.rows;
+}
+
+reportsRouter.get(
+  "/reports/vendor-spend",
+  asyncHandler(async (req, res) => {
+    const { date_from, date_to } = req.query;
+    res.json(await buildVendorSpendSummary(date_from as string | undefined, date_to as string | undefined));
+  }),
+);
+
+reportsRouter.get(
+  "/reports/vendor-spend.csv",
+  asyncHandler(async (req, res) => {
+    const { date_from, date_to } = req.query;
+    const rows = await buildVendorSpendSummary(date_from as string | undefined, date_to as string | undefined);
+    const csv = toCsv(rows, [
+      { header: "Vendor", value: (r) => r.vendor_name },
+      { header: "Month", value: (r) => dateOnlyOrNull(r.month) },
+      { header: "PO Count", value: (r) => r.po_count },
+      { header: "Total Cost", value: (r) => r.total_cost },
+    ]);
+    sendCsv(res, "vendor-spend.csv", csv);
+  }),
+);
+
 reportsRouter.get(
   "/reports/timesheets.csv",
   asyncHandler(async (req, res) => {

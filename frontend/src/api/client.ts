@@ -433,6 +433,13 @@ export type PeriodCloseSummary = {
   anomalies: { by_type: { type: string; count: number }[]; alerts: PeriodCloseAlert[] };
 };
 
+export type VendorSpendRow = {
+  vendor_name: string;
+  month: string;
+  po_count: number;
+  total_cost: number;
+};
+
 export const CONFIRMATION_ACTION_TYPES = [
   "timeclock_event",
   "consumable_adjustment",
@@ -726,6 +733,13 @@ export const api = {
   },
   periodCloseSummary: (dateFrom: string, dateTo: string) =>
     request<PeriodCloseSummary>(`/reports/period-close?date_from=${dateFrom}&date_to=${dateTo}`),
+  vendorSpendSummary: (filters: { date_from?: string; date_to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.date_from) params.set("date_from", filters.date_from);
+    if (filters.date_to) params.set("date_to", filters.date_to);
+    const qs = params.toString();
+    return request<VendorSpendRow[]>(`/reports/vendor-spend${qs ? `?${qs}` : ""}`);
+  },
   approveSpendRecord: (id: string, ratePerKm?: number) =>
     request<SpendRecord>(`/spend-records/${id}/approve`, {
       method: "PATCH",
