@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { AssetsPage } from "./pages/AssetsPage";
@@ -41,9 +41,33 @@ type Tab =
   | "compliance"
   | "notification-settings";
 
+const ADMIN_TABS: { tab: Tab; label: string }[] = [
+  { tab: "users", label: "Users" },
+  { tab: "payroll", label: "Payroll" },
+  { tab: "spending", label: "Spending" },
+  { tab: "confirmations", label: "Confirmations" },
+  { tab: "compliance", label: "Compliance" },
+  { tab: "notification-settings", label: "Notification Settings" },
+];
+
 function Dashboard() {
   const { user, logout } = useAuth();
   const [tab, setTab] = useState<Tab>("map");
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const adminMenuRef = useRef<HTMLDivElement>(null);
+  const isAdmin = user?.role === "admin" || user?.role === "owner";
+  const onAdminTab = ADMIN_TABS.some((t) => t.tab === tab);
+
+  useEffect(() => {
+    if (!adminMenuOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (adminMenuRef.current && !adminMenuRef.current.contains(e.target as Node)) {
+        setAdminMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [adminMenuOpen]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -59,7 +83,7 @@ function Dashboard() {
             fixed-width neighbors. */}
         <nav
           className="dashboard-header-nav"
-          style={{ display: "flex", gap: 8, overflowX: "auto", flexWrap: "nowrap", paddingBottom: 2 }}
+          style={{ display: "flex", gap: 6, overflowX: "auto", flexWrap: "nowrap", paddingBottom: 2 }}
         >
             <button onClick={() => setTab("map")} disabled={tab === "map"}>
               Map
@@ -88,11 +112,6 @@ function Dashboard() {
             <button onClick={() => setTab("vendors")} disabled={tab === "vendors"}>
               Vendors
             </button>
-            {(user?.role === "admin" || user?.role === "owner") && (
-              <button onClick={() => setTab("users")} disabled={tab === "users"}>
-                Users
-              </button>
-            )}
             <button onClick={() => setTab("activity")} disabled={tab === "activity"}>
               Activity
             </button>
@@ -102,30 +121,49 @@ function Dashboard() {
             <button onClick={() => setTab("timesheets")} disabled={tab === "timesheets"}>
               Timesheets
             </button>
-            {(user?.role === "admin" || user?.role === "owner") && (
-              <button onClick={() => setTab("payroll")} disabled={tab === "payroll"}>
-                Payroll
-              </button>
-            )}
-            {(user?.role === "admin" || user?.role === "owner") && (
-              <button onClick={() => setTab("spending")} disabled={tab === "spending"}>
-                Spending
-              </button>
-            )}
-            {(user?.role === "admin" || user?.role === "owner") && (
-              <button onClick={() => setTab("confirmations")} disabled={tab === "confirmations"}>
-                Confirmations
-              </button>
-            )}
-            {(user?.role === "admin" || user?.role === "owner") && (
-              <button onClick={() => setTab("compliance")} disabled={tab === "compliance"}>
-                Compliance
-              </button>
-            )}
-            {(user?.role === "admin" || user?.role === "owner") && (
-              <button onClick={() => setTab("notification-settings")} disabled={tab === "notification-settings"}>
-                Notification Settings
-              </button>
+            {isAdmin && (
+              // The 6 admin-only surfaces (Users/Payroll/Spending/Confirmations/
+              // Compliance/Notification Settings) used to each be their own
+              // top-level button -- folding them into one dropdown is most of
+              // what fixed nav crowding: only admin/owner ever saw the full
+              // 18-button row, since staff never had these 6 to begin with.
+              <div ref={adminMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+                <button onClick={() => setAdminMenuOpen((v) => !v)} disabled={onAdminTab && !adminMenuOpen}>
+                  Admin {adminMenuOpen ? "▴" : "▾"}
+                </button>
+                {adminMenuOpen && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      marginTop: 4,
+                      background: "#fff",
+                      border: "1px solid #ddd",
+                      borderRadius: 4,
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                      zIndex: 10,
+                      display: "flex",
+                      flexDirection: "column",
+                      minWidth: 160,
+                    }}
+                  >
+                    {ADMIN_TABS.map((t) => (
+                      <button
+                        key={t.tab}
+                        onClick={() => {
+                          setTab(t.tab);
+                          setAdminMenuOpen(false);
+                        }}
+                        disabled={tab === t.tab}
+                        style={{ textAlign: "left", border: "none", borderRadius: 0 }}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </nav>
         <div className="dashboard-header-user" style={{ display: "flex", alignItems: "center", gap: 12 }}>

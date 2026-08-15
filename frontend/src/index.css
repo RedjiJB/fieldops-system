@@ -35,6 +35,15 @@ button {
   grid-area: nav;
   min-width: 0;
 }
+/* Tighter than the global button padding (8px 10px) -- scoped to just the
+   nav, not every button in the app, since this row has more items than any
+   other button group and is the one place the extra padding actually costs
+   real estate. */
+.dashboard-header-nav > button,
+.dashboard-header-nav > div > button {
+  padding: 6px 6px;
+  font-size: 13px;
+}
 .dashboard-header-user {
   grid-area: user;
 }
