@@ -47,18 +47,20 @@ function Dashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "10px 16px",
-          borderBottom: "1px solid #ddd",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <strong>FieldOps Dashboard</strong>
-          <nav style={{ display: "flex", gap: 8 }}>
+      <header className="dashboard-header" style={{ padding: "10px 16px", borderBottom: "1px solid #ddd" }}>
+        <strong className="dashboard-header-title">FieldOps Dashboard</strong>
+        {/* .dashboard-header-nav (index.css) is grid-area: nav, min-width: 0 --
+            that min-width: 0 is what lets overflow-x: auto below actually
+            engage instead of the browser just growing the nav to fit its
+            content, which is what pushed the whole page wider before this
+            existed. Below 640px, index.css's media query moves this to its
+            own full-width row under title+user, so the scroller has real
+            room instead of being squeezed to ~0px next to two other
+            fixed-width neighbors. */}
+        <nav
+          className="dashboard-header-nav"
+          style={{ display: "flex", gap: 8, overflowX: "auto", flexWrap: "nowrap", paddingBottom: 2 }}
+        >
             <button onClick={() => setTab("map")} disabled={tab === "map"}>
               Map
             </button>
@@ -126,8 +128,7 @@ function Dashboard() {
               </button>
             )}
           </nav>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="dashboard-header-user" style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span>{user?.name}</span>
           <button onClick={() => logout()}>Log out</button>
         </div>

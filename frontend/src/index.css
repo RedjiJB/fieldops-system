@@ -16,3 +16,40 @@ button {
 button {
   cursor: pointer;
 }
+
+/* Dashboard header: title | nav | user, as three grid areas rather than
+   nested flex rows, so the mobile breakpoint below can re-place them
+   without restructuring the DOM. Desktop keeps today's single-row look
+   unchanged (nav gets the flexible middle column via 1fr). */
+.dashboard-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "title nav user";
+  align-items: center;
+  column-gap: 16px;
+}
+.dashboard-header-title {
+  grid-area: title;
+}
+.dashboard-header-nav {
+  grid-area: nav;
+  min-width: 0;
+}
+.dashboard-header-user {
+  grid-area: user;
+}
+
+/* Below this, the title+user row and the nav each get their own full-width
+   row -- the nav's overflow-x: auto (set inline) turns it into a horizontal
+   scroller instead of overflowing the page, which is what was actually
+   happening before this existed (18 nav buttons in one row don't fit a
+   phone screen, and the flex layout had nowhere to shrink them into). */
+@media (max-width: 640px) {
+  .dashboard-header {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "title user"
+      "nav nav";
+    row-gap: 8px;
+  }
+}
