@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express, { type ErrorRequestHandler } from "express";
+import helmet from "helmet";
 import { pool } from "./db/pool.js";
 import { HttpError } from "./lib/httpError.js";
 import { activityRouter } from "./routes/activity.js";
@@ -31,6 +32,12 @@ import { startExceptionsWorker } from "./workers/exceptions.js";
 import { requireAuth } from "./middleware/auth.js";
 
 const app = express();
+// Defaults only -- this is a pure JSON API (the one HTML-adjacent surface,
+// GET /documents/:id/file, already sets its own nosniff/Content-Disposition
+// per-response in documents.ts, and helmet's defaults don't fight that).
+// Found missing during a security audit; the frontend (nginx) gets the
+// matching CSP/frame/nosniff headers separately, see frontend/nginx.conf.
+app.use(helmet());
 // Default express.json() limit (100kb) is too small for base64-encoded
 // photo uploads (POST /documents/upload) — WhatsApp images are typically
 // a few hundred KB to a few MB, and base64 inflates that by ~33%.
