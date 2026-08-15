@@ -181,11 +181,21 @@ spendingRouter.post(
 // resolution in AGENTS.md is what keeps this scoped to the resolved
 // sender's own claims, same trust boundary every crew-write tool already
 // relies on, not a new one invented here.
+//
+// A crew-session dashboard request is a DIFFERENT trust boundary from the
+// service token, though -- there's no agent in the loop resolving anything,
+// it's a browser with someone's redeemed magic-link cookie. Confirmed live
+// during a security pass: without this branch, a crew session fell through
+// to the same ungated path as the service token and could read every OTHER
+// crew member's spend records, no filter required. crew_member_id is
+// force-derived from the session here, exactly like every /me/* route --
+// never trusted from the query string for this auth type.
 spendingRouter.get(
   "/spend-records",
   asyncHandler(async (req, res) => {
     if (req.auth?.type === "user") requireAdmin(req);
-    const { category, method, status, crew_member_id, date_from, date_to } = req.query;
+    const { category, method, status, date_from, date_to } = req.query;
+    const crew_member_id = req.auth?.type === "crew" ? req.auth.crewMemberId : (req.query.crew_member_id as string | undefined);
     const conditions: string[] = [];
     const params: unknown[] = [];
 
@@ -242,6 +252,11 @@ spendingRouter.get(
 // GET /pending-confirmations: a dashboard session must be admin, but the
 // service token passes through ungated so the agent can answer this over
 // WhatsApp too.
+//
+// Same crew-session leak fixed on GET /spend-records above applies here --
+// this route pre-dates that one and was the actual precedent it copied, so
+// it had the identical gap: a crew session fell through ungated with no
+// scoping at all. Forced to the session's own crew_member_id here too.
 spendingRouter.get(
   "/spend-records/missing-receipts",
   asyncHandler(async (req, res) => {
@@ -252,6 +267,10 @@ spendingRouter.get(
     }
     const conditions = ["sr.document_id IS NULL", "sr.category != 'mileage'", "sr.status = 'approved'"];
     const params: unknown[] = [];
+    if (req.auth?.type === "crew") {
+      params.push(req.auth.crewMemberId);
+      conditions.push(`sr.crew_member_id = $${params.length}`);
+    }
     if (category) {
       params.push(category);
       conditions.push(`sr.category = $${params.length}`);

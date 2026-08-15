@@ -15,10 +15,18 @@ const CREW_ROLES = ["crew", "foreman", "yard", "management", "owner"] as const;
 // a dashboard session must be admin, but the agent's service token passes through
 // ungated, since openclaw/notifier/deliver-notifications.mjs (host-side, no DB access)
 // needs critical_notification_roles fresh every run.
+//
+// Lower severity than the crew-session leaks fixed on GET /spend-records
+// and GET /pending-confirmations (this is operational config, not
+// per-person financial/personal data, and there's no crew_member_id to
+// scope it by anyway) -- but a crew-type session fell through this gate
+// exactly the same way, with no legitimate use case for it (no CrewPortalPage
+// surface reads this), so blocked explicitly for consistency with those fixes.
 notificationSettingsRouter.get(
   "/notification-settings",
   asyncHandler(async (req, res) => {
     if (req.auth?.type === "user") requireAdmin(req);
+    if (req.auth?.type === "crew") throw new HttpError(403, "Not authorized");
     const result = await pool.query("SELECT * FROM notification_settings LIMIT 1");
     res.json(result.rows[0]);
   }),

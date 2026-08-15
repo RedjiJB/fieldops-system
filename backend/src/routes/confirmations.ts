@@ -116,11 +116,23 @@ confirmationsRouter.post(
 // ungated (same trust boundary as GET /notifications/pending, which the
 // notifier already polls freely) -- this is what lets the agent look up
 // what's open when management asks over WhatsApp.
+// Crew-session leak fixed alongside the equivalent one on GET
+// /spend-records (spending.ts): a crew-type dashboard session fell through
+// this route's admin gate exactly like the service token, with no scoping
+// -- any crew member's magic-link session could browse every OTHER crew
+// member's pending confirmations (mileage claims, timeclock events, etc.),
+// confirmed live during a security pass. There's no current dashboard UI
+// that needs a crew session to see anyone else's, management-role included
+// -- that review happens over WhatsApp via the service token, not this
+// route -- so this forces crew_member_id to the session's own id
+// regardless of role, same as /me/* routes, never trusted from the query
+// string for this auth type.
 confirmationsRouter.get(
   "/pending-confirmations",
   asyncHandler(async (req, res) => {
     if (req.auth?.type === "user") requireAdmin(req);
-    const { status, whatsapp_message_id, crew_member_id } = req.query;
+    const { status, whatsapp_message_id } = req.query;
+    const crew_member_id = req.auth?.type === "crew" ? req.auth.crewMemberId : (req.query.crew_member_id as string | undefined);
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (status) {
