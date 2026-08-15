@@ -109,14 +109,29 @@ This pairs via a QR code, similar to WhatsApp Web — scan it with the phone tha
 
 ## Backups
 
-A Pi is a single point of failure sitting on a home network. Nightly `pg_dump`:
+A Pi is a single point of failure sitting on a home network. Nightly `pg_dump`, gzipped, written to `~/fieldops-backups/` (deliberately outside the repo working directory) with 14-day local retention.
+
+**This used to be a plain host crontab entry in this doc — it never actually got installed anywhere, silently, for as long as the rest of this deployment existed** (confirmed directly: no crontab, no backup files, nothing). Every other scheduled job in this stack (dashboard-url sync, digest cron jobs, shift nudges) runs through `openclaw cron`, not host crontab — this now does too, both for consistency and because it comes with its own run history/status tracking (`openclaw cron runs`) that plain crontab doesn't:
 
 ```bash
-# crontab -e
-0 3 * * * docker exec fieldops-postgres-1 pg_dump -U fieldops fieldops | gzip > /path/to/backups/fieldops-$(date +\%F).sql.gz
+openclaw cron add --name fieldops-backup --display-name "Database Backup" \
+  --command "node ~/fieldops-system/openclaw/notifier/backup-database.mjs" \
+  --command-env "AGENT_SERVICE_TOKEN=<real token>" \
+  --cron "0 3 * * *" --timeout-seconds 300 --no-deliver
 ```
 
-Sync the backup directory somewhere off the Pi (Drive, another machine, whatever's easiest) so a Pi failure costs downtime, not data — particularly the bootstrap inventory audit, which is real one-time labor worth protecting.
+(See `openclaw/notifier/README.md`'s "Install" section for why `--no-deliver` and no `OPENCLAW_BIN` — same reasoning as `sync-dashboard-url.mjs`'s own install command.)
+
+Verify it's actually there and run it once manually rather than waiting until 3am:
+
+```bash
+openclaw cron list                    # confirm "Database Backup" is enabled
+openclaw cron run <the job's id>       # runs it now
+```
+
+`GET /system/backup-status` (or ask the agent — `get_backup_status`) shows the last outcome. A `backup_failed` alert fires either on an explicit failed run, or — the actual gap this closes — if nothing has succeeded in ~30 hours, which is what catches the cron job silently not running at all again in the future.
+
+Sync the backup directory somewhere off the Pi (Drive, another machine, whatever's easiest) so a Pi failure costs downtime, not data — particularly the bootstrap inventory audit, which is real one-time labor worth protecting. **Deliberately not automated here** — this only writes to local disk; off-Pi sync is still a manual step.
 
 ## Migrating off the Pi later
 

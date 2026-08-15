@@ -71,3 +71,55 @@ systemRouter.post(
     res.json({ ok: true });
   }),
 );
+
+systemRouter.get(
+  "/system/backup-status",
+  asyncHandler(async (req, res) => {
+    const result = await pool.query(
+      "SELECT id, last_attempt_at, last_success_at, last_size_bytes, last_error FROM backup_status LIMIT 1",
+    );
+    res.json(result.rows[0]);
+  }),
+);
+
+// Reported by openclaw/notifier/backup-database.mjs after every nightly
+// pg_dump attempt. Explicit failure raises immediately here, same as
+// dashboard-url/health above; staleness (the cron job silently not running
+// at all) is instead caught by the exceptions worker's checkBackupStale,
+// since nothing calls this route to say so -- there's no negative signal
+// for "didn't run."
+systemRouter.post(
+  "/system/backup-status",
+  asyncHandler(async (req, res) => {
+    requireServiceToken(req);
+    const { success, sizeBytes, error } = req.body;
+    if (typeof success !== "boolean") throw new HttpError(400, "success (boolean) is required");
+
+    const result = await pool.query(
+      `UPDATE backup_status
+       SET last_attempt_at = now(),
+           last_success_at = CASE WHEN $1 THEN now() ELSE last_success_at END,
+           last_size_bytes = CASE WHEN $1 THEN $2 ELSE last_size_bytes END,
+           last_error = CASE WHEN $1 THEN NULL ELSE $3 END
+       RETURNING id`,
+      [success, sizeBytes ?? null, error ?? null],
+    );
+    const row = result.rows[0];
+
+    if (!success) {
+      const client = await pool.connect();
+      try {
+        await raiseAlert(
+          client,
+          "backup_failed",
+          null,
+          row.id,
+          `🚨 Nightly database backup failed${error ? `: ${error}` : "."}`,
+        );
+      } finally {
+        client.release();
+      }
+    }
+    res.json({ ok: true });
+  }),
+);

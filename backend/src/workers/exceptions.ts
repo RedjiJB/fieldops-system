@@ -30,7 +30,15 @@ const ALERT_MESSAGES: Record<string, string> = {
   vehicle_dark: "A vehicle was reporting location today and has since gone quiet for 3+ hours.",
   dashboard_unreachable: "🚨 The dashboard's public URL is unreachable — the Quick Tunnel may be down.",
   maintenance_due: "An asset's preventive maintenance interval has elapsed.",
+  backup_failed: "🚨 The nightly database backup failed or hasn't run recently.",
 };
+
+// Nightly backup, ~24h cadence -- 30h gives a night's worth of slack before
+// calling it stale, same reasoning as VEHICLE_DARK_HOURS above: wide enough
+// that a normal one-tick delay never false-positives, tight enough that a
+// genuinely dead cron job (the actual gap this closes -- see
+// 0059_backup_status.sql's comment) still gets caught within a day.
+const BACKUP_STALE_HOURS = 30;
 
 // Vehicle telemetry older than this is treated as stale, not evidence of
 // a current wrong-site arrival. Not settings-driven (out of scope for the
@@ -383,6 +391,21 @@ async function checkMaintenanceDue(client: PoolClient): Promise<void> {
   }
 }
 
+// Catches the cron job silently not running at all -- the one failure mode
+// POST /system/backup-status can never report on its own, since a job that
+// never ran never calls it. dedup via raiseAlert means this only fires once
+// per stale window, not on every 5-minute tick while it stays stale.
+async function checkBackupStale(client: PoolClient): Promise<void> {
+  const result = await client.query(
+    `SELECT id FROM backup_status
+     WHERE last_success_at IS NULL OR last_success_at < now() - ($1 || ' hours')::interval`,
+    [BACKUP_STALE_HOURS],
+  );
+  for (const row of result.rows) {
+    await raiseAlert(client, "backup_failed", null, row.id);
+  }
+}
+
 // A pending confirmation is backed by a real critical notification, so its
 // escalation is inherited from notifications.ts's existing mechanism rather
 // than duplicated here -- this just watches for one that's exhausted its
@@ -415,6 +438,7 @@ export async function runExceptionChecks(): Promise<void> {
     await checkDelayedArrivals(client, settings);
     await checkLoadoutGap(client);
     await checkMaintenanceDue(client);
+    await checkBackupStale(client);
     await checkWeather(client, settings);
     await expirePendingConfirmations(client, settings);
   } finally {

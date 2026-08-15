@@ -358,6 +358,8 @@ CREATE TABLE alerts (
 
 `dashboard_unreachable` is raised by `POST /system/dashboard-url/health` (see `dashboard_url` below) via the exceptions worker's own `raiseAlert` — same dedup-while-unresolved semantics as every other type here, reused rather than reimplemented. It never auto-resolves on recovery, same convention as the rest of this table; a human confirms via the Alerts page.
 
+`backup_failed` is raised two ways (see `backup_status` below): immediately by `POST /system/backup-status` on an explicit `{success: false}` report, or by the exceptions worker's periodic `checkBackupStale` when `last_success_at` is null or more than ~30 hours old — the latter is what catches the backup cron job not running at all, which the former can never report on its own.
+
 ## dashboard_url
 
 Tracks the current Cloudflare Quick Tunnel URL for the web dashboard and whether it's currently reachable. This repo runs Quick Tunnel mode (no domain registered — see [DEPLOYMENT.md](DEPLOYMENT.md)), which mints a new random `*.trycloudflare.com` URL on every restart and has no uptime guarantee, so this can't be a static value anywhere. Singleton table — exactly one row, seeded by migration, always `UPDATE`d afterward. `openclaw/notifier/sync-dashboard-url.mjs` (host-side, polls every 5 minutes — no container in this stack has Docker socket access) is the only writer; the agent's `get_dashboard_url` tool is the only reader.
@@ -372,6 +374,22 @@ CREATE TABLE dashboard_url (
   checked_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_restarted_at  TIMESTAMPTZ
+);
+```
+
+## backup_status
+
+Tracks the nightly database backup's last outcome. Same singleton-row convention as `dashboard_url` above. `openclaw/notifier/backup-database.mjs` (host-side, same `docker compose exec` reasoning as the dashboard-url sync script) is the only writer, via `POST /system/backup-status`; the agent's `get_backup_status` tool and the exceptions worker's `checkBackupStale` are the readers.
+
+This table exists because the backup it tracks didn't: `docs/DEPLOYMENT.md`'s "Backups" section documented a nightly `pg_dump` crontab entry as though it were already installed, but it never actually was on the live Pi — confirmed directly (no crontab, no systemd timer, no backup files anywhere) before this shipped. `last_success_at` is what a cron job silently never running looks like from here: it just stops advancing, which is exactly what `checkBackupStale` (see [EXCEPTION_HANDLING.md](EXCEPTION_HANDLING.md)) watches for — `POST /system/backup-status` itself can only report an *attempted* run's outcome, never the absence of one.
+
+```sql
+CREATE TABLE backup_status (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  last_attempt_at  TIMESTAMPTZ,
+  last_success_at  TIMESTAMPTZ,
+  last_size_bytes  BIGINT,
+  last_error       TEXT
 );
 ```
 

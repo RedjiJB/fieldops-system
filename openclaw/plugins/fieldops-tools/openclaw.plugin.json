@@ -76,6 +76,7 @@
       "list_expiring_documents",
       "list_missing_receipts",
       "get_dashboard_url",
+      "get_backup_status",
       "restart_dashboard_tunnel",
       "send_dashboard_login_link",
       "list_notifications",

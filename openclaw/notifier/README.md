@@ -33,6 +33,12 @@ Also invoked directly (not via cron) by the agent's `restart_dashboard_tunnel` t
 
 Built after the tunnel silently died for ~30 hours with nothing to catch it — see `docs/ARCHITECTURE.md`'s Hosting section.
 
+## `backup-database.mjs`
+
+Runs nightly, `docker compose exec -T postgres pg_dump -U fieldops fieldops`, gzips the output, writes it to `~/fieldops-backups/` (deliberately outside the repo working directory — a dump should never be able to land inside a git-tracked directory), prunes anything older than 14 days, then `POST /system/backup-status` with the outcome. Same `docker` CLI dependency as `sync-dashboard-url.mjs`, no `openclaw` binary involved.
+
+Built after discovering `docs/DEPLOYMENT.md`'s previously-documented crontab-based nightly backup had never actually been installed anywhere on the live Pi — no crontab, no backup files, silently absent the whole time this deployment existed. `backup_status.last_success_at` (see `docs/DATABASE_SCHEMA.md#backup_status`) not advancing is exactly what that same failure mode looks like from Postgres's side, which is what the exceptions worker's `checkBackupStale` watches for — see `docs/EXCEPTION_HANDLING.md`.
+
 ## Environment variables
 
 - `BACKEND_URL` — defaults to `http://localhost:3000/api/v1`
@@ -83,6 +89,15 @@ openclaw cron add --name fieldops-dashboard-url-sync --display-name "Dashboard U
   --command "node ~/fieldops-system/openclaw/notifier/sync-dashboard-url.mjs" \
   --command-env "AGENT_SERVICE_TOKEN=<real token>" \
   --every 5m --timeout-seconds 30 --no-deliver
+```
+
+`backup-database.mjs` installs nightly, same no-`OPENCLAW_BIN` reasoning as `sync-dashboard-url.mjs`:
+
+```bash
+openclaw cron add --name fieldops-backup --display-name "Database Backup" \
+  --command "node ~/fieldops-system/openclaw/notifier/backup-database.mjs" \
+  --command-env "AGENT_SERVICE_TOKEN=<real token>" \
+  --cron "0 3 * * *" --timeout-seconds 300 --no-deliver
 ```
 
 ## Live reply-id check (do once, not blocking)

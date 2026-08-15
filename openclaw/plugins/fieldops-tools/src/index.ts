@@ -1109,6 +1109,17 @@ export default defineToolPlugin({
       },
     }),
 
+    tool({
+      name: "get_backup_status",
+      label: "Get Backup Status",
+      description:
+        "Get the nightly database backup's last outcome, when asked whether backups are working. last_success_at is when it last actually completed; last_attempt_at may be more recent if the most recent run failed (check last_error). A null last_success_at, or one more than ~30 hours old, means the backup isn't running reliably -- say so plainly rather than assuming it's fine.",
+      parameters: Type.Object({}),
+      async execute(_input, config) {
+        return callBackend(config, "/system/backup-status");
+      },
+    }),
+
     // The one tool in this plugin that doesn't just call the backend for
     // its core action -- the OpenClaw gateway (and this plugin, running
     // inside it) is a native systemd service on the Pi host, not a
