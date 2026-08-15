@@ -10,6 +10,18 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5432:5432"   # local only — not reachable outside the Pi
+    # Same reasoning as cloudflared's own logging block below -- this
+    # service has no daemon-level default cap (confirmed: no
+    # /etc/docker/daemon.json on this Pi), so a `restart: unless-stopped`
+    # container with no bound here means genuinely unbounded json-file
+    # growth over a long-running production lifetime. Found and fixed
+    # during a security/availability audit; applied to all three services
+    # below that were missing it.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   backend:
     build: ./backend
@@ -23,6 +35,11 @@ services:
       - uploads:/app/uploads
     ports:
       - "127.0.0.1:3000:3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     build: ./frontend
@@ -31,6 +48,11 @@ services:
       - backend
     ports:
       - "127.0.0.1:8080:80"   # local only, same pattern as backend — external access via cloudflared
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # OpenClaw is NOT a service here. Confirmed by actually installing it: it's
   # a CLI tool (curl install script / npm global package) that runs as its
@@ -49,9 +71,12 @@ services:
     # ...and add a public hostname in the Cloudflare Zero Trust dashboard
     # instead of relying on the printed URL. See DEPLOYMENT.md.
     command: tunnel --no-autoupdate --url http://frontend:80
-    # No rotation was set here before, on a `restart: unless-stopped`
-    # service that (per openclaw/notifier/sync-dashboard-url.mjs) now also
-    # gets polled every 5 minutes -- unbounded growth on a long-running Pi.
+    # Originally the only service with a logging cap -- added when this was
+    # also getting polled every 5 minutes (openclaw/notifier/sync-dashboard-url.mjs)
+    # on a `restart: unless-stopped` service with no daemon-level default.
+    # The other three services above had the identical unbounded-growth
+    # exposure and just hadn't hit it yet -- same fix applied to all of them
+    # during a later audit, see postgres' comment above.
     logging:
       driver: json-file
       options:
