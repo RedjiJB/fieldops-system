@@ -5,6 +5,7 @@ import {
   type ModelUsageRow,
   type ClaimOutcomeRow,
   type OrderReconciliationRow,
+  type PayrollExportRow,
 } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
@@ -22,6 +23,7 @@ const REPORT_TYPES = [
   { value: "model-usage", label: "Model Usage & Cost", path: "/api/v1/reports/model-usage.csv" },
   { value: "claim-outcomes", label: "Claim Outcomes", path: "/api/v1/reports/claim-outcomes.csv" },
   { value: "order-reconciliation", label: "Order Reconciliation", path: "/api/v1/reports/order-reconciliation.csv" },
+  { value: "payroll-export", label: "Payroll Export", path: "/api/v1/reports/payroll-export.csv" },
 ] as const;
 
 function formatMoney(value: number | string | null): string {
@@ -251,6 +253,88 @@ function OrderReconciliationSection() {
   );
 }
 
+// Generic, not tied to any one payroll provider's template -- the business
+// picks date_from/date_to to match whatever pay period their provider
+// actually uses, then imports/maps this CSV's columns there. Only
+// pay_type: 'payroll' crew appear -- cash-paid crew are paid outside the
+// payroll system by definition.
+function PayrollExportSection() {
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [rows, setRows] = useState<PayrollExportRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .payrollExportSummary({ date_from: dateFrom || undefined, date_to: dateTo || undefined })
+      .then(setRows)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load payroll export"));
+  }, [dateFrom, dateTo]);
+
+  const totalGross = rows.reduce((sum, r) => sum + (r.gross_pay ?? 0), 0);
+
+  return (
+    <section style={sectionStyle}>
+      <h2 style={{ fontSize: 16 }}>Payroll export</h2>
+      <p style={{ color: "#888", fontSize: 13 }}>
+        A generic CSV for importing into any payroll provider — set the date range to match your actual pay period.
+        Only payroll-paid crew appear here; cash-paid crew are handled outside the payroll system. Incomplete
+        timeclock sessions are flagged, never guessed into hours.
+      </p>
+      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+
+      <div style={filterBarStyle}>
+        <label style={{ fontSize: 13 }}>
+          Pay period from <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </label>
+        <label style={{ fontSize: 13 }}>
+          To <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </label>
+      </div>
+
+      {rows.length === 0 ? (
+        <p style={{ color: "#888" }}>No payroll-paid activity in this range.</p>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Employee</th>
+                <th style={thStyle}>Rate</th>
+                <th style={thStyle}>Hours</th>
+                <th style={thStyle}>Gross pay</th>
+                <th style={thStyle}>Incomplete sessions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, idx) => (
+                <tr key={idx}>
+                  <td style={tdStyle}>{r.crew_member_name}</td>
+                  <td style={tdStyle}>{r.hourly_rate !== null ? formatMoney(r.hourly_rate) : "—"}</td>
+                  <td style={tdStyle}>{r.hours_worked}</td>
+                  <td style={tdStyle}>{r.gross_pay !== null ? formatMoney(r.gross_pay) : "—"}</td>
+                  <td style={{ ...tdStyle, color: r.incomplete_sessions > 0 ? "#c0392b" : undefined }}>
+                    {r.incomplete_sessions > 0 ? r.incomplete_sessions : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td style={{ ...tdStyle, fontWeight: 600 }} colSpan={3}>
+                  Total
+                </td>
+                <td style={{ ...tdStyle, fontWeight: 600 }}>{formatMoney(totalGross)}</td>
+                <td style={tdStyle} />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // Deliberately plain: counts only, no computed "score," no color-coded
 // pass/fail, no ranking across crew members -- this is quiet data for
 // management to notice patterns in if they want to, not an automated
@@ -326,7 +410,10 @@ export function ReportsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const visibleReportTypes = isAdmin ? REPORT_TYPES : REPORT_TYPES.filter((r) => r.value !== "claim-outcomes");
+  const ADMIN_ONLY_REPORT_TYPES = ["claim-outcomes", "payroll-export"];
+  const visibleReportTypes = isAdmin
+    ? REPORT_TYPES
+    : REPORT_TYPES.filter((r) => !ADMIN_ONLY_REPORT_TYPES.includes(r.value));
 
   function download() {
     const report = REPORT_TYPES.find((r) => r.value === reportType)!;
@@ -367,6 +454,7 @@ export function ReportsPage() {
       <VendorSpendSection />
       <ModelUsageSection />
       <OrderReconciliationSection />
+      {isAdmin && <PayrollExportSection />}
       {isAdmin && <ClaimOutcomesSection />}
     </div>
   );

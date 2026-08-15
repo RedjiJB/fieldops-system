@@ -481,6 +481,16 @@ export type OrderReconciliationRow = {
   vendor_name: string | null;
 };
 
+export type PayrollExportRow = {
+  crew_member_name: string;
+  hourly_rate: number | null;
+  hours_worked: number;
+  gross_pay: number | null;
+  incomplete_sessions: number;
+  period_start: string | null;
+  period_end: string | null;
+};
+
 export type ClaimOutcomeRow = {
   crew_member_id: string;
   crew_member_name: string;
@@ -820,6 +830,13 @@ export const api = {
     if (filters.date_to) params.set("date_to", filters.date_to);
     const qs = params.toString();
     return request<OrderReconciliationRow[]>(`/reports/order-reconciliation${qs ? `?${qs}` : ""}`);
+  },
+  payrollExportSummary: (filters: { date_from?: string; date_to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.date_from) params.set("date_from", filters.date_from);
+    if (filters.date_to) params.set("date_to", filters.date_to);
+    const qs = params.toString();
+    return request<PayrollExportRow[]>(`/reports/payroll-export${qs ? `?${qs}` : ""}`);
   },
   claimOutcomesSummary: (filters: { date_from?: string; date_to?: string } = {}) => {
     const params = new URLSearchParams();

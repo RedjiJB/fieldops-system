@@ -356,6 +356,86 @@ reportsRouter.get(
   }),
 );
 
+// Generic CSV any payroll provider's import tool can consume -- not one
+// vendor's specific template. The business picks date_from/date_to to
+// match whatever pay period their provider uses; this doesn't try to guess
+// or enforce weekly/biweekly/semi-monthly. Filters to pay_type = 'payroll'
+// only: cash-paid crew are paid outside the payroll system by definition
+// (that's the whole reason the pay_type split exists), so including them
+// here would risk a double-payment if someone imports every row blindly.
+// Admin-gated, unlike vendor-spend/model-usage/order-reconciliation above
+// -- this is wage data, same sensitivity as the rest of Payroll.
+async function buildPayrollExportSummary(date_from?: string, date_to?: string) {
+  const sessions = await fetchSessionsInRange(pool, { date_from, date_to });
+
+  // Same completed-vs-incomplete split as /payroll/reconciliation --
+  // incomplete sessions are never folded into hours_worked as a guess,
+  // just counted separately so the gap is visible before payroll runs.
+  const hoursByCrewMember = new Map<string, { completedSeconds: number; incompleteCount: number }>();
+  for (const s of sessions) {
+    const entry = hoursByCrewMember.get(s.crew_member_id) ?? { completedSeconds: 0, incompleteCount: 0 };
+    if (s.incomplete) {
+      entry.incompleteCount += 1;
+    } else {
+      entry.completedSeconds += s.net_seconds ?? 0;
+    }
+    hoursByCrewMember.set(s.crew_member_id, entry);
+  }
+
+  const profilesResult = await pool.query(
+    `SELECT cm.id AS crew_member_id, cm.name AS crew_member_name, p.hourly_rate
+     FROM crew_members cm
+     LEFT JOIN crew_pay_profiles p ON p.crew_member_id = cm.id
+     WHERE COALESCE(p.pay_type, 'payroll') = 'payroll'
+     ORDER BY cm.name`,
+  );
+
+  return profilesResult.rows
+    .map((profile) => {
+      const hours = hoursByCrewMember.get(profile.crew_member_id);
+      const hoursWorked = Math.round(((hours?.completedSeconds ?? 0) / 3600) * 100) / 100;
+      const rate = profile.hourly_rate !== null ? Number(profile.hourly_rate) : null;
+      return {
+        crew_member_name: profile.crew_member_name,
+        hourly_rate: rate,
+        hours_worked: hoursWorked,
+        gross_pay: rate !== null ? Math.round(hoursWorked * rate * 100) / 100 : null,
+        incomplete_sessions: hours?.incompleteCount ?? 0,
+        period_start: date_from ?? null,
+        period_end: date_to ?? null,
+      };
+    })
+    .filter((row) => row.hours_worked > 0 || row.incomplete_sessions > 0);
+}
+
+reportsRouter.get(
+  "/reports/payroll-export",
+  asyncHandler(async (req, res) => {
+    requireAdmin(req);
+    const { date_from, date_to } = req.query;
+    res.json(await buildPayrollExportSummary(date_from as string | undefined, date_to as string | undefined));
+  }),
+);
+
+reportsRouter.get(
+  "/reports/payroll-export.csv",
+  asyncHandler(async (req, res) => {
+    requireAdmin(req);
+    const { date_from, date_to } = req.query;
+    const rows = await buildPayrollExportSummary(date_from as string | undefined, date_to as string | undefined);
+    const csv = toCsv(rows, [
+      { header: "Employee Name", value: (r) => r.crew_member_name },
+      { header: "Hourly Rate", value: (r) => r.hourly_rate },
+      { header: "Hours Worked", value: (r) => r.hours_worked },
+      { header: "Gross Pay", value: (r) => r.gross_pay },
+      { header: "Incomplete Sessions", value: (r) => r.incomplete_sessions },
+      { header: "Period Start", value: (r) => r.period_start },
+      { header: "Period End", value: (r) => r.period_end },
+    ]);
+    sendCsv(res, "payroll-export.csv", csv);
+  }),
+);
+
 reportsRouter.get(
   "/reports/timesheets.csv",
   asyncHandler(async (req, res) => {
