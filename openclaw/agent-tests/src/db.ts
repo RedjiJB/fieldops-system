@@ -77,6 +77,66 @@ export async function shiftsForCrewMember(crewMemberId: string): Promise<{ id: s
   return result.rows;
 }
 
+export async function createShift(
+  crewMemberId: string,
+  siteId: string,
+  date: string,
+  status = "assigned",
+): Promise<string> {
+  const result = await pool.query(
+    "INSERT INTO shifts (crew_member_id, site_id, date, status) VALUES ($1, $2, $3, $4) RETURNING id",
+    [crewMemberId, siteId, date, status],
+  );
+  return result.rows[0].id;
+}
+
+export async function getShiftStatus(shiftId: string): Promise<string | null> {
+  const result = await pool.query("SELECT status FROM shifts WHERE id = $1", [shiftId]);
+  return result.rows[0]?.status ?? null;
+}
+
+// priority/delivered mirror a real pushed critical notification --
+// acknowledgment resolution (AGENTS.md's "Acknowledging critical
+// notifications") only considers delivered_at IS NOT NULL rows meaningful,
+// same filter deliver-notifications.mjs itself uses for escalation.
+export async function createNotification(
+  message: string,
+  priority: "critical" | "routine" = "critical",
+  delivered = true,
+): Promise<string> {
+  const result = await pool.query(
+    `INSERT INTO notifications (priority, message, source_type, source_id, delivered_at)
+     VALUES ($1, $2, 'test', NULL, $3)
+     RETURNING id`,
+    [priority, message, delivered ? new Date() : null],
+  );
+  return result.rows[0].id;
+}
+
+export async function getNotificationAck(
+  notificationId: string,
+): Promise<{ acknowledged_at: Date | null; acknowledged_by: string | null }> {
+  const result = await pool.query(
+    "SELECT acknowledged_at, acknowledged_by FROM notifications WHERE id = $1",
+    [notificationId],
+  );
+  return result.rows[0];
+}
+
+// This suite runs against the real live Pi, not an isolated test database
+// (see the README) -- a genuine unrelated critical alert can legitimately
+// be open at the same time a scenario runs. Scenarios that depend on
+// "exactly one open critical" (the acknowledge-single-open-critical
+// heuristic itself, per AGENTS.md) need to know that going in, so a real
+// alert existing produces a clear skip/diagnostic rather than a confusing
+// tool-mismatch failure that looks like a regression but isn't one.
+export async function countOpenCriticalNotifications(): Promise<number> {
+  const result = await pool.query(
+    "SELECT count(*) FROM notifications WHERE priority = 'critical' AND acknowledged_at IS NULL",
+  );
+  return Number(result.rows[0].count);
+}
+
 export async function vehicleTelemetryExists(vehicleId: string): Promise<boolean> {
   const result = await pool.query("SELECT 1 FROM vehicle_telemetry WHERE vehicle_id = $1", [vehicleId]);
   return (result.rowCount ?? 0) > 0;

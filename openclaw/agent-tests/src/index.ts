@@ -8,6 +8,7 @@ import { businessRuleScenarios } from "./scenarios/businessRules.js";
 import { locationScenarios } from "./scenarios/location.js";
 import { guardrailScenarios } from "./scenarios/guardrails.js";
 import { reasoningScenarios } from "./scenarios/reasoning.js";
+import { replyScenarios } from "./scenarios/replies.js";
 import type { Scenario } from "./framework.js";
 
 const scenarios: Scenario[] = [
@@ -17,6 +18,7 @@ const scenarios: Scenario[] = [
   ...locationScenarios,
   ...guardrailScenarios,
   ...reasoningScenarios,
+  ...replyScenarios,
 ];
 
 async function run() {
