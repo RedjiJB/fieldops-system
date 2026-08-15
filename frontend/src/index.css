@@ -5,35 +5,46 @@
    dark-mode work was requested. Neutral scale has a faint cool-slate
    bias rather than pure gray, so it reads as chosen rather than default. */
 :root {
-  --color-bg: #f6f7f9;
+  --color-bg: #f5f7f4;
   --color-surface: #ffffff;
-  --color-border: #e2e5ea;
-  --color-border-strong: #cbd0d8;
-  --color-text: #1a2028;
-  --color-text-muted: #626b78;
-  --color-text-faint: #88919c;
+  --color-border: #e3e7e1;
+  --color-border-strong: #cad1c6;
+  --color-text: #1b2419;
+  --color-text-muted: #5c6659;
+  --color-text-faint: #86917f;
 
-  --color-accent: #1d5fae;
-  --color-accent-hover: #164a89;
-  --color-accent-soft: #e8f0fb;
+  /* Accent pulled from the Sod Boys mark: field green for brand/actions,
+     sun gold as a sparing secondary highlight (active-nav glow, the
+     login card's top edge) -- never used for body text or as a status
+     color, so it stays a true accent rather than fighting the palette. */
+  --color-accent: #2e8b3f;
+  --color-accent-hover: #256e33;
+  --color-accent-soft: #e6f4e8;
+  --color-accent-2: #f2a71b;
 
   /* Status/traffic-light convention -- used for order status, alert
-     priority, compliance state, maintenance due, etc. Kept separate
-     from --color-accent so semantic color never fights the brand hue. */
-  --color-status-good: #2f9e44;
-  --color-status-good-soft: #e9f7ed;
+     priority, compliance state, maintenance due, etc. Good is teal
+     rather than the same green as --color-accent, deliberately, so a
+     "good" pill never reads as just "the brand color" -- semantic and
+     brand color stay visually distinct even though both land in the
+     green family. */
+  --color-status-good: #0d8f7a;
+  --color-status-good-soft: #e3f5f1;
   --color-status-warn: #e8830c;
   --color-status-warn-soft: #fdf1e0;
   --color-status-bad: #d92626;
   --color-status-bad-soft: #fbe8e8;
-  --color-status-neutral: #626b78;
-  --color-status-neutral-soft: #eceef1;
+  --color-status-neutral: #5c6659;
+  --color-status-neutral-soft: #ebede9;
 
-  --sidebar-width: 220px;
+  --sidebar-width: 232px;
   --sidebar-width-collapsed: 56px;
 
-  --radius: 6px;
-  --shadow-card: 0 1px 2px rgba(20, 24, 32, 0.06), 0 1px 1px rgba(20, 24, 32, 0.04);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(20, 30, 18, 0.05), 0 1px 1px rgba(20, 30, 18, 0.04);
+  --shadow-raised: 0 4px 16px rgba(20, 30, 18, 0.10), 0 1px 2px rgba(20, 30, 18, 0.06);
 }
 
 * {
@@ -62,18 +73,65 @@ select {
   color: var(--color-text);
 }
 
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
 button {
   cursor: pointer;
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
+  font-weight: 500;
+  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
 button:hover:not(:disabled) {
   border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 button:disabled {
   cursor: default;
+}
+
+/* Button variants -- OCE's primary actions (Save, Advance, Assign) are
+   solid-fill; everything else stays the neutral outline style above.
+   Applied selectively to each page's main call-to-action, not every
+   button, so the hierarchy actually means something. */
+.btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  color: #fff;
+}
+.btn-danger {
+  background: var(--color-status-bad);
+  border-color: var(--color-status-bad);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #b81e1e;
+  border-color: #b81e1e;
+  color: #fff;
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+  border-color: transparent;
+}
+button:disabled.btn-primary,
+button:disabled.btn-danger {
+  opacity: 0.5;
 }
 
 /* App shell: fixed-width sidebar + flexible content column. Sidebar
@@ -319,4 +377,108 @@ button:disabled {
 .status-pill.status-neutral {
   background: var(--color-status-neutral-soft);
   color: var(--color-status-neutral);
+}
+
+/* Page header -- title + optional action row, sits above a page's cards.
+   Not every page uses one (some, like Documents, put the filter bar
+   straight into the first card), but where present it's the same shape
+   everywhere rather than each page inventing its own heading style. */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 4px;
+  flex-wrap: wrap;
+}
+.page-header h1 {
+  font-size: 19px;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* Card -- the module-tile look every page's sections now share, replacing
+   the old flush borderBottom dividers. See src/styles/shared.ts, which
+   pages import instead of redefining their own sectionStyle per file. */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  margin: 12px 20px;
+  padding: 16px;
+}
+.card h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+
+/* Data table -- for the pages that render real <table> markup (Reports,
+   Compliance) rather than the flex-row list pattern most pages use. */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.data-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  border-bottom: 1px solid var(--color-border-strong);
+}
+.data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+.data-table tbody tr:hover {
+  background: var(--color-accent-soft);
+}
+
+/* Tab strip -- underline-style tabs for any page that switches between
+   sub-views in place (e.g. Assets' active/maintenance toggle), matching
+   OCE's tab-based workspace navigation rather than a plain button row. */
+.tab-strip {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 20px;
+}
+.tab-strip-btn {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 4px;
+  margin-bottom: -1px;
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+}
+.tab-strip-btn:hover:not(:disabled) {
+  color: var(--color-accent);
+  border-color: transparent;
+}
+.tab-strip-btn:disabled {
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* Brand logo -- login card and sidebar header both use this, sized via
+   the modifier class rather than inline width/height on each <img>. */
+.brand-logo {
+  display: block;
+  object-fit: contain;
+}
+.brand-logo-sidebar {
+  height: 32px;
+  max-width: 100%;
+}
+.brand-logo-login {
+  height: 64px;
+  margin: 0 auto 8px;
 }

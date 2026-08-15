@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import { api, CREW_ROLES, type NotificationSettings } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
-const sectionStyle = { padding: 16, maxWidth: 640 };
 const fieldRowStyle = { display: "flex", flexDirection: "column" as const, gap: 4, marginBottom: 16 };
 const labelStyle = { fontSize: 13, fontWeight: 600 };
-const helpStyle = { fontSize: 12.5, color: "#888" };
+const helpStyle = { fontSize: 12.5, color: "var(--color-text-muted)" };
 const inputStyle = { width: 120, padding: "6px 8px" };
 const checkboxRowStyle = { display: "flex", gap: 6, alignItems: "center" };
 
@@ -88,9 +87,9 @@ export function NotificationSettingsPage() {
   if (!isAdmin) {
     return (
       <div style={{ overflowY: "auto", flex: 1 }}>
-        <section style={sectionStyle}>
-          <h2 style={{ fontSize: 16 }}>Notification Settings</h2>
-          <p style={{ color: "#888" }}>Admin access required.</p>
+        <section className="card" style={{ maxWidth: 640 }}>
+          <h2>Notification Settings</h2>
+          <p style={{ color: "var(--color-text-muted)" }}>Admin access required.</p>
         </section>
       </div>
     );
@@ -145,19 +144,19 @@ export function NotificationSettingsPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Notification Settings</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card" style={{ maxWidth: 640 }}>
+        <h2>Notification Settings</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Tuning for the exceptions engine and the critical-notification delivery pipeline — previously hardcoded
           constants, now editable here and picked up by the next worker tick or notifier cron run, no redeploy
           needed.
         </p>
 
-        {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 12 }}>{error}</div>}
-        {saved && !error && <div style={{ color: "#2f6b40", fontSize: 13, marginBottom: 12 }}>Saved.</div>}
+        {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+        {saved && !error && <div style={{ color: "var(--color-status-good)", fontSize: 13, marginBottom: 12 }}>Saved.</div>}
 
         {!settings || !form ? (
-          <p style={{ color: "#888" }}>Loading…</p>
+          <p style={{ color: "var(--color-text-muted)" }}>Loading…</p>
         ) : (
           <>
             <h3 style={{ fontSize: 14, marginTop: 24 }}>Escalation</h3>
@@ -267,7 +266,7 @@ export function NotificationSettingsPage() {
               suffix="hours"
             />
 
-            <button onClick={save} disabled={saving} style={{ marginTop: 8 }}>
+            <button className="btn-primary" onClick={save} disabled={saving} style={{ marginTop: 8 }}>
               {saving ? "Saving…" : "Save"}
             </button>
           </>

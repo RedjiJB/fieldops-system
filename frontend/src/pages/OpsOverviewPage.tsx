@@ -87,12 +87,12 @@ function BulkShiftAssignSection({ onAssigned }: { onAssigned: () => void }) {
   }
 
   return (
-    <section style={sectionStyle}>
-      <h2 style={{ fontSize: 16 }}>Assign shifts</h2>
-      <p style={{ color: "#888", fontSize: 13 }}>
+    <section className="card">
+      <h2>Assign shifts</h2>
+      <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
         All rows are assigned together, all-or-nothing — if one row is invalid, none are created.
       </p>
-      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
       {rows.map((row) => (
         <div key={row.key} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" as const }}>
           <select value={row.crew_member_id} onChange={(e) => updateRow(row.key, { crew_member_id: e.target.value })}>
@@ -131,7 +131,7 @@ function BulkShiftAssignSection({ onAssigned }: { onAssigned: () => void }) {
       ))}
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         <button onClick={addRow}>+ Add row</button>
-        <button onClick={submit} disabled={submitting}>
+        <button className="btn-primary" onClick={submit} disabled={submitting}>
           {submitting ? "Assigning…" : `Assign ${rows.length} shift${rows.length === 1 ? "" : "s"}`}
         </button>
       </div>
@@ -182,12 +182,12 @@ function OrderItemsPanel({ orderId }: { orderId: string }) {
     }
   }
 
-  if (!detail) return <p style={{ color: "#888", fontSize: 13 }}>Loading items…</p>;
+  if (!detail) return <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>Loading items…</p>;
 
   return (
     <div style={{ padding: "8px 0 8px 16px" }}>
-      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 6 }}>{error}</div>}
-      {detail.items.length === 0 && <p style={{ color: "#888", fontSize: 13 }}>No items on this order.</p>}
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 6 }}>{error}</div>}
+      {detail.items.length === 0 && <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>No items on this order.</p>}
       {detail.items.map((item) => (
         <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 13 }}>
           <span style={{ flex: 1 }}>
@@ -202,20 +202,19 @@ function OrderItemsPanel({ orderId }: { orderId: string }) {
             onChange={(e) => setDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
             style={{ width: 80 }}
           />
-          <button onClick={() => save(item.id)}>Save</button>
+          <button className="btn-primary" onClick={() => save(item.id)}>Save</button>
         </div>
       ))}
     </div>
   );
 }
 
-const sectionStyle = { padding: 16, borderBottom: "1px solid #eee" };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 
 export function OpsOverviewPage() {
@@ -352,7 +351,7 @@ export function OpsOverviewPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      {error && <div style={{ padding: 8, color: "#c0392b" }}>{error}</div>}
+      {error && <div style={{ padding: 8, color: "var(--color-status-bad)" }}>{error}</div>}
 
       <div className="kpi-row">
         <div className="kpi-card">
@@ -373,25 +372,25 @@ export function OpsOverviewPage() {
         </div>
       </div>
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Today's shifts</h2>
-        {shifts.length === 0 && <p style={{ color: "#888" }}>No shifts scheduled today.</p>}
+      <section className="card">
+        <h2>Today's shifts</h2>
+        {shifts.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No shifts scheduled today.</p>}
         {shifts.map((s) => (
           <div key={s.id} style={rowStyle}>
             <span>
               <strong>{s.crew_member_name ?? "Unknown"}</strong> — {s.site_name ?? "Unknown site"}
               {s.start_time ? ` @ ${s.start_time}` : ""}
             </span>
-            <span style={{ color: "#888" }}>{s.status}</span>
+            <StatusBadge label={s.status} tone="neutral" />
           </div>
         ))}
       </section>
 
       <BulkShiftAssignSection onAssigned={reload} />
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Unresolved alerts</h2>
-        {alerts.length === 0 && <p style={{ color: "#888" }}>No unresolved alerts.</p>}
+      <section className="card">
+        <h2>Unresolved alerts</h2>
+        {alerts.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No unresolved alerts.</p>}
         {selectedAlertIds.size > 0 && (
           <div style={{ marginBottom: 8 }}>
             <button onClick={onBulkResolve} disabled={bulkResolving}>
@@ -410,16 +409,16 @@ export function OpsOverviewPage() {
               />
               <strong>{a.type}</strong>{" "}
               <StatusBadge label="unresolved" tone="bad" />
-              <span style={{ color: "#888" }}> — raised {new Date(a.raised_at).toLocaleString()}</span>
+              <span style={{ color: "var(--color-text-muted)" }}> — raised {new Date(a.raised_at).toLocaleString()}</span>
             </span>
             <button onClick={() => onResolve(a)}>Resolve</button>
           </div>
         ))}
       </section>
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Order pipeline</h2>
-        {orders.length === 0 && <p style={{ color: "#888" }}>No orders.</p>}
+      <section className="card">
+        <h2>Order pipeline</h2>
+        {orders.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No orders.</p>}
         {orders.map((o) => {
           const next = nextStatus(o.status);
           const expanded = expandedOrderId === o.id;
@@ -434,10 +433,10 @@ export function OpsOverviewPage() {
                     {expanded ? "▾" : "▸"}
                   </button>
                   <strong>{o.site_name ?? "Unknown site"}</strong>
-                  <span style={{ color: "#888" }}> — requested by {o.requester_name ?? "Unknown"} — </span>
+                  <span style={{ color: "var(--color-text-muted)" }}> — requested by {o.requester_name ?? "Unknown"} — </span>
                   <StatusBadge label={o.status} tone={orderStatusTone(o.status)} />
                 </span>
-                {next && <button onClick={() => onAdvance(o)}>Advance to: {next}</button>}
+                {next && <button className="btn-primary" onClick={() => onAdvance(o)}>Advance to: {next}</button>}
               </div>
               {expanded && <OrderItemsPanel orderId={o.id} />}
             </div>
@@ -445,9 +444,9 @@ export function OpsOverviewPage() {
         })}
       </section>
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Activity (last 24h)</h2>
-        {notifications.length === 0 && <p style={{ color: "#888" }}>Nothing logged in the last 24 hours.</p>}
+      <section className="card">
+        <h2>Activity (last 24h)</h2>
+        {notifications.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>Nothing logged in the last 24 hours.</p>}
         {selectedNotificationIds.size > 0 && (
           <div style={{ marginBottom: 8 }}>
             <button onClick={onBulkAcknowledge} disabled={bulkAcknowledging}>
@@ -472,9 +471,9 @@ export function OpsOverviewPage() {
                 </>
               )}
               {n.message}
-              <span style={{ color: "#888" }}> — {new Date(n.created_at).toLocaleString()}</span>
-              {n.acknowledged_at && <span style={{ color: "#888" }}> — acknowledged</span>}
-              {n.escalated_count > 0 && <span style={{ color: "#888" }}> — escalated x{n.escalated_count}</span>}
+              <span style={{ color: "var(--color-text-muted)" }}> — {new Date(n.created_at).toLocaleString()}</span>
+              {n.acknowledged_at && <span style={{ color: "var(--color-text-muted)" }}> — acknowledged</span>}
+              {n.escalated_count > 0 && <span style={{ color: "var(--color-text-muted)" }}> — escalated x{n.escalated_count}</span>}
             </span>
             {n.priority === "critical" && !n.acknowledged_at && (
               <button onClick={() => onAcknowledge(n)}>Acknowledge</button>

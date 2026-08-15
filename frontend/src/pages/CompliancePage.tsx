@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
 import { api, type PeriodCloseSummary, type SpendRecord } from "../api/client";
+import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
 
-const sectionStyle = { padding: 16 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const, alignItems: "center" };
-const thStyle = { textAlign: "left" as const, padding: "6px 10px", fontSize: 13, color: "#888", borderBottom: "1px solid #ddd" };
-const tdStyle = { padding: "6px 10px", fontSize: 13, borderBottom: "1px solid #f0f0f0" };
-const cardStyle = { padding: 12, border: "1px solid #ddd", borderRadius: 4, minWidth: 140 };
-const cardLabelStyle = { fontSize: 12, color: "#888" };
-const cardValueStyle = { fontSize: 20, fontWeight: 600 };
 
 function formatMoney(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : `$${Number(value).toFixed(2)}`;
@@ -26,38 +21,38 @@ function MissingReceiptsSection() {
   }, []);
 
   return (
-    <section style={sectionStyle}>
-      <h2 style={{ fontSize: 16 }}>Missing receipts</h2>
-      <p style={{ color: "#888", fontSize: 13 }}>
+    <section className="card">
+      <h2>Missing receipts</h2>
+      <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
         Approved spend with no receipt attached — a year-end/tax-prep check, not an urgent alert. Mileage claims are
         excluded (rate-computed, not receipt-based, so they structurally can't have one).
       </p>
-      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
       {records.length === 0 ? (
-        <p style={{ color: "#888" }}>No approved spend is missing a receipt.</p>
+        <p style={{ color: "var(--color-text-muted)" }}>No approved spend is missing a receipt.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <table className="data-table">
             <thead>
               <tr>
-                <th style={thStyle}>Date</th>
-                <th style={thStyle}>Crew member</th>
-                <th style={thStyle}>Category</th>
-                <th style={thStyle}>Method</th>
-                <th style={thStyle}>Amount</th>
-                <th style={thStyle}>Description</th>
+                <th>Date</th>
+                <th>Crew member</th>
+                <th>Category</th>
+                <th>Method</th>
+                <th>Amount</th>
+                <th>Description</th>
               </tr>
             </thead>
             <tbody>
               {records.map((r) => (
                 <tr key={r.id}>
-                  <td style={tdStyle}>{new Date(r.occurred_at).toLocaleDateString()}</td>
-                  <td style={tdStyle}>{r.crew_member_name ?? "—"}</td>
-                  <td style={tdStyle}>{r.category}</td>
-                  <td style={tdStyle}>{r.method}</td>
-                  <td style={tdStyle}>{formatMoney(r.amount)}</td>
-                  <td style={tdStyle}>{r.description ?? "—"}</td>
+                  <td>{new Date(r.occurred_at).toLocaleDateString()}</td>
+                  <td>{r.crew_member_name ?? "—"}</td>
+                  <td>{r.category}</td>
+                  <td>{r.method}</td>
+                  <td>{formatMoney(r.amount)}</td>
+                  <td>{r.description ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -92,13 +87,13 @@ function PeriodCloseSection() {
   const totalSpend = summary ? summary.spend.reduce((sum, r) => sum + Number(r.total_amount), 0) : 0;
 
   return (
-    <section style={sectionStyle}>
-      <h2 style={{ fontSize: 16 }}>Period-close summary</h2>
-      <p style={{ color: "#888", fontSize: 13 }}>
+    <section className="card">
+      <h2>Period-close summary</h2>
+      <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
         One rollup — completed jobs, hours, spend, missing receipts, and anomalies — for handing to a
         bookkeeper/accountant at month or quarter close.
       </p>
-      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
       <div style={filterBarStyle}>
         <label style={{ fontSize: 13 }}>
@@ -113,51 +108,51 @@ function PeriodCloseSection() {
       </div>
 
       {!dateFrom || !dateTo ? (
-        <p style={{ color: "#888" }}>Pick both a start and end date to see a rollup.</p>
+        <p style={{ color: "var(--color-text-muted)" }}>Pick both a start and end date to see a rollup.</p>
       ) : !summary ? (
-        <p style={{ color: "#888" }}>Loading…</p>
+        <p style={{ color: "var(--color-text-muted)" }}>Loading…</p>
       ) : (
         <>
           <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" as const }}>
-            <div style={cardStyle}>
-              <div style={cardLabelStyle}>Completed jobs</div>
-              <div style={cardValueStyle}>{summary.jobs.length}</div>
+            <div className="kpi-card">
+              <div className="kpi-card-label">Completed jobs</div>
+              <div className="kpi-card-value">{summary.jobs.length}</div>
             </div>
-            <div style={cardStyle}>
-              <div style={cardLabelStyle}>Total spend</div>
-              <div style={cardValueStyle}>{formatMoney(totalSpend)}</div>
+            <div className="kpi-card">
+              <div className="kpi-card-label">Total spend</div>
+              <div className="kpi-card-value">{formatMoney(totalSpend)}</div>
             </div>
-            <div style={cardStyle}>
-              <div style={cardLabelStyle}>Missing receipts</div>
-              <div style={cardValueStyle}>{summary.missing_receipts.count}</div>
+            <div className="kpi-card">
+              <div className="kpi-card-label">Missing receipts</div>
+              <div className="kpi-card-value">{summary.missing_receipts.count}</div>
             </div>
-            <div style={cardStyle}>
-              <div style={cardLabelStyle}>Anomalies</div>
-              <div style={cardValueStyle}>{summary.anomalies.alerts.length}</div>
+            <div className="kpi-card">
+              <div className="kpi-card-label">Anomalies</div>
+              <div className="kpi-card-value">{summary.anomalies.alerts.length}</div>
             </div>
           </div>
 
           <h3 style={{ fontSize: 14 }}>Completed jobs</h3>
           {summary.jobs.length === 0 ? (
-            <p style={{ color: "#888" }}>None in this period.</p>
+            <p style={{ color: "var(--color-text-muted)" }}>None in this period.</p>
           ) : (
             <div style={{ overflowX: "auto", marginBottom: 20 }}>
-              <table style={{ borderCollapse: "collapse", width: "100%" }}>
+              <table className="data-table">
                 <thead>
                   <tr>
-                    <th style={thStyle}>Site</th>
-                    <th style={thStyle}>Job type</th>
-                    <th style={thStyle}>Completed at</th>
-                    <th style={thStyle}>Completed by</th>
+                    <th>Site</th>
+                    <th>Job type</th>
+                    <th>Completed at</th>
+                    <th>Completed by</th>
                   </tr>
                 </thead>
                 <tbody>
                   {summary.jobs.map((j) => (
                     <tr key={j.id}>
-                      <td style={tdStyle}>{j.site_name ?? "—"}</td>
-                      <td style={tdStyle}>{j.job_type_name ?? "—"}</td>
-                      <td style={tdStyle}>{new Date(j.completed_at).toLocaleString()}</td>
-                      <td style={tdStyle}>{j.completed_by_name ?? "—"}</td>
+                      <td>{j.site_name ?? "—"}</td>
+                      <td>{j.job_type_name ?? "—"}</td>
+                      <td>{new Date(j.completed_at).toLocaleString()}</td>
+                      <td>{j.completed_by_name ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -167,23 +162,23 @@ function PeriodCloseSection() {
 
           <h3 style={{ fontSize: 14 }}>Hours by crew member</h3>
           {summary.hours.length === 0 ? (
-            <p style={{ color: "#888" }}>No timeclock activity in this period.</p>
+            <p style={{ color: "var(--color-text-muted)" }}>No timeclock activity in this period.</p>
           ) : (
             <div style={{ overflowX: "auto", marginBottom: 20 }}>
-              <table style={{ borderCollapse: "collapse", width: "100%" }}>
+              <table className="data-table">
                 <thead>
                   <tr>
-                    <th style={thStyle}>Crew member</th>
-                    <th style={thStyle}>Hours</th>
-                    <th style={thStyle}>Incomplete sessions</th>
+                    <th>Crew member</th>
+                    <th>Hours</th>
+                    <th>Incomplete sessions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {summary.hours.map((h) => (
                     <tr key={h.crew_member_id}>
-                      <td style={tdStyle}>{h.crew_member_name}</td>
-                      <td style={tdStyle}>{h.completed_hours.toFixed(2)}</td>
-                      <td style={{ ...tdStyle, color: h.incomplete_sessions > 0 ? "#c9902f" : undefined }}>
+                      <td>{h.crew_member_name}</td>
+                      <td>{h.completed_hours.toFixed(2)}</td>
+                      <td style={h.incomplete_sessions > 0 ? { color: "var(--color-status-warn)", fontWeight: 600 } : undefined}>
                         {h.incomplete_sessions > 0 ? h.incomplete_sessions : "—"}
                       </td>
                     </tr>
@@ -195,23 +190,23 @@ function PeriodCloseSection() {
 
           <h3 style={{ fontSize: 14 }}>Spend by category</h3>
           {summary.spend.length === 0 ? (
-            <p style={{ color: "#888" }}>No approved spend in this period.</p>
+            <p style={{ color: "var(--color-text-muted)" }}>No approved spend in this period.</p>
           ) : (
             <div style={{ overflowX: "auto", marginBottom: 20 }}>
-              <table style={{ borderCollapse: "collapse", width: "100%" }}>
+              <table className="data-table">
                 <thead>
                   <tr>
-                    <th style={thStyle}>Category</th>
-                    <th style={thStyle}>Count</th>
-                    <th style={thStyle}>Total</th>
+                    <th>Category</th>
+                    <th>Count</th>
+                    <th>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {summary.spend.map((s) => (
                     <tr key={s.category}>
-                      <td style={tdStyle}>{s.category}</td>
-                      <td style={tdStyle}>{s.count}</td>
-                      <td style={tdStyle}>{formatMoney(s.total_amount)}</td>
+                      <td>{s.category}</td>
+                      <td>{s.count}</td>
+                      <td>{formatMoney(s.total_amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -221,25 +216,27 @@ function PeriodCloseSection() {
 
           <h3 style={{ fontSize: 14 }}>Anomalies</h3>
           {summary.anomalies.alerts.length === 0 ? (
-            <p style={{ color: "#888" }}>No alerts raised in this period.</p>
+            <p style={{ color: "var(--color-text-muted)" }}>No alerts raised in this period.</p>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%" }}>
+              <table className="data-table">
                 <thead>
                   <tr>
-                    <th style={thStyle}>Type</th>
-                    <th style={thStyle}>Site</th>
-                    <th style={thStyle}>Raised at</th>
-                    <th style={thStyle}>Resolved</th>
+                    <th>Type</th>
+                    <th>Site</th>
+                    <th>Raised at</th>
+                    <th>Resolved</th>
                   </tr>
                 </thead>
                 <tbody>
                   {summary.anomalies.alerts.map((a) => (
                     <tr key={a.id}>
-                      <td style={tdStyle}>{a.type}</td>
-                      <td style={tdStyle}>{a.site_name ?? "—"}</td>
-                      <td style={tdStyle}>{new Date(a.raised_at).toLocaleString()}</td>
-                      <td style={tdStyle}>{a.resolved_at ? "yes" : "no"}</td>
+                      <td>{a.type}</td>
+                      <td>{a.site_name ?? "—"}</td>
+                      <td>{new Date(a.raised_at).toLocaleString()}</td>
+                      <td>
+                        <StatusBadge label={a.resolved_at ? "resolved" : "unresolved"} tone={a.resolved_at ? "good" : "bad"} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -259,9 +256,9 @@ export function CompliancePage() {
   if (!isAdmin) {
     return (
       <div style={{ overflowY: "auto", flex: 1 }}>
-        <section style={sectionStyle}>
-          <h2 style={{ fontSize: 16 }}>Compliance</h2>
-          <p style={{ color: "#888" }}>Admin access required.</p>
+        <section className="card">
+          <h2>Compliance</h2>
+          <p style={{ color: "var(--color-text-muted)" }}>Admin access required.</p>
         </section>
       </div>
     );

@@ -2,13 +2,12 @@ import { useEffect, useState } from "react";
 import { api, USER_ROLES, type User } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
-const sectionStyle = { padding: 16 };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -60,7 +59,7 @@ function NewUserForm({ onCreated }: { onCreated: (u: User) => void }) {
         ))}
       </select>
       <button onClick={submit}>+ New user</button>
-      {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
+      {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </div>
   );
 }
@@ -98,9 +97,9 @@ function ResetPasswordInline({ user }: { user: User }) {
         onChange={(e) => setNewPassword(e.target.value)}
         style={{ width: 140 }}
       />
-      <button onClick={submit}>Save</button>
+      <button className="btn-primary" onClick={submit}>Save</button>
       <button onClick={() => setOpen(false)}>Cancel</button>
-      {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
+      {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </span>
   );
 }
@@ -152,16 +151,16 @@ export function UsersPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Users</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Users</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Dashboard login accounts. {isAdmin ? "Admins manage accounts; staff have view-only access here." : "View only — ask an admin to make changes."}
         </p>
-        {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+        {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
         {isAdmin && <NewUserForm onCreated={(u) => setUsers((prev) => [...prev, u])} />}
 
-        {users.length === 0 && <p style={{ color: "#888" }}>No users on file.</p>}
+        {users.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No users on file.</p>}
         {users.map((u) => (
           <div key={u.id} style={rowStyle}>
             {isAdmin && editingId === u.id ? (
@@ -175,14 +174,14 @@ export function UsersPage() {
                     </option>
                   ))}
                 </select>
-                <button onClick={() => saveEdit(u)}>Save</button>
+                <button className="btn-primary" onClick={() => saveEdit(u)}>Save</button>
                 <button onClick={() => setEditingId(null)}>Cancel</button>
               </span>
             ) : (
               <>
                 <span>
                   <strong style={{ opacity: u.active ? 1 : 0.5 }}>{u.name}</strong>
-                  <span style={{ color: "#888" }}>
+                  <span style={{ color: "var(--color-text-muted)" }}>
                     {" "}
                     — {u.email} — {u.role}
                     {!u.active ? " — inactive" : ""}

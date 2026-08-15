@@ -3,13 +3,12 @@ import { api, CREW_ROLES, PREFERRED_LANGUAGES, type CrewMember } from "../api/cl
 
 const LANGUAGE_LABELS: Record<(typeof PREFERRED_LANGUAGES)[number], string> = { en: "English", fr: "French" };
 
-const sectionStyle = { padding: 16 };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const };
 
@@ -78,10 +77,10 @@ export function CrewPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      {error && <div style={{ padding: 8, color: "#c0392b" }}>{error}</div>}
+      {error && <div style={{ padding: 8, color: "var(--color-status-bad)" }}>{error}</div>}
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Crew</h2>
+      <section className="card">
+        <h2>Crew</h2>
 
         <div style={filterBarStyle}>
           <input
@@ -105,7 +104,7 @@ export function CrewPage() {
           </select>
         </div>
 
-        {visibleCrew.length === 0 && <p style={{ color: "#888" }}>No crew members match these filters.</p>}
+        {visibleCrew.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No crew members match these filters.</p>}
         {visibleCrew.map((c) => (
           <div key={c.id} style={rowStyle}>
             {editingId === c.id ? (
@@ -129,14 +128,14 @@ export function CrewPage() {
                     </option>
                   ))}
                 </select>
-                <button onClick={() => saveEdit(c)}>Save</button>
+                <button className="btn-primary" onClick={() => saveEdit(c)}>Save</button>
                 <button onClick={() => setEditingId(null)}>Cancel</button>
               </span>
             ) : (
               <>
                 <span>
                   <strong style={{ opacity: c.active ? 1 : 0.5 }}>{c.name}</strong>
-                  <span style={{ color: "#888" }}>
+                  <span style={{ color: "var(--color-text-muted)" }}>
                     {" "}
                     — {c.phone} — {c.role}
                     {c.preferred_language ? ` — ${LANGUAGE_LABELS[c.preferred_language]}` : ""}

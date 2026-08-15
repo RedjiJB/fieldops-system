@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { api, SITE_TYPES, type Site } from "../api/client";
 
-const sectionStyle = { padding: 16 };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const };
 const editGridStyle = { display: "grid", gridTemplateColumns: "auto 1fr", gap: 6, alignItems: "center" };
@@ -91,11 +90,11 @@ export function SitesPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      {error && <div style={{ padding: 8, color: "#c0392b" }}>{error}</div>}
+      {error && <div style={{ padding: 8, color: "var(--color-status-bad)" }}>{error}</div>}
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Sites</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Sites</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Polygon geofences aren't editable here yet — radius-based geofences and everything else are.
         </p>
 
@@ -116,7 +115,7 @@ export function SitesPage() {
           </select>
         </div>
 
-        {visibleSites.length === 0 && <p style={{ color: "#888" }}>No sites match this filter.</p>}
+        {visibleSites.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No sites match this filter.</p>}
         {visibleSites.map((s) => (
           <div key={s.id} style={rowStyle}>
             {editingId === s.id && draft ? (
@@ -180,7 +179,7 @@ export function SitesPage() {
                 </span>
                 <span />
                 <span style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => saveEdit(s)}>Save</button>
+                  <button className="btn-primary" onClick={() => saveEdit(s)}>Save</button>
                   <button
                     onClick={() => {
                       setEditingId(null);
@@ -195,7 +194,7 @@ export function SitesPage() {
               <>
                 <span>
                   <strong>{s.name}</strong>
-                  <span style={{ color: "#888" }}>
+                  <span style={{ color: "var(--color-text-muted)" }}>
                     {" "}
                     — {s.type}
                     {s.address ? ` — ${s.address}` : ""}

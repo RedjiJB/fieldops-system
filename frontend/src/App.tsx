@@ -25,6 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import logo from "./assets/logo.png";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { AssetsPage } from "./pages/AssetsPage";
@@ -143,7 +144,7 @@ function Dashboard() {
     <div className="app-shell">
       <div ref={sidebarRef} className={`sidebar${collapsed ? " collapsed" : ""}${mobileOpen ? " mobile-open" : ""}`}>
         <div className="sidebar-header">
-          <span className="sidebar-title">FieldOps</span>
+          <img src={logo} alt="Sod Boys Ltd" className="brand-logo brand-logo-sidebar sidebar-title" />
           <button className="sidebar-collapse-btn" onClick={() => setCollapsed((v) => !v)} title={collapsed ? "Expand" : "Collapse"}>
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
@@ -173,7 +174,7 @@ function Dashboard() {
           <button className="app-topbar-menu-btn" onClick={() => setMobileOpen((v) => !v)}>
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
-          <strong>{activeItem?.label ?? "FieldOps"}</strong>
+          <strong>{activeItem?.label ?? "Sod Boys Ltd"}</strong>
           <span style={{ width: 20 }} />
         </div>
         {tab === "ops" && <OpsOverviewPage />}

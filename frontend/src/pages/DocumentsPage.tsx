@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { api, DOCUMENT_TYPES, type Document } from "../api/client";
 
-const sectionStyle = { padding: 16, borderBottom: "1px solid #eee" };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 
 const EXPIRING_WITHIN_DAYS = 30;
@@ -26,7 +25,7 @@ function DocumentRow({ doc }: { doc: Document }) {
         )}
         <span>
           <strong>{doc.filename}</strong>
-          <span style={{ color: "#888" }}>
+          <span style={{ color: "var(--color-text-muted)" }}>
             {" "}
             — {doc.type} — {doc.site_name ?? "no site on record"}
             {doc.expiry_date ? ` — expires ${doc.expiry_date}` : ""}
@@ -59,18 +58,18 @@ export function DocumentsPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      {error && <div style={{ padding: 8, color: "#c0392b" }}>{error}</div>}
+      {error && <div style={{ padding: 8, color: "var(--color-status-bad)" }}>{error}</div>}
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Expiring soon (next {EXPIRING_WITHIN_DAYS} days)</h2>
-        {expiring.length === 0 && <p style={{ color: "#888" }}>Nothing expiring or overdue.</p>}
+      <section className="card">
+        <h2>Expiring soon (next {EXPIRING_WITHIN_DAYS} days)</h2>
+        {expiring.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>Nothing expiring or overdue.</p>}
         {expiring.map((d) => (
           <DocumentRow key={d.id} doc={d} />
         ))}
       </section>
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>All documents</h2>
+      <section className="card">
+        <h2>All documents</h2>
         <div style={{ marginBottom: 12 }}>
           <select value={type} onChange={(e) => setType(e.target.value)}>
             <option value="">All types</option>
@@ -81,7 +80,7 @@ export function DocumentsPage() {
             ))}
           </select>
         </div>
-        {documents.length === 0 && <p style={{ color: "#888" }}>No documents match this filter.</p>}
+        {documents.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No documents match this filter.</p>}
         {documents.map((d) => (
           <DocumentRow key={d.id} doc={d} />
         ))}

@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type CrewMember, type TimeclockSession } from "../api/client";
+import { StatusBadge } from "../components/StatusBadge";
 
-const sectionStyle = { padding: 16 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const, alignItems: "center" };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 
 function formatHours(netSeconds: number | null): string {
@@ -59,14 +59,14 @@ export function TimesheetsPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Timesheets</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Timesheets</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Clock-in/out sessions computed from raw timeclock events. A session with no matching clock-out is flagged
           "incomplete" rather than guessed. Overtime/missed-break flags use the thresholds set on the Notification
           Settings page — pay rates, corrections, and pay periods aren't handled here.
         </p>
-        {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+        {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
         <div style={filterBarStyle}>
           <select value={crewMemberId} onChange={(e) => setCrewMemberId(e.target.value)}>
@@ -85,7 +85,7 @@ export function TimesheetsPage() {
           </label>
         </div>
 
-        {grouped.length === 0 && <p style={{ color: "#888" }}>No sessions match these filters.</p>}
+        {grouped.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No sessions match these filters.</p>}
         {grouped.map(([crewId, crewSessions]) => (
           <div key={crewId} style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 14, marginBottom: 4 }}>{nameById.get(crewId) ?? crewId}</h3>
@@ -94,14 +94,29 @@ export function TimesheetsPage() {
                 <span>
                   {new Date(s.started_at).toLocaleString()} →{" "}
                   {s.ended_at ? new Date(s.ended_at).toLocaleString() : "no clock-out"}
-                  <span style={{ color: "#888" }}> — break {formatBreak(s.break_seconds)}</span>
-                  {!s.geofence_verified && <span style={{ color: "#c9902f" }}> — geofence unverified</span>}
-                  {s.overtime && <span style={{ color: "#c0392b" }}> — overtime</span>}
-                  {s.missed_break && <span style={{ color: "#c9902f" }}> — missed break</span>}
+                  <span style={{ color: "var(--color-text-muted)" }}> — break {formatBreak(s.break_seconds)}</span>
+                  {!s.geofence_verified && (
+                    <>
+                      {" "}
+                      <StatusBadge label="geofence unverified" tone="warn" />
+                    </>
+                  )}
+                  {s.overtime && (
+                    <>
+                      {" "}
+                      <StatusBadge label="overtime" tone="bad" />
+                    </>
+                  )}
+                  {s.missed_break && (
+                    <>
+                      {" "}
+                      <StatusBadge label="missed break" tone="warn" />
+                    </>
+                  )}
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {s.incomplete ? (
-                    <span style={{ color: "#c0392b", fontSize: 13, fontWeight: "bold" }}>incomplete</span>
+                    <span style={{ color: "var(--color-status-bad)", fontSize: 13, fontWeight: "bold" }}>incomplete</span>
                   ) : (
                     <span>{formatHours(s.net_seconds)} h</span>
                   )}

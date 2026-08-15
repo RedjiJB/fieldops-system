@@ -54,9 +54,9 @@ export function MapPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-      {error && <div style={{ padding: 8, color: "#c0392b" }}>{error}</div>}
+      {error && <div style={{ padding: 8, color: "var(--color-status-bad)" }}>{error}</div>}
       {lastUpdated && (
-        <div style={{ padding: "4px 8px", fontSize: 12, color: "#888" }}>
+        <div style={{ padding: "4px 8px", fontSize: 12, color: "var(--color-text-muted)" }}>
           Live — updated {lastUpdated.toLocaleTimeString()}
         </div>
       )}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 import {
   api,
@@ -10,6 +11,7 @@ import {
   type MySiteCheckout,
   type MySiteOrder,
 } from "../api/client";
+import { StatusBadge } from "../components/StatusBadge";
 
 // Deliberately not a cut-down version of the 17-tab admin Dashboard --
 // crew are on their phones mid-job, not at a desk. One page, four short
@@ -28,9 +30,8 @@ import {
 // extra sections just render below the base four when they apply.
 const FOREMAN_TIER_ROLES = new Set(["foreman", "management", "owner"]);
 
-const sectionStyle = { padding: 16, borderBottom: "1px solid #eee" };
 const rowStyle = { display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 14 };
-const labelStyle = { color: "#888", fontSize: 13 };
+const labelStyle = { color: "var(--color-text-muted)", fontSize: 13 };
 
 function formatMoney(amount: number | null): string {
   if (amount === null) return "—";
@@ -40,6 +41,18 @@ function formatMoney(amount: number | null): string {
 function formatHours(netSeconds: number | null): string {
   if (netSeconds === null) return "—";
   return (Number(netSeconds) / 3600).toFixed(2);
+}
+
+function spendStatusTone(status: string): "good" | "warn" | "bad" | "neutral" {
+  if (status === "rejected" || status === "disputed") return "bad";
+  if (status === "pending") return "warn";
+  return "good";
+}
+
+function orderStatusTone(status: string): "good" | "warn" | "neutral" {
+  if (status === "requested") return "neutral";
+  if (status === "returned") return "good";
+  return "warn";
 }
 
 export function CrewPortalPage() {
@@ -78,14 +91,26 @@ export function CrewPortalPage() {
   }, [isForemanTier]);
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 16 }}>
-        <h2 style={{ fontSize: 16, margin: 0 }}>{user?.name}</h2>
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--color-bg)" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "14px 16px",
+          background: "var(--color-surface)",
+          borderBottom: "1px solid var(--color-border)",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <img src={logo} alt="Sod Boys Ltd" className="brand-logo" style={{ height: 28 }} />
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{user?.name}</span>
+        </span>
         <button onClick={() => logout()}>Log out</button>
       </div>
-      {error && <div style={{ color: "#c0392b", fontSize: 13, padding: "0 16px" }}>{error}</div>}
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, padding: "12px 16px 0" }}>{error}</div>}
 
-      <section style={sectionStyle}>
+      <section className="card">
         <h3 style={{ fontSize: 14 }}>Pay</h3>
         {pay ? (
           <>
@@ -113,7 +138,7 @@ export function CrewPortalPage() {
         )}
       </section>
 
-      <section style={sectionStyle}>
+      <section className="card">
         <h3 style={{ fontSize: 14 }}>Shifts &amp; timesheet</h3>
         {shifts ? (
           <>
@@ -124,7 +149,7 @@ export function CrewPortalPage() {
                 <span>
                   {new Date(sh.date).toLocaleDateString()} — {sh.site_name ?? "no site"}
                 </span>
-                <span style={labelStyle}>{sh.status}</span>
+                <StatusBadge label={sh.status} tone="neutral" />
               </div>
             ))}
             <h4 style={{ fontSize: 13, marginTop: 12, marginBottom: 4 }}>Recent hours</h4>
@@ -141,18 +166,18 @@ export function CrewPortalPage() {
         )}
       </section>
 
-      <section style={sectionStyle}>
+      <section className="card">
         <h3 style={{ fontSize: 14 }}>Checked out to you</h3>
         {checkouts.length === 0 && <p style={labelStyle}>Nothing currently checked out to you.</p>}
         {checkouts.map((c) => (
           <div key={c.id} style={rowStyle}>
             <span>{c.asset_name}</span>
-            <span style={labelStyle}>{c.checked_in_at ? "returned" : "with you"}</span>
+            <StatusBadge label={c.checked_in_at ? "returned" : "with you"} tone={c.checked_in_at ? "good" : "neutral"} />
           </div>
         ))}
       </section>
 
-      <section style={sectionStyle}>
+      <section className="card">
         <h3 style={{ fontSize: 14 }}>Your claims</h3>
         {spendRecords.length === 0 && <p style={labelStyle}>No spend or mileage claims submitted.</p>}
         {spendRecords.map((sr) => (
@@ -164,9 +189,9 @@ export function CrewPortalPage() {
               )}
               {sr.dispute_note && <div style={labelStyle}>Disputed: {sr.dispute_note}</div>}
             </span>
-            <span style={labelStyle}>
-              {sr.status}
-              {sr.amount !== null ? ` · ${formatMoney(sr.amount)}` : ""}
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+              <StatusBadge label={sr.status} tone={spendStatusTone(sr.status)} />
+              {sr.amount !== null && <span style={labelStyle}>{formatMoney(sr.amount)}</span>}
             </span>
           </div>
         ))}
@@ -174,7 +199,7 @@ export function CrewPortalPage() {
 
       {isForemanTier && (
         <>
-          <section style={sectionStyle}>
+          <section className="card">
             <h3 style={{ fontSize: 14 }}>Site roster — today</h3>
             {siteRoster === null ? (
               <p style={labelStyle}>Loading…</p>
@@ -186,16 +211,16 @@ export function CrewPortalPage() {
                   <span>
                     {r.name} — {r.site_name}
                   </span>
-                  <span style={labelStyle}>
-                    {r.last_event_type ?? "no clock-in yet"}
-                    {r.last_event_at ? ` · ${new Date(r.last_event_at).toLocaleTimeString()}` : ""}
+                  <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                    <StatusBadge label={r.last_event_type ?? "no clock-in yet"} tone={r.last_event_type ? "good" : "neutral"} />
+                    {r.last_event_at && <span style={labelStyle}>{new Date(r.last_event_at).toLocaleTimeString()}</span>}
                   </span>
                 </div>
               ))
             )}
           </section>
 
-          <section style={sectionStyle}>
+          <section className="card">
             <h3 style={{ fontSize: 14 }}>Checked out at your site</h3>
             {siteCheckouts === null ? (
               <p style={labelStyle}>Loading…</p>
@@ -211,7 +236,7 @@ export function CrewPortalPage() {
             )}
           </section>
 
-          <section style={sectionStyle}>
+          <section className="card">
             <h3 style={{ fontSize: 14 }}>Site orders</h3>
             {siteOrders === null ? (
               <p style={labelStyle}>Loading…</p>
@@ -224,7 +249,7 @@ export function CrewPortalPage() {
                     {new Date(o.created_at).toLocaleDateString()} — {o.requester_name}
                     {o.items.length > 0 ? ` (${o.items.length} item${o.items.length === 1 ? "" : "s"})` : ""}
                   </span>
-                  <span style={labelStyle}>{o.status}</span>
+                  <StatusBadge label={o.status} tone={orderStatusTone(o.status)} />
                 </div>
               ))
             )}

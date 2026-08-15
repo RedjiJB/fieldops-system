@@ -10,16 +10,16 @@ import {
   type MoneyInstrument,
   type SpendRecord,
 } from "../api/client";
+import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
 
-const sectionStyle = { padding: 16 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const, alignItems: "center" };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 
 function formatMoney(value: number | string | null): string {
@@ -58,7 +58,7 @@ function NewInstrumentForm({ onCreated }: { onCreated: (mi: MoneyInstrument) => 
       </select>
       <input placeholder="Label (e.g. Company Visa)" value={label} onChange={(e) => setLabel(e.target.value)} />
       <button onClick={submit}>+ New instrument</button>
-      {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
+      {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </div>
   );
 }
@@ -109,7 +109,7 @@ function InstrumentRow({
     <div style={rowStyle}>
       <span>
         <strong>{instrument.label}</strong>
-        <span style={{ color: "#888" }}>
+        <span style={{ color: "var(--color-text-muted)" }}>
           {" "}
           — {instrument.type} — held by {instrument.current_holder_name ?? "nobody"}
           {instrument.type === "petty_cash" && ` — balance ${formatMoney(instrument.balance)}`}
@@ -138,7 +138,7 @@ function InstrumentRow({
             <button onClick={adjustBalance}>Adjust balance</button>
           </>
         )}
-        {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
+        {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
       </span>
     </div>
   );
@@ -255,7 +255,7 @@ function NewSpendRecordForm({
       </select>
       <input placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
       <button onClick={submit}>+ Record spend</button>
-      {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
+      {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </div>
   );
 }
@@ -314,9 +314,9 @@ function ApproveControl({ record, onDone }: { record: SpendRecord; onDone: (r: S
         onChange={(e) => setReason(e.target.value)}
         style={{ width: 140 }}
       />
-      <button onClick={approve}>Approve</button>
-      <button onClick={reject}>Reject</button>
-      {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
+      <button className="btn-primary" onClick={approve}>Approve</button>
+      <button className="btn-danger" onClick={reject}>Reject</button>
+      {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </span>
   );
 }
@@ -358,9 +358,9 @@ export function SpendingPage() {
   if (!isAdmin) {
     return (
       <div style={{ overflowY: "auto", flex: 1 }}>
-        <section style={sectionStyle}>
-          <h2 style={{ fontSize: 16 }}>Spending</h2>
-          <p style={{ color: "#888" }}>Admin access required.</p>
+        <section className="card">
+          <h2>Spending</h2>
+          <p style={{ color: "var(--color-text-muted)" }}>Admin access required.</p>
         </section>
       </div>
     );
@@ -368,17 +368,17 @@ export function SpendingPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Money instruments</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Money instruments</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Company cards and petty cash floats — who has custody right now. Petty cash balance is hand-adjusted, same
           as consumables' on-hand quantity; nothing here auto-decrements it.
         </p>
-        {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+        {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
         <NewInstrumentForm onCreated={(mi) => setInstruments((prev) => [...prev, mi])} />
 
-        {instruments.length === 0 && <p style={{ color: "#888" }}>No money instruments on file.</p>}
+        {instruments.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No money instruments on file.</p>}
         {instruments.map((mi) => (
           <InstrumentRow
             key={mi.id}
@@ -389,9 +389,9 @@ export function SpendingPage() {
         ))}
       </section>
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Spend records</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Spend records</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Company-card/cash spend is logged already-approved; a personal reimbursement (receipt or mileage) starts
           pending and needs sign-off — mileage's amount is computed at approval from a rate you set then, not typed in
           up front.
@@ -423,38 +423,33 @@ export function SpendingPage() {
           </select>
         </div>
 
-        {records.length === 0 && <p style={{ color: "#888" }}>No spend records match these filters.</p>}
+        {records.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No spend records match these filters.</p>}
         {records.map((r) => (
           <div key={r.id} style={rowStyle}>
             <span>
               <strong>{r.category}</strong>
-              <span style={{ color: "#888" }}>
+              <span style={{ color: "var(--color-text-muted)" }}>
                 {" "}
                 — {r.method} — {r.category === "mileage" ? `${r.distance_km} km` : formatMoney(r.amount)}
                 {r.crew_member_name ? ` — ${r.crew_member_name}` : ""}
                 {r.instrument_label ? ` — ${r.instrument_label}` : ""}
                 {r.description ? ` — ${r.description}` : ""} — {new Date(r.occurred_at).toLocaleString()}
               </span>
-              <span
-                style={{
-                  marginLeft: 8,
-                  color:
-                    r.status === "rejected"
-                      ? "#c0392b"
-                      : r.status === "disputed"
-                        ? "#a0522d"
-                        : r.status === "pending"
-                          ? "#c9902f"
-                          : "#888",
-                  fontWeight: r.status === "pending" || r.status === "disputed" ? "bold" : "normal",
-                }}
-              >
-                {r.status}
-              </span>
+              {" "}
+              <StatusBadge
+                label={r.status}
+                tone={
+                  r.status === "rejected" || r.status === "disputed"
+                    ? "bad"
+                    : r.status === "pending"
+                      ? "warn"
+                      : "good"
+                }
+              />
               {r.status === "rejected" && r.rejection_note && (
-                <div style={{ color: "#888", fontSize: 13 }}>Reason: {r.rejection_note}</div>
+                <div style={{ color: "var(--color-text-muted)", fontSize: 13 }}>Reason: {r.rejection_note}</div>
               )}
-              {r.dispute_note && <div style={{ color: "#a0522d", fontSize: 13 }}>Dispute: {r.dispute_note}</div>}
+              {r.dispute_note && <div style={{ color: "var(--color-status-bad)", fontSize: 13 }}>Dispute: {r.dispute_note}</div>}
             </span>
             {(r.status === "pending" || r.status === "disputed") && (
               <ApproveControl record={r} onDone={(updated) => setRecords((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))} />

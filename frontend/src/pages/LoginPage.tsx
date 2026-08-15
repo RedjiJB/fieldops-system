@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { ApiError } from "../api/client";
+import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 
 export function LoginPage() {
@@ -23,9 +24,25 @@ export function LoginPage() {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center" }}>
-      <form onSubmit={onSubmit} style={{ width: 320, display: "flex", flexDirection: "column", gap: 12 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 8 }}>FieldOps Dashboard</h1>
+    <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "var(--color-bg)" }}>
+      <form
+        onSubmit={onSubmit}
+        className="card"
+        style={{
+          width: 340,
+          margin: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          padding: "32px 28px 28px",
+          boxShadow: "var(--shadow-raised)",
+          borderTop: "3px solid var(--color-accent)",
+        }}
+      >
+        <img src={logo} alt="Sod Boys Ltd" className="brand-logo brand-logo-login" />
+        <p style={{ textAlign: "center", color: "var(--color-text-muted)", fontSize: 13, margin: "0 0 8px" }}>
+          Dashboard sign in
+        </p>
         <input
           type="email"
           placeholder="Email"
@@ -41,8 +58,8 @@ export function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        {error && <div style={{ color: "#c0392b" }}>{error}</div>}
-        <button type="submit" disabled={submitting}>
+        {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</div>}
+        <button type="submit" className="btn-primary" disabled={submitting}>
           {submitting ? "Signing in…" : "Sign in"}
         </button>
       </form>

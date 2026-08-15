@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { ACTIVITY_EVENT_TYPES, api, type ActivityEvent } from "../api/client";
 
-const sectionStyle = { padding: 16 };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const };
 
@@ -39,13 +38,13 @@ export function ActivityLogPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Activity Log</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Activity Log</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Job progress, checkouts/returns, verifications, and resolved alerts — everything with a recorded actor.
           Order and purchase-order status changes don't record who yet, so they don't appear here.
         </p>
-        {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+        {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
         <div style={filterBarStyle}>
           <select value={eventType} onChange={(e) => setEventType(e.target.value)}>
@@ -59,17 +58,17 @@ export function ActivityLogPage() {
           <input type="date" value={since} onChange={(e) => setSince(e.target.value)} />
         </div>
 
-        {events.length === 0 && <p style={{ color: "#888" }}>No activity matches these filters.</p>}
+        {events.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No activity matches these filters.</p>}
         {events.map((e, idx) => (
           <div key={idx} style={rowStyle}>
             <span>
               <strong>{EVENT_LABELS[e.event_type] ?? e.event_type}</strong>
-              <span style={{ color: "#888" }}>
+              <span style={{ color: "var(--color-text-muted)" }}>
                 {" "}
                 — {e.description} — {e.actor_name ?? "unknown actor"}
               </span>
             </span>
-            <span style={{ color: "#888", fontSize: 13 }}>{new Date(e.occurred_at).toLocaleString()}</span>
+            <span style={{ color: "var(--color-text-muted)", fontSize: 13 }}>{new Date(e.occurred_at).toLocaleString()}</span>
           </div>
         ))}
       </section>

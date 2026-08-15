@@ -2,17 +2,14 @@ import { useEffect, useState } from "react";
 import { api, PAY_TYPES, type PayProfile, type Payout, type ReconciliationRow } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
-const sectionStyle = { padding: 16 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const, alignItems: "center" };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
-const thStyle = { textAlign: "left" as const, padding: "6px 10px", fontSize: 13, color: "#888", borderBottom: "1px solid #ddd" };
-const tdStyle = { padding: "6px 10px", fontSize: 13, borderBottom: "1px solid #f0f0f0" };
 
 function formatMoney(value: number | null): string {
   return value === null ? "—" : `$${value.toFixed(2)}`;
@@ -62,10 +59,10 @@ function PayProfileRow({ profile, onSaved }: { profile: PayProfile; onSaved: (p:
           onChange={(e) => setHourlyRate(e.target.value)}
           style={{ width: 100 }}
         />
-        <button onClick={save} disabled={saving}>
+        <button className="btn-primary" onClick={save} disabled={saving}>
           Save
         </button>
-        {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
+        {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
       </span>
     </div>
   );
@@ -132,8 +129,8 @@ function NewPayoutForm({
         Paid at (optional, defaults to now)
         <input type="datetime-local" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} />
       </label>
-      <button onClick={submit}>+ Record payout</button>
-      {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
+      <button className="btn-primary" onClick={submit}>+ Record payout</button>
+      {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </div>
   );
 }
@@ -194,9 +191,9 @@ export function PayrollPage() {
   if (!isAdmin) {
     return (
       <div style={{ overflowY: "auto", flex: 1 }}>
-        <section style={sectionStyle}>
-          <h2 style={{ fontSize: 16 }}>Payroll</h2>
-          <p style={{ color: "#888" }}>Admin access required.</p>
+        <section className="card">
+          <h2>Payroll</h2>
+          <p style={{ color: "var(--color-text-muted)" }}>Admin access required.</p>
         </section>
       </div>
     );
@@ -204,16 +201,16 @@ export function PayrollPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Pay profiles</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Pay profiles</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           What each crew member is paid — payroll (hourly, reconciled by payroll's own system) or cash (often a lump
           sum payout at end of day, logged below rather than reconciled to precise hour math in real time). Wage
           data, admin-only.
         </p>
-        {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+        {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
-        {profiles.length === 0 && <p style={{ color: "#888" }}>No crew members on file.</p>}
+        {profiles.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No crew members on file.</p>}
         {profiles.map((p) => (
           <PayProfileRow
             key={p.crew_member_id}
@@ -223,9 +220,9 @@ export function PayrollPage() {
         ))}
       </section>
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Payouts</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Payouts</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           A record that an amount was actually paid out — independent of computed hours. See Reconciliation below for
           how this compares against computed timesheet hours.
         </p>
@@ -249,12 +246,12 @@ export function PayrollPage() {
           </label>
         </div>
 
-        {payouts.length === 0 && <p style={{ color: "#888" }}>No payouts match these filters.</p>}
+        {payouts.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No payouts match these filters.</p>}
         {payouts.map((p) => (
           <div key={p.id} style={rowStyle}>
             <span>
               <strong>{p.crew_member_name}</strong>
-              <span style={{ color: "#888" }}>
+              <span style={{ color: "var(--color-text-muted)" }}>
                 {" "}
                 — ${Number(p.amount).toFixed(2)} — {new Date(p.paid_at).toLocaleString()}
                 {p.note ? ` — ${p.note}` : ""} — recorded by {p.recorded_by_name}
@@ -264,9 +261,9 @@ export function PayrollPage() {
         ))}
       </section>
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Reconciliation</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Reconciliation</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Computed hours × hourly rate, against what's actually been paid out. "No rate set" means owed can't be
           computed — never shown as $0. Sessions with no clock-out are counted separately and excluded from hours,
           never treated as complete.
@@ -290,33 +287,33 @@ export function PayrollPage() {
         </div>
 
         {reconciliation.length === 0 ? (
-          <p style={{ color: "#888" }}>No activity matches these filters.</p>
+          <p style={{ color: "var(--color-text-muted)" }}>No activity matches these filters.</p>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <table className="data-table">
               <thead>
                 <tr>
-                  <th style={thStyle}>Crew member</th>
-                  <th style={thStyle}>Pay type</th>
-                  <th style={thStyle}>Hours</th>
-                  <th style={thStyle}>Incomplete sessions</th>
-                  <th style={thStyle}>Owed</th>
-                  <th style={thStyle}>Paid</th>
-                  <th style={thStyle}>Difference</th>
+                  <th>Crew member</th>
+                  <th>Pay type</th>
+                  <th>Hours</th>
+                  <th>Incomplete sessions</th>
+                  <th>Owed</th>
+                  <th>Paid</th>
+                  <th>Difference</th>
                 </tr>
               </thead>
               <tbody>
                 {reconciliation.map((r) => (
                   <tr key={r.crew_member_id}>
-                    <td style={tdStyle}>{r.crew_member_name}</td>
-                    <td style={tdStyle}>{r.pay_type}</td>
-                    <td style={tdStyle}>{r.completed_hours.toFixed(2)}</td>
-                    <td style={{ ...tdStyle, color: r.incomplete_sessions > 0 ? "#c9902f" : undefined }}>
+                    <td>{r.crew_member_name}</td>
+                    <td>{r.pay_type}</td>
+                    <td>{r.completed_hours.toFixed(2)}</td>
+                    <td style={r.incomplete_sessions > 0 ? { color: "var(--color-status-warn)", fontWeight: 600 } : undefined}>
                       {r.incomplete_sessions > 0 ? r.incomplete_sessions : "—"}
                     </td>
-                    <td style={tdStyle}>{r.hourly_rate === null ? "no rate set" : formatMoney(r.amount_owed)}</td>
-                    <td style={tdStyle}>{formatMoney(r.amount_paid)}</td>
-                    <td style={{ ...tdStyle, color: r.difference !== null && r.difference !== 0 ? "#c0392b" : undefined }}>
+                    <td>{r.hourly_rate === null ? "no rate set" : formatMoney(r.amount_owed)}</td>
+                    <td>{formatMoney(r.amount_paid)}</td>
+                    <td style={r.difference !== null && r.difference !== 0 ? { color: "var(--color-status-bad)", fontWeight: 600 } : undefined}>
                       {r.difference === null ? "—" : formatMoney(r.difference)}
                     </td>
                   </tr>

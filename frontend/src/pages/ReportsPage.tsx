@@ -9,10 +9,7 @@ import {
 } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
-const sectionStyle = { padding: 16 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const, alignItems: "center" };
-const thStyle = { textAlign: "left" as const, padding: "6px 10px", fontSize: 13, color: "#888", borderBottom: "1px solid #ddd" };
-const tdStyle = { padding: "6px 10px", fontSize: 13, borderBottom: "1px solid #f0f0f0" };
 
 const REPORT_TYPES = [
   { value: "jobs", label: "Jobs", path: "/api/v1/reports/jobs.csv" },
@@ -53,12 +50,12 @@ function VendorSpendSection() {
   const totalCost = rows.reduce((sum, r) => sum + Number(r.total_cost), 0);
 
   return (
-    <section style={sectionStyle}>
-      <h2 style={{ fontSize: 16 }}>Vendor spend summary</h2>
-      <p style={{ color: "#888", fontSize: 13 }}>
+    <section className="card">
+      <h2>Vendor spend summary</h2>
+      <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
         Purchase order cost, grouped by vendor and month — who you're spending the most with, at a glance.
       </p>
-      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
       <div style={filterBarStyle}>
         <label style={{ fontSize: 13 }}>
@@ -70,34 +67,34 @@ function VendorSpendSection() {
       </div>
 
       {rows.length === 0 ? (
-        <p style={{ color: "#888" }}>No purchase orders with a recorded cost in this range.</p>
+        <p style={{ color: "var(--color-text-muted)" }}>No purchase orders with a recorded cost in this range.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <table className="data-table">
             <thead>
               <tr>
-                <th style={thStyle}>Vendor</th>
-                <th style={thStyle}>Month</th>
-                <th style={thStyle}>POs</th>
-                <th style={thStyle}>Total cost</th>
+                <th>Vendor</th>
+                <th>Month</th>
+                <th>POs</th>
+                <th>Total cost</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, idx) => (
                 <tr key={idx}>
-                  <td style={tdStyle}>{r.vendor_name}</td>
-                  <td style={tdStyle}>{new Date(r.month).toLocaleDateString(undefined, { year: "numeric", month: "long" })}</td>
-                  <td style={tdStyle}>{r.po_count}</td>
-                  <td style={tdStyle}>{formatMoney(r.total_cost)}</td>
+                  <td>{r.vendor_name}</td>
+                  <td>{new Date(r.month).toLocaleDateString(undefined, { year: "numeric", month: "long" })}</td>
+                  <td>{r.po_count}</td>
+                  <td>{formatMoney(r.total_cost)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
-                <td style={{ ...tdStyle, fontWeight: 600 }} colSpan={3}>
+                <td style={{ fontWeight: 600 }} colSpan={3}>
                   Total
                 </td>
-                <td style={{ ...tdStyle, fontWeight: 600 }}>{formatMoney(totalCost)}</td>
+                <td style={{ fontWeight: 600 }}>{formatMoney(totalCost)}</td>
               </tr>
             </tfoot>
           </table>
@@ -124,13 +121,13 @@ function ModelUsageSection() {
   const totalTokens = rows.reduce((sum, r) => sum + Number(r.total_tokens), 0);
 
   return (
-    <section style={sectionStyle}>
-      <h2 style={{ fontSize: 16 }}>Model usage &amp; cost</h2>
-      <p style={{ color: "#888", fontSize: 13 }}>
+    <section className="card">
+      <h2>Model usage &amp; cost</h2>
+      <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
         Token usage and API cost, grouped by provider/model/month — aggregated nightly from real session
         transcripts, not an estimate.
       </p>
-      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
       <div style={filterBarStyle}>
         <label style={{ fontSize: 13 }}>
@@ -142,37 +139,37 @@ function ModelUsageSection() {
       </div>
 
       {rows.length === 0 ? (
-        <p style={{ color: "#888" }}>No recorded usage in this range.</p>
+        <p style={{ color: "var(--color-text-muted)" }}>No recorded usage in this range.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <table className="data-table">
             <thead>
               <tr>
-                <th style={thStyle}>Provider</th>
-                <th style={thStyle}>Model</th>
-                <th style={thStyle}>Month</th>
-                <th style={thStyle}>Total tokens</th>
-                <th style={thStyle}>Cost</th>
+                <th>Provider</th>
+                <th>Model</th>
+                <th>Month</th>
+                <th>Total tokens</th>
+                <th>Cost</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, idx) => (
                 <tr key={idx}>
-                  <td style={tdStyle}>{r.provider}</td>
-                  <td style={tdStyle}>{r.model}</td>
-                  <td style={tdStyle}>{new Date(r.month).toLocaleDateString(undefined, { year: "numeric", month: "long" })}</td>
-                  <td style={tdStyle}>{Number(r.total_tokens).toLocaleString()}</td>
-                  <td style={tdStyle}>{formatCost(r.cost_usd)}</td>
+                  <td>{r.provider}</td>
+                  <td>{r.model}</td>
+                  <td>{new Date(r.month).toLocaleDateString(undefined, { year: "numeric", month: "long" })}</td>
+                  <td>{Number(r.total_tokens).toLocaleString()}</td>
+                  <td>{formatCost(r.cost_usd)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
-                <td style={{ ...tdStyle, fontWeight: 600 }} colSpan={3}>
+                <td style={{ fontWeight: 600 }} colSpan={3}>
                   Total
                 </td>
-                <td style={{ ...tdStyle, fontWeight: 600 }}>{totalTokens.toLocaleString()}</td>
-                <td style={{ ...tdStyle, fontWeight: 600 }}>{formatCost(totalCost)}</td>
+                <td style={{ fontWeight: 600 }}>{totalTokens.toLocaleString()}</td>
+                <td style={{ fontWeight: 600 }}>{formatCost(totalCost)}</td>
               </tr>
             </tfoot>
           </table>
@@ -196,14 +193,14 @@ function OrderReconciliationSection() {
   }, [dateFrom, dateTo]);
 
   return (
-    <section style={sectionStyle}>
-      <h2 style={{ fontSize: 16 }}>Order reconciliation</h2>
-      <p style={{ color: "#888", fontSize: 13 }}>
+    <section className="card">
+      <h2>Order reconciliation</h2>
+      <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
         Requested vs. purchased quantity, per order item. Blank "Purchased" means no PO has been compiled for it yet
         (or it predates this tracking — older orders won't show a match here). Covers requested vs. purchased only,
         not what's physically on-site.
       </p>
-      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
       <div style={filterBarStyle}>
         <label style={{ fontSize: 13 }}>
@@ -215,18 +212,18 @@ function OrderReconciliationSection() {
       </div>
 
       {rows.length === 0 ? (
-        <p style={{ color: "#888" }}>No order items in this range.</p>
+        <p style={{ color: "var(--color-text-muted)" }}>No order items in this range.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <table className="data-table">
             <thead>
               <tr>
-                <th style={thStyle}>Site</th>
-                <th style={thStyle}>Item</th>
-                <th style={thStyle}>Requested</th>
-                <th style={thStyle}>Purchased</th>
-                <th style={thStyle}>Vendor</th>
-                <th style={thStyle}>PO status</th>
+                <th>Site</th>
+                <th>Item</th>
+                <th>Requested</th>
+                <th>Purchased</th>
+                <th>Vendor</th>
+                <th>PO status</th>
               </tr>
             </thead>
             <tbody>
@@ -234,14 +231,14 @@ function OrderReconciliationSection() {
                 const mismatch = r.purchased_quantity !== null && Number(r.purchased_quantity) !== Number(r.requested_quantity);
                 return (
                   <tr key={r.order_item_id}>
-                    <td style={tdStyle}>{r.site_name ?? "—"}</td>
-                    <td style={tdStyle}>{r.item_name ?? "—"}</td>
-                    <td style={tdStyle}>{r.requested_quantity}</td>
-                    <td style={{ ...tdStyle, color: mismatch ? "#c0392b" : undefined, fontWeight: mismatch ? 600 : undefined }}>
+                    <td>{r.site_name ?? "—"}</td>
+                    <td>{r.item_name ?? "—"}</td>
+                    <td>{r.requested_quantity}</td>
+                    <td style={mismatch ? { color: "var(--color-status-bad)", fontWeight: 600 } : undefined}>
                       {r.purchased_quantity ?? "—"}
                     </td>
-                    <td style={tdStyle}>{r.vendor_name ?? "—"}</td>
-                    <td style={tdStyle}>{r.po_status ?? "not compiled"}</td>
+                    <td>{r.vendor_name ?? "—"}</td>
+                    <td>{r.po_status ?? "not compiled"}</td>
                   </tr>
                 );
               })}
@@ -274,14 +271,14 @@ function PayrollExportSection() {
   const totalGross = rows.reduce((sum, r) => sum + (r.gross_pay ?? 0), 0);
 
   return (
-    <section style={sectionStyle}>
-      <h2 style={{ fontSize: 16 }}>Payroll export</h2>
-      <p style={{ color: "#888", fontSize: 13 }}>
+    <section className="card">
+      <h2>Payroll export</h2>
+      <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
         A generic CSV for importing into any payroll provider — set the date range to match your actual pay period.
         Only payroll-paid crew appear here; cash-paid crew are handled outside the payroll system. Incomplete
         timeclock sessions are flagged, never guessed into hours.
       </p>
-      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
       <div style={filterBarStyle}>
         <label style={{ fontSize: 13 }}>
@@ -293,27 +290,27 @@ function PayrollExportSection() {
       </div>
 
       {rows.length === 0 ? (
-        <p style={{ color: "#888" }}>No payroll-paid activity in this range.</p>
+        <p style={{ color: "var(--color-text-muted)" }}>No payroll-paid activity in this range.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <table className="data-table">
             <thead>
               <tr>
-                <th style={thStyle}>Employee</th>
-                <th style={thStyle}>Rate</th>
-                <th style={thStyle}>Hours</th>
-                <th style={thStyle}>Gross pay</th>
-                <th style={thStyle}>Incomplete sessions</th>
+                <th>Employee</th>
+                <th>Rate</th>
+                <th>Hours</th>
+                <th>Gross pay</th>
+                <th>Incomplete sessions</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, idx) => (
                 <tr key={idx}>
-                  <td style={tdStyle}>{r.crew_member_name}</td>
-                  <td style={tdStyle}>{r.hourly_rate !== null ? formatMoney(r.hourly_rate) : "—"}</td>
-                  <td style={tdStyle}>{r.hours_worked}</td>
-                  <td style={tdStyle}>{r.gross_pay !== null ? formatMoney(r.gross_pay) : "—"}</td>
-                  <td style={{ ...tdStyle, color: r.incomplete_sessions > 0 ? "#c0392b" : undefined }}>
+                  <td>{r.crew_member_name}</td>
+                  <td>{r.hourly_rate !== null ? formatMoney(r.hourly_rate) : "—"}</td>
+                  <td>{r.hours_worked}</td>
+                  <td>{r.gross_pay !== null ? formatMoney(r.gross_pay) : "—"}</td>
+                  <td style={r.incomplete_sessions > 0 ? { color: "var(--color-status-bad)", fontWeight: 600 } : undefined}>
                     {r.incomplete_sessions > 0 ? r.incomplete_sessions : "—"}
                   </td>
                 </tr>
@@ -321,11 +318,11 @@ function PayrollExportSection() {
             </tbody>
             <tfoot>
               <tr>
-                <td style={{ ...tdStyle, fontWeight: 600 }} colSpan={3}>
+                <td style={{ fontWeight: 600 }} colSpan={3}>
                   Total
                 </td>
-                <td style={{ ...tdStyle, fontWeight: 600 }}>{formatMoney(totalGross)}</td>
-                <td style={tdStyle} />
+                <td style={{ fontWeight: 600 }}>{formatMoney(totalGross)}</td>
+                <td />
               </tr>
             </tfoot>
           </table>
@@ -353,13 +350,13 @@ function ClaimOutcomesSection() {
   }, [dateFrom, dateTo]);
 
   return (
-    <section style={sectionStyle}>
-      <h2 style={{ fontSize: 16 }}>Claim outcomes</h2>
-      <p style={{ color: "#888", fontSize: 13 }}>
+    <section className="card">
+      <h2>Claim outcomes</h2>
+      <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
         How spend and mileage claims have been decided, by crew member — approved, rejected, or disputed. Includes
         mileage claims rejected before ever reaching the spend ledger. Just counts, not a score.
       </p>
-      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
       <div style={filterBarStyle}>
         <label style={{ fontSize: 13 }}>
@@ -371,27 +368,27 @@ function ClaimOutcomesSection() {
       </div>
 
       {rows.length === 0 ? (
-        <p style={{ color: "#888" }}>No decided claims in this range.</p>
+        <p style={{ color: "var(--color-text-muted)" }}>No decided claims in this range.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <table className="data-table">
             <thead>
               <tr>
-                <th style={thStyle}>Crew member</th>
-                <th style={thStyle}>Approved</th>
-                <th style={thStyle}>Rejected</th>
-                <th style={thStyle}>Disputed</th>
-                <th style={thStyle}>Total</th>
+                <th>Crew member</th>
+                <th>Approved</th>
+                <th>Rejected</th>
+                <th>Disputed</th>
+                <th>Total</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.crew_member_id}>
-                  <td style={tdStyle}>{r.crew_member_name}</td>
-                  <td style={tdStyle}>{r.approved_count}</td>
-                  <td style={tdStyle}>{r.rejected_count}</td>
-                  <td style={tdStyle}>{r.disputed_count}</td>
-                  <td style={tdStyle}>{r.total_count}</td>
+                  <td>{r.crew_member_name}</td>
+                  <td>{r.approved_count}</td>
+                  <td>{r.rejected_count}</td>
+                  <td>{r.disputed_count}</td>
+                  <td>{r.total_count}</td>
                 </tr>
               ))}
             </tbody>
@@ -426,9 +423,9 @@ export function ReportsPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Reports</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Reports</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           CSV exports of history that already tracks who did what, including computed timesheet sessions. Pay rates,
           correction workflows, and pay periods aren't handled here yet.
         </p>

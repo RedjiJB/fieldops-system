@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
 import { api, PO_STATUSES, type PurchaseOrder, type PurchaseOrderDetail, type Vendor } from "../api/client";
+import { StatusBadge } from "../components/StatusBadge";
 
-const sectionStyle = { padding: 16, borderBottom: "1px solid #eee" };
+function poStatusTone(status: (typeof PO_STATUSES)[number]): "neutral" | "warn" | "good" {
+  if (status === PO_STATUSES[0]) return "neutral";
+  if (status === PO_STATUSES[PO_STATUSES.length - 1]) return "good";
+  return "warn";
+}
+
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const };
 const poLayoutStyle = { display: "flex", gap: 16 };
@@ -49,11 +55,11 @@ function VendorsSection() {
   }
 
   return (
-    <section style={sectionStyle}>
-      <h2 style={{ fontSize: 16 }}>Vendors</h2>
-      {error && <div style={{ color: "#c0392b", fontSize: 13 }}>{error}</div>}
+    <section className="card">
+      <h2>Vendors</h2>
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</div>}
 
-      {vendors.length === 0 && <p style={{ color: "#888" }}>No vendors on file.</p>}
+      {vendors.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No vendors on file.</p>}
       {vendors.map((v) => (
         <div key={v.id} style={rowStyle}>
           {editingId === v.id && draft ? (
@@ -81,14 +87,14 @@ function VendorsSection() {
                 placeholder="Lead time (days)"
                 style={{ width: 130 }}
               />
-              <button onClick={() => saveEdit(v)}>Save</button>
+              <button className="btn-primary" onClick={() => saveEdit(v)}>Save</button>
               <button onClick={() => setEditingId(null)}>Cancel</button>
             </span>
           ) : (
             <>
               <span>
                 <strong>{v.name}</strong>
-                <span style={{ color: "#888" }}>
+                <span style={{ color: "var(--color-text-muted)" }}>
                   {v.contact_method ? ` — ${v.contact_method}` : ""}
                   {v.lead_time_days != null ? ` — ${v.lead_time_days}d lead time` : ""}
                 </span>
@@ -160,9 +166,9 @@ function PurchaseOrdersSection() {
   }
 
   return (
-    <section style={sectionStyle}>
-      <h2 style={{ fontSize: 16 }}>Purchase Orders</h2>
-      {error && <div style={{ color: "#c0392b", fontSize: 13 }}>{error}</div>}
+    <section className="card">
+      <h2>Purchase Orders</h2>
+      {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</div>}
 
       <div style={filterBarStyle}>
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -177,7 +183,7 @@ function PurchaseOrdersSection() {
 
       <div style={poLayoutStyle}>
         <div style={poListColStyle}>
-          {orders.length === 0 && <p style={{ color: "#888" }}>No purchase orders match this filter.</p>}
+          {orders.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No purchase orders match this filter.</p>}
           {orders.map((po) => (
             <div
               key={po.id}
@@ -186,29 +192,30 @@ function PurchaseOrdersSection() {
                 padding: "8px 4px",
                 cursor: "pointer",
                 fontWeight: selectedId === po.id ? "bold" : "normal",
-                borderBottom: "1px solid #f0f0f0",
+                borderBottom: "1px solid var(--color-border)",
               }}
             >
-              {po.vendor_name ?? "unknown vendor"} — {po.status}
+              {po.vendor_name ?? "unknown vendor"} — <StatusBadge label={po.status} tone={poStatusTone(po.status)} />
             </div>
           ))}
         </div>
 
         <div style={poDetailColStyle}>
-          {!detail && <p style={{ color: "#888" }}>Select a purchase order.</p>}
+          {!detail && <p style={{ color: "var(--color-text-muted)" }}>Select a purchase order.</p>}
           {detail && (
             <>
               <p>
-                <strong>{detail.vendor_name ?? "unknown vendor"}</strong> — {detail.status}
+                <strong>{detail.vendor_name ?? "unknown vendor"}</strong>{" "}
+                <StatusBadge label={detail.status} tone={poStatusTone(detail.status)} />
               </p>
-              <p style={{ color: "#888" }}>
+              <p style={{ color: "var(--color-text-muted)" }}>
                 {detail.site_name ? `Requested from ${detail.site_name}` : "Not linked to an order on file"}
                 {detail.cost != null ? ` — cost ${detail.cost}` : ""}
                 {detail.eta ? ` — eta ${detail.eta}` : ""}
                 {detail.sent_to ? ` — sent to ${detail.sent_to}` : ""}
               </p>
               {detail.fulfilled_at && (
-                <p style={{ color: "#888" }}>
+                <p style={{ color: "var(--color-text-muted)" }}>
                   Fulfilled {new Date(detail.fulfilled_at).toLocaleString()}
                   {detail.fulfilled_by_name ? ` by ${detail.fulfilled_by_name}` : ""}
                 </p>
@@ -224,12 +231,12 @@ function PurchaseOrdersSection() {
               {detail.status === "compiled" && (
                 <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                   <input placeholder="Sent to" value={sentTo} onChange={(e) => setSentTo(e.target.value)} />
-                  <button onClick={send}>Send</button>
+                  <button className="btn-primary" onClick={send}>Send</button>
                 </div>
               )}
               {(detail.status === "sent_to_office" || detail.status === "forwarded_by_office") && (
                 <div style={{ marginTop: 12 }}>
-                  <button onClick={markFulfilled}>Mark fulfilled</button>
+                  <button className="btn-primary" onClick={markFulfilled}>Mark fulfilled</button>
                 </div>
               )}
             </>

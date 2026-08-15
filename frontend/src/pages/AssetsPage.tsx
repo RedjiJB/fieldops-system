@@ -1,15 +1,22 @@
 import { useEffect, useState } from "react";
 import { api, ASSET_DIRECTLY_SETTABLE_STATUSES, type Asset } from "../api/client";
+import { StatusBadge } from "../components/StatusBadge";
 
-const sectionStyle = { padding: 16 };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const };
+
+function assetStatusTone(status: Asset["status"]): "good" | "warn" | "bad" | "neutral" {
+  if (status === "available") return "good";
+  if (status === "checked_out" || status === "in_maintenance") return "warn";
+  if (status === "missing" || status === "unconfirmed") return "bad";
+  return "neutral";
+}
 
 // Calendar-interval maintenance schedule, inline per row -- matches this
 // page's plain row+inline-control style, no modal/expand-toggle like
@@ -40,9 +47,9 @@ function MaintenanceControls({
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#888", marginTop: 2 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--color-text-muted)", marginTop: 2 }}>
       {dueDate ? (
-        <span style={overdue ? { color: "#c0392b", fontWeight: "bold" } : undefined}>
+        <span style={overdue ? { color: "var(--color-status-bad)", fontWeight: "bold" } : undefined}>
           {overdue ? "Maintenance overdue: " : "Next service due: "}
           {dueDate.toLocaleDateString()}
         </span>
@@ -170,11 +177,11 @@ export function AssetsPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      {error && <div style={{ padding: 8, color: "#c0392b" }}>{error}</div>}
+      {error && <div style={{ padding: 8, color: "var(--color-status-bad)" }}>{error}</div>}
 
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Assets</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Assets</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Verification stays a WhatsApp/crew action — this view browses and reports status only.
         </p>
 
@@ -210,10 +217,10 @@ export function AssetsPage() {
           />
         </div>
 
-        {visibleAssets.length === 0 && <p style={{ color: "#888" }}>No assets match these filters.</p>}
+        {visibleAssets.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No assets match these filters.</p>}
         {selectedIds.size > 0 && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 13, color: "#888" }}>{selectedIds.size} selected</span>
+            <span style={{ fontSize: 13, color: "var(--color-text-muted)" }}>{selectedIds.size} selected</span>
             <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
               <option value="">Set status to…</option>
               {ASSET_DIRECTLY_SETTABLE_STATUSES.map((s) => (
@@ -222,7 +229,7 @@ export function AssetsPage() {
                 </option>
               ))}
             </select>
-            <button onClick={onBulkChangeStatus} disabled={!bulkStatus || bulkApplying}>
+            <button className="btn-primary" onClick={onBulkChangeStatus} disabled={!bulkStatus || bulkApplying}>
               {bulkApplying ? "Applying…" : "Apply"}
             </button>
           </div>
@@ -238,15 +245,15 @@ export function AssetsPage() {
                   style={{ marginRight: 8 }}
                 />
                 <strong>{a.name}</strong>
-                <span style={{ color: "#888" }}> ({a.category})</span>
-                <span style={{ color: "#888" }}>
+                <span style={{ color: "var(--color-text-muted)" }}> ({a.category})</span>
+                <span style={{ color: "var(--color-text-muted)" }}>
                   {" "}
                   — {a.current_site_name ?? "no site on record"}
                   {a.current_holder_name ? `, held by ${a.current_holder_name}` : ""}
                 </span>
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <em>{a.status}</em>
+                <StatusBadge label={a.status} tone={assetStatusTone(a.status)} />
                 <select value="" onChange={(e) => e.target.value && onChangeStatus(a, e.target.value)}>
                   <option value="">Change status…</option>
                   {ASSET_DIRECTLY_SETTABLE_STATUSES.filter((s) => s !== a.status).map((s) => (

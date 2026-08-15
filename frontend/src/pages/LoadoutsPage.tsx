@@ -10,14 +10,14 @@ import {
 } from "../api/client";
 
 const pageStyle = { display: "flex", flex: 1, overflow: "hidden" };
-const listColStyle = { width: 320, borderRight: "1px solid #eee", overflowY: "auto" as const, padding: 16 };
+const listColStyle = { width: 320, borderRight: "1px solid var(--color-border)", overflowY: "auto" as const, padding: 16 };
 const detailColStyle = { flex: 1, overflowY: "auto" as const, padding: 16 };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 const itemFormStyle = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const, marginTop: 12 };
 
@@ -272,8 +272,8 @@ export function LoadoutsPage() {
   return (
     <div style={pageStyle}>
       <div style={listColStyle}>
-        <h2 style={{ fontSize: 16 }}>Loadout Templates</h2>
-        {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+        <h2>Loadout Templates</h2>
+        {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
         <div style={{ marginBottom: 12 }}>
           <select value={filterJobType} onChange={(e) => setFilterJobType(e.target.value)} style={{ width: "100%" }}>
@@ -290,7 +290,7 @@ export function LoadoutsPage() {
           + New loadout
         </button>
 
-        {loadouts.length === 0 && <p style={{ color: "#888" }}>No loadouts match this filter.</p>}
+        {loadouts.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No loadouts match this filter.</p>}
         {loadouts.map((l) => (
           <div
             key={l.id}
@@ -299,7 +299,7 @@ export function LoadoutsPage() {
               padding: "8px 4px",
               cursor: "pointer",
               fontWeight: selectedId === l.id ? "bold" : "normal",
-              borderBottom: "1px solid #f0f0f0",
+              borderBottom: "1px solid var(--color-border)",
             }}
           >
             {l.name}
@@ -310,7 +310,7 @@ export function LoadoutsPage() {
       <div style={detailColStyle}>
         {creating && (
           <>
-            <h2 style={{ fontSize: 16 }}>New loadout</h2>
+            <h2>New loadout</h2>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <input placeholder="Name" value={createName} onChange={(e) => setCreateName(e.target.value)} />
               <select value={createJobType} onChange={(e) => setCreateJobType(e.target.value)}>
@@ -324,7 +324,7 @@ export function LoadoutsPage() {
             </div>
 
             <h3 style={{ fontSize: 14 }}>Items</h3>
-            {createItems.length === 0 && <p style={{ color: "#888" }}>No items added yet.</p>}
+            {createItems.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No items added yet.</p>}
             {createItems.map((it, idx) => (
               <div key={idx} style={rowStyle}>
                 <span>
@@ -341,13 +341,13 @@ export function LoadoutsPage() {
             </div>
 
             <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-              <button onClick={submitCreate}>Create loadout</button>
+              <button className="btn-primary" onClick={submitCreate}>Create loadout</button>
               <button onClick={() => setCreating(false)}>Cancel</button>
             </div>
           </>
         )}
 
-        {!creating && !detail && <p style={{ color: "#888" }}>Select a loadout, or create a new one.</p>}
+        {!creating && !detail && <p style={{ color: "var(--color-text-muted)" }}>Select a loadout, or create a new one.</p>}
 
         {!creating && detail && (
           <>
@@ -362,14 +362,14 @@ export function LoadoutsPage() {
                     </option>
                   ))}
                 </select>
-                <button onClick={saveHeader}>Save</button>
+                <button className="btn-primary" onClick={saveHeader}>Save</button>
                 <button onClick={() => setEditingHeader(false)}>Cancel</button>
               </div>
             ) : (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <h2 style={{ fontSize: 16 }}>
+                <h2>
                   {detail.name}
-                  <span style={{ color: "#888", fontWeight: "normal" }}>
+                  <span style={{ color: "var(--color-text-muted)", fontWeight: "normal" }}>
                     {" "}
                     — {jobTypes.find((jt) => jt.id === detail.job_type_id)?.name ?? "no job type"}
                   </span>
@@ -382,7 +382,7 @@ export function LoadoutsPage() {
             )}
 
             <h3 style={{ fontSize: 14 }}>Items</h3>
-            {detail.items.length === 0 && <p style={{ color: "#888" }}>No items in this loadout.</p>}
+            {detail.items.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No items in this loadout.</p>}
             {detail.items.map((item) => (
               <div key={item.id} style={rowStyle}>
                 <span>{item.item_name}</span>

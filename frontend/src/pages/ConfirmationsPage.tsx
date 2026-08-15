@@ -1,23 +1,23 @@
 import { useEffect, useState } from "react";
 import { api, CONFIRMATION_STATUSES, type PendingConfirmation } from "../api/client";
+import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
 
-const sectionStyle = { padding: 16 };
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const, alignItems: "center" };
 const rowStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--color-border)",
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  awaiting_management: "#c9902f",
-  approved: "#2e7d32",
-  rejected: "#c0392b",
-  expired: "#888",
-  disputed: "#a0522d",
+const STATUS_TONES: Record<string, "good" | "warn" | "bad" | "neutral"> = {
+  awaiting_management: "warn",
+  approved: "good",
+  rejected: "bad",
+  expired: "neutral",
+  disputed: "bad",
 };
 
 function ReviewControl({
@@ -81,9 +81,9 @@ function ReviewControl({
         onChange={(e) => setReason(e.target.value)}
         style={{ width: 140 }}
       />
-      <button onClick={approve}>Approve</button>
-      <button onClick={reject}>Reject</button>
-      {error && <span style={{ color: "#c0392b", fontSize: 13 }}>{error}</span>}
+      <button className="btn-primary" onClick={approve}>Approve</button>
+      <button className="btn-danger" onClick={reject}>Reject</button>
+      {error && <span style={{ color: "var(--color-status-bad)", fontSize: 13 }}>{error}</span>}
     </span>
   );
 }
@@ -110,9 +110,9 @@ export function ConfirmationsPage() {
   if (!isAdmin) {
     return (
       <div style={{ overflowY: "auto", flex: 1 }}>
-        <section style={sectionStyle}>
-          <h2 style={{ fontSize: 16 }}>Confirmations</h2>
-          <p style={{ color: "#888" }}>Admin access required.</p>
+        <section className="card">
+          <h2>Confirmations</h2>
+          <p style={{ color: "var(--color-text-muted)" }}>Admin access required.</p>
         </section>
       </div>
     );
@@ -120,15 +120,15 @@ export function ConfirmationsPage() {
 
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
-      <section style={sectionStyle}>
-        <h2 style={{ fontSize: 16 }}>Confirmations</h2>
-        <p style={{ color: "#888", fontSize: 13 }}>
+      <section className="card">
+        <h2>Confirmations</h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Two-party confirm-before-execute pilot: hours, material-usage claims, checkout damage/condition claims, and
           mileage claims all need a crew member's confirmation <em>and</em> yours before they take effect. The crew
           member is told the outcome automatically once you act. Unanswered requests escalate the same way critical
           notifications already do, then expire.
         </p>
-        {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+        {error && <div style={{ color: "var(--color-status-bad)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
         <div style={filterBarStyle}>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -141,21 +141,22 @@ export function ConfirmationsPage() {
           </select>
         </div>
 
-        {confirmations.length === 0 && <p style={{ color: "#888" }}>No confirmations match this filter.</p>}
+        {confirmations.length === 0 && <p style={{ color: "var(--color-text-muted)" }}>No confirmations match this filter.</p>}
         {confirmations.map((c) => (
           <div key={c.id} style={rowStyle}>
             <span>
               <strong>{c.crew_member_name ?? "Unknown"}</strong>
-              <span style={{ color: "#888" }}>
+              <span style={{ color: "var(--color-text-muted)" }}>
                 {" "}
                 — {c.summary} — {new Date(c.created_at).toLocaleString()}
                 {c.reviewed_by_name ? ` — reviewed by ${c.reviewed_by_name}` : ""}
               </span>
-              <span style={{ marginLeft: 8, color: STATUS_COLORS[c.status], fontWeight: "bold" }}>{c.status}</span>
+              {" "}
+              <StatusBadge label={c.status} tone={STATUS_TONES[c.status] ?? "neutral"} />
               {c.status === "rejected" && c.rejection_note && (
-                <div style={{ color: "#888", fontSize: 13 }}>Reason: {c.rejection_note}</div>
+                <div style={{ color: "var(--color-text-muted)", fontSize: 13 }}>Reason: {c.rejection_note}</div>
               )}
-              {c.dispute_note && <div style={{ color: "#a0522d", fontSize: 13 }}>Dispute: {c.dispute_note}</div>}
+              {c.dispute_note && <div style={{ color: "var(--color-status-bad)", fontSize: 13 }}>Dispute: {c.dispute_note}</div>}
             </span>
             {(c.status === "awaiting_management" || c.status === "disputed") && (
               <ReviewControl
