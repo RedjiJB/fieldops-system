@@ -199,7 +199,7 @@ ordersRouter.post(
     if (!orderResult.rows[0]) throw new HttpError(404, "Order not found");
 
     const itemsResult = await pool.query(
-      `SELECT oi.quantity, COALESCE(a.name, c.name) AS item_name
+      `SELECT oi.id, oi.quantity, COALESCE(a.name, c.name) AS item_name
        FROM order_items oi
        LEFT JOIN assets a ON oi.asset_id = a.id
        LEFT JOIN consumables c ON oi.consumable_id = c.id
@@ -222,10 +222,10 @@ ordersRouter.post(
       const insertedItems = [];
       for (const item of itemsResult.rows) {
         const itemResult = await client.query(
-          `INSERT INTO purchase_order_items (purchase_order_id, description, quantity)
-           VALUES ($1, $2, $3)
+          `INSERT INTO purchase_order_items (purchase_order_id, description, quantity, order_item_id)
+           VALUES ($1, $2, $3, $4)
            RETURNING *`,
-          [po.id, `${item.item_name} x ${item.quantity}`, item.quantity],
+          [po.id, `${item.item_name} x ${item.quantity}`, item.quantity, item.id],
         );
         insertedItems.push(itemResult.rows[0]);
       }

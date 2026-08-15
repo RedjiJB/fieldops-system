@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, type VendorSpendRow, type ModelUsageRow, type ClaimOutcomeRow } from "../api/client";
+import {
+  api,
+  type VendorSpendRow,
+  type ModelUsageRow,
+  type ClaimOutcomeRow,
+  type OrderReconciliationRow,
+} from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 const sectionStyle = { padding: 16 };
@@ -15,6 +21,7 @@ const REPORT_TYPES = [
   { value: "vendor-spend", label: "Vendor Spend Summary", path: "/api/v1/reports/vendor-spend.csv" },
   { value: "model-usage", label: "Model Usage & Cost", path: "/api/v1/reports/model-usage.csv" },
   { value: "claim-outcomes", label: "Claim Outcomes", path: "/api/v1/reports/claim-outcomes.csv" },
+  { value: "order-reconciliation", label: "Order Reconciliation", path: "/api/v1/reports/order-reconciliation.csv" },
 ] as const;
 
 function formatMoney(value: number | string | null): string {
@@ -173,6 +180,77 @@ function ModelUsageSection() {
   );
 }
 
+function OrderReconciliationSection() {
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [rows, setRows] = useState<OrderReconciliationRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .orderReconciliationSummary({ date_from: dateFrom || undefined, date_to: dateTo || undefined })
+      .then(setRows)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load order reconciliation"));
+  }, [dateFrom, dateTo]);
+
+  return (
+    <section style={sectionStyle}>
+      <h2 style={{ fontSize: 16 }}>Order reconciliation</h2>
+      <p style={{ color: "#888", fontSize: 13 }}>
+        Requested vs. purchased quantity, per order item. Blank "Purchased" means no PO has been compiled for it yet
+        (or it predates this tracking — older orders won't show a match here). Covers requested vs. purchased only,
+        not what's physically on-site.
+      </p>
+      {error && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+
+      <div style={filterBarStyle}>
+        <label style={{ fontSize: 13 }}>
+          Needed from <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </label>
+        <label style={{ fontSize: 13 }}>
+          To <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </label>
+      </div>
+
+      {rows.length === 0 ? (
+        <p style={{ color: "#888" }}>No order items in this range.</p>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Site</th>
+                <th style={thStyle}>Item</th>
+                <th style={thStyle}>Requested</th>
+                <th style={thStyle}>Purchased</th>
+                <th style={thStyle}>Vendor</th>
+                <th style={thStyle}>PO status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const mismatch = r.purchased_quantity !== null && Number(r.purchased_quantity) !== Number(r.requested_quantity);
+                return (
+                  <tr key={r.order_item_id}>
+                    <td style={tdStyle}>{r.site_name ?? "—"}</td>
+                    <td style={tdStyle}>{r.item_name ?? "—"}</td>
+                    <td style={tdStyle}>{r.requested_quantity}</td>
+                    <td style={{ ...tdStyle, color: mismatch ? "#c0392b" : undefined, fontWeight: mismatch ? 600 : undefined }}>
+                      {r.purchased_quantity ?? "—"}
+                    </td>
+                    <td style={tdStyle}>{r.vendor_name ?? "—"}</td>
+                    <td style={tdStyle}>{r.po_status ?? "not compiled"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // Deliberately plain: counts only, no computed "score," no color-coded
 // pass/fail, no ranking across crew members -- this is quiet data for
 // management to notice patterns in if they want to, not an automated
@@ -288,6 +366,7 @@ export function ReportsPage() {
 
       <VendorSpendSection />
       <ModelUsageSection />
+      <OrderReconciliationSection />
       {isAdmin && <ClaimOutcomesSection />}
     </div>
   );

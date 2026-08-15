@@ -235,7 +235,19 @@ CREATE TABLE purchase_order_items (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   purchase_order_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
   description       TEXT NOT NULL, -- free text; may include full brand/spec
-  quantity          NUMERIC
+  quantity          NUMERIC,
+  -- Added in 0063. This table has exactly one creation path -- POST
+  -- /orders/:id/compile-po, one row per order_items row, in a loop -- so
+  -- the link back to the specific order_item was always knowable, just
+  -- never persisted before this, only flattened into `description`'s free
+  -- text. Nullable and forward-only: pre-migration rows have no way to be
+  -- backfilled without parsing that text, the exact fragile matching this
+  -- column exists to avoid. Powers GET /reports/order-reconciliation's
+  -- requested-vs-purchased comparison (see API.md) -- deliberately doesn't
+  -- extend to what's physically on-site, which would need assets to link
+  -- back to the order that justified buying them, a real workflow change
+  -- (register_asset, its agent tool, AGENTS.md), scoped out for this pass.
+  order_item_id     UUID REFERENCES order_items(id)
 );
 ```
 

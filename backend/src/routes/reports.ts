@@ -291,6 +291,71 @@ reportsRouter.get(
   }),
 );
 
+// Requested-vs-purchased half of order->PO reconciliation -- see
+// 0063_purchase_order_items_order_item_link.sql. Not the full
+// requested->purchased->on-site chain (that would need assets to link back
+// to the order that justified buying them, a real workflow change, scoped
+// out deliberately) -- just "did we actually buy what was asked for, in
+// what quantity." purchased_quantity is null for an order item with no PO
+// yet (not compiled) or whose PO predates this column (old rows can't be
+// backfilled -- see the migration's comment). Not admin-gated, same
+// precedent as vendor-spend: quantities/material info, not wage/cash data.
+async function buildOrderReconciliationSummary(date_from?: string, date_to?: string) {
+  const result = await pool.query(
+    `SELECT oi.id AS order_item_id, o.id AS order_id, o.date_needed, o.status AS order_status,
+            s.name AS site_name, COALESCE(a.name, c.name) AS item_name,
+            CASE WHEN oi.asset_id IS NOT NULL THEN 'asset' ELSE 'consumable' END AS item_type,
+            oi.quantity AS requested_quantity, poi.quantity AS purchased_quantity,
+            po.id AS purchase_order_id, po.status AS po_status, v.name AS vendor_name
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+     LEFT JOIN sites s ON s.id = o.site_id
+     LEFT JOIN assets a ON a.id = oi.asset_id
+     LEFT JOIN consumables c ON c.id = oi.consumable_id
+     LEFT JOIN purchase_order_items poi ON poi.order_item_id = oi.id
+     LEFT JOIN purchase_orders po ON po.id = poi.purchase_order_id
+     LEFT JOIN vendors v ON v.id = po.vendor_id
+     WHERE ($1::date IS NULL OR o.date_needed >= $1)
+       AND ($2::date IS NULL OR o.date_needed <= $2)
+     ORDER BY o.date_needed DESC NULLS LAST, o.created_at DESC`,
+    [date_from ?? null, date_to ?? null],
+  );
+  return result.rows;
+}
+
+reportsRouter.get(
+  "/reports/order-reconciliation",
+  asyncHandler(async (req, res) => {
+    const { date_from, date_to } = req.query;
+    res.json(
+      await buildOrderReconciliationSummary(date_from as string | undefined, date_to as string | undefined),
+    );
+  }),
+);
+
+reportsRouter.get(
+  "/reports/order-reconciliation.csv",
+  asyncHandler(async (req, res) => {
+    const { date_from, date_to } = req.query;
+    const rows = await buildOrderReconciliationSummary(
+      date_from as string | undefined,
+      date_to as string | undefined,
+    );
+    const csv = toCsv(rows, [
+      { header: "Site", value: (r) => r.site_name },
+      { header: "Date Needed", value: (r) => dateOnlyOrNull(r.date_needed) },
+      { header: "Item", value: (r) => r.item_name },
+      { header: "Type", value: (r) => r.item_type },
+      { header: "Requested Qty", value: (r) => r.requested_quantity },
+      { header: "Purchased Qty", value: (r) => r.purchased_quantity },
+      { header: "Vendor", value: (r) => r.vendor_name },
+      { header: "PO Status", value: (r) => r.po_status },
+      { header: "Order Status", value: (r) => r.order_status },
+    ]);
+    sendCsv(res, "order-reconciliation.csv", csv);
+  }),
+);
+
 reportsRouter.get(
   "/reports/timesheets.csv",
   asyncHandler(async (req, res) => {

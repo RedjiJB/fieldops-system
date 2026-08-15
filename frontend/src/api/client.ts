@@ -466,6 +466,21 @@ export type ModelUsageRow = {
   cost_usd: number;
 };
 
+export type OrderReconciliationRow = {
+  order_item_id: string;
+  order_id: string;
+  date_needed: string | null;
+  order_status: string;
+  site_name: string | null;
+  item_name: string | null;
+  item_type: "asset" | "consumable";
+  requested_quantity: number;
+  purchased_quantity: number | null;
+  purchase_order_id: string | null;
+  po_status: string | null;
+  vendor_name: string | null;
+};
+
 export type ClaimOutcomeRow = {
   crew_member_id: string;
   crew_member_name: string;
@@ -798,6 +813,13 @@ export const api = {
     if (filters.date_to) params.set("date_to", filters.date_to);
     const qs = params.toString();
     return request<ModelUsageRow[]>(`/reports/model-usage${qs ? `?${qs}` : ""}`);
+  },
+  orderReconciliationSummary: (filters: { date_from?: string; date_to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.date_from) params.set("date_from", filters.date_from);
+    if (filters.date_to) params.set("date_to", filters.date_to);
+    const qs = params.toString();
+    return request<OrderReconciliationRow[]>(`/reports/order-reconciliation${qs ? `?${qs}` : ""}`);
   },
   claimOutcomesSummary: (filters: { date_from?: string; date_to?: string } = {}) => {
     const params = new URLSearchParams();
