@@ -1,3 +1,41 @@
+/* Design tokens -- introduced for the OpenConstructionERP-inspired
+   restyle (sidebar nav, KPI cards, status pills). Single light theme,
+   deliberately: this is a field tool used outdoors on phones/tablets,
+   not a desktop app where a dark mode carries its own value, and no
+   dark-mode work was requested. Neutral scale has a faint cool-slate
+   bias rather than pure gray, so it reads as chosen rather than default. */
+:root {
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-border: #e2e5ea;
+  --color-border-strong: #cbd0d8;
+  --color-text: #1a2028;
+  --color-text-muted: #626b78;
+  --color-text-faint: #88919c;
+
+  --color-accent: #1d5fae;
+  --color-accent-hover: #164a89;
+  --color-accent-soft: #e8f0fb;
+
+  /* Status/traffic-light convention -- used for order status, alert
+     priority, compliance state, maintenance due, etc. Kept separate
+     from --color-accent so semantic color never fights the brand hue. */
+  --color-status-good: #2f9e44;
+  --color-status-good-soft: #e9f7ed;
+  --color-status-warn: #e8830c;
+  --color-status-warn-soft: #fdf1e0;
+  --color-status-bad: #d92626;
+  --color-status-bad-soft: #fbe8e8;
+  --color-status-neutral: #626b78;
+  --color-status-neutral-soft: #eceef1;
+
+  --sidebar-width: 220px;
+  --sidebar-width-collapsed: 56px;
+
+  --radius: 6px;
+  --shadow-card: 0 1px 2px rgba(20, 24, 32, 0.06), 0 1px 1px rgba(20, 24, 32, 0.04);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -5,60 +43,280 @@
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 input,
-button {
+button,
+select {
   font: inherit;
   padding: 8px 10px;
 }
 
+input,
+select {
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
 button {
   cursor: pointer;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+button:disabled {
+  cursor: default;
 }
 
-/* Dashboard header: title | nav | user, as three grid areas rather than
-   nested flex rows, so the mobile breakpoint below can re-place them
-   without restructuring the DOM. Desktop keeps today's single-row look
-   unchanged (nav gets the flexible middle column via 1fr). */
-.dashboard-header {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-areas: "title nav user";
+/* App shell: fixed-width sidebar + flexible content column. Sidebar
+   collapses to an icon rail at tablet widths and a slide-out drawer on
+   phones -- see the breakpoints below -- rather than the old top-bar's
+   horizontal-scroll approach, which stopped scaling once admin-only tabs
+   were folded in on top of the 12 shared ones. */
+.app-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  transition: width 0.15s ease;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.sidebar.collapsed {
+  width: var(--sidebar-width-collapsed);
+}
+
+.sidebar-header {
+  display: flex;
   align-items: center;
-  column-gap: 16px;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
-.dashboard-header-title {
-  grid-area: title;
+.sidebar-title {
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
 }
-.dashboard-header-nav {
-  grid-area: nav;
-  min-width: 0;
+.sidebar.collapsed .sidebar-title,
+.sidebar.collapsed .sidebar-section-label,
+.sidebar.collapsed .sidebar-link-label {
+  display: none;
 }
-/* Tighter than the global button padding (8px 10px) -- scoped to just the
-   nav, not every button in the app, since this row has more items than any
-   other button group and is the one place the extra padding actually costs
-   real estate. */
-.dashboard-header-nav > button,
-.dashboard-header-nav > div > button {
-  padding: 6px 6px;
-  font-size: 13px;
+.sidebar-collapse-btn {
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-shrink: 0;
 }
-.dashboard-header-user {
-  grid-area: user;
+.sidebar-collapse-btn:hover {
+  color: var(--color-accent);
+  border: none;
 }
 
-/* Below this, the title+user row and the nav each get their own full-width
-   row -- the nav's overflow-x: auto (set inline) turns it into a horizontal
-   scroller instead of overflowing the page, which is what was actually
-   happening before this existed (18 nav buttons in one row don't fit a
-   phone screen, and the flex layout had nowhere to shrink them into). */
-@media (max-width: 640px) {
-  .dashboard-header {
-    grid-template-columns: 1fr auto;
-    grid-template-areas:
-      "title user"
-      "nav nav";
-    row-gap: 8px;
+.sidebar-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  padding: 14px 16px 4px;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 4px 8px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13.5px;
+  text-align: left;
+  white-space: nowrap;
+}
+.sidebar-link:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+  border: none;
+}
+.sidebar-link:disabled {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.sidebar-link svg {
+  flex-shrink: 0;
+}
+
+.sidebar-footer {
+  border-top: 1px solid var(--color-border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.sidebar-footer-name {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-topbar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+}
+.app-topbar-menu-btn {
+  border: none;
+  background: transparent;
+  padding: 4px;
+  display: flex;
+}
+
+/* Tablet: rail-collapse the sidebar by default (icons only, toggle still
+   works to expand). Phone: sidebar becomes an off-canvas drawer opened by
+   the topbar's hamburger, since even icon-only doesn't leave enough room
+   next to real content on a phone screen. */
+@media (max-width: 900px) {
+  .sidebar:not(.mobile-open) {
+    width: var(--sidebar-width-collapsed);
   }
+  .sidebar:not(.mobile-open) .sidebar-title,
+  .sidebar:not(.mobile-open) .sidebar-section-label,
+  .sidebar:not(.mobile-open) .sidebar-link-label {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .app-topbar {
+    display: flex;
+  }
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    width: 0;
+    border-right: none;
+  }
+  .sidebar.mobile-open {
+    width: 240px;
+    border-right: 1px solid var(--color-border);
+    box-shadow: 0 0 0 100vmax rgba(20, 24, 32, 0.35);
+  }
+  .sidebar:not(.mobile-open) .sidebar-header,
+  .sidebar:not(.mobile-open) .sidebar-nav,
+  .sidebar:not(.mobile-open) .sidebar-footer {
+    display: none;
+  }
+}
+
+/* KPI cards -- OpsOverviewPage's landing row. */
+.kpi-row {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  flex-wrap: wrap;
+}
+.kpi-card {
+  flex: 1 1 160px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kpi-card-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+.kpi-card-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-card.status-bad .kpi-card-value {
+  color: var(--color-status-bad);
+}
+.kpi-card.status-warn .kpi-card-value {
+  color: var(--color-status-warn);
+}
+.kpi-card.status-good .kpi-card-value {
+  color: var(--color-status-good);
+}
+
+/* Status pill -- shared convention for order status, alert priority,
+   compliance state, maintenance due, etc. (see StatusBadge component). */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status-pill.status-good {
+  background: var(--color-status-good-soft);
+  color: var(--color-status-good);
+}
+.status-pill.status-warn {
+  background: var(--color-status-warn-soft);
+  color: var(--color-status-warn);
+}
+.status-pill.status-bad {
+  background: var(--color-status-bad-soft);
+  color: var(--color-status-bad);
+}
+.status-pill.status-neutral {
+  background: var(--color-status-neutral-soft);
+  color: var(--color-status-neutral);
 }

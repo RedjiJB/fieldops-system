@@ -1,3 +1,29 @@
+import {
+  Activity as ActivityIcon,
+  BarChart3,
+  Bell,
+  Boxes,
+  Building2,
+  CheckSquare,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  FileText,
+  LayoutDashboard,
+  LogOut,
+  Map as MapIcon,
+  Menu,
+  Package,
+  Receipt,
+  ShieldAlert,
+  Store,
+  Truck,
+  UserCog,
+  Users as UsersIcon,
+  Wallet,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
@@ -22,8 +48,8 @@ import { VehicleHistoryPage } from "./pages/VehicleHistoryPage";
 import { VendorsPage } from "./pages/VendorsPage";
 
 type Tab =
-  | "map"
   | "ops"
+  | "map"
   | "assets"
   | "documents"
   | "crew"
@@ -31,164 +57,144 @@ type Tab =
   | "vehicles"
   | "loadouts"
   | "vendors"
-  | "users"
   | "activity"
   | "reports"
   | "timesheets"
+  | "users"
   | "payroll"
   | "spending"
   | "confirmations"
   | "compliance"
   | "notification-settings";
 
-const ADMIN_TABS: { tab: Tab; label: string }[] = [
-  { tab: "users", label: "Users" },
-  { tab: "payroll", label: "Payroll" },
-  { tab: "spending", label: "Spending" },
-  { tab: "confirmations", label: "Confirmations" },
-  { tab: "compliance", label: "Compliance" },
-  { tab: "notification-settings", label: "Notification Settings" },
+type NavItem = { tab: Tab; label: string; icon: LucideIcon };
+
+// Grouped the way OpenConstructionERP groups its module sidebar into
+// workflow sections, adapted to this app's actual 18 tabs rather than
+// its 180 modules -- three shared groups everyone sees, one admin-only
+// group folded in for admin/owner (same 6 tabs the old dropdown held).
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  { label: "Overview", items: [{ tab: "ops", label: "Overview", icon: LayoutDashboard }] },
+  {
+    label: "Field",
+    items: [
+      { tab: "map", label: "Map", icon: MapIcon },
+      { tab: "assets", label: "Assets", icon: Package },
+      { tab: "documents", label: "Documents", icon: FileText },
+      { tab: "crew", label: "Crew", icon: UsersIcon },
+      { tab: "sites", label: "Sites", icon: Building2 },
+      { tab: "vehicles", label: "Vehicles", icon: Truck },
+      { tab: "loadouts", label: "Loadouts", icon: Boxes },
+      { tab: "vendors", label: "Vendors", icon: Store },
+    ],
+  },
+  {
+    label: "Records",
+    items: [
+      { tab: "activity", label: "Activity", icon: ActivityIcon },
+      { tab: "reports", label: "Reports", icon: BarChart3 },
+      { tab: "timesheets", label: "Timesheets", icon: Clock },
+    ],
+  },
 ];
+
+const ADMIN_NAV_GROUP: { label: string; items: NavItem[] } = {
+  label: "Admin",
+  items: [
+    { tab: "users", label: "Users", icon: UserCog },
+    { tab: "payroll", label: "Payroll", icon: Wallet },
+    { tab: "spending", label: "Spending", icon: Receipt },
+    { tab: "confirmations", label: "Confirmations", icon: CheckSquare },
+    { tab: "compliance", label: "Compliance", icon: ShieldAlert },
+    { tab: "notification-settings", label: "Notification Settings", icon: Bell },
+  ],
+};
 
 function Dashboard() {
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<Tab>("map");
-  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
-  const adminMenuRef = useRef<HTMLDivElement>(null);
+  const [tab, setTab] = useState<Tab>("ops");
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const isAdmin = user?.role === "admin" || user?.role === "owner";
-  const onAdminTab = ADMIN_TABS.some((t) => t.tab === tab);
+  const groups = isAdmin ? [...NAV_GROUPS, ADMIN_NAV_GROUP] : NAV_GROUPS;
+  const activeItem = groups.flatMap((g) => g.items).find((i) => i.tab === tab);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
+  // Closing the mobile drawer on outside-click, same pattern the old
+  // admin dropdown used -- tapping the dimmed backdrop (the drawer's
+  // box-shadow trick in index.css) should dismiss it like any drawer.
   useEffect(() => {
-    if (!adminMenuOpen) return;
+    if (!mobileOpen) return;
     function onClickOutside(e: MouseEvent) {
-      if (adminMenuRef.current && !adminMenuRef.current.contains(e.target as Node)) {
-        setAdminMenuOpen(false);
+      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) {
+        setMobileOpen(false);
       }
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [adminMenuOpen]);
+  }, [mobileOpen]);
+
+  function selectTab(t: Tab) {
+    setTab(t);
+    setMobileOpen(false);
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <header className="dashboard-header" style={{ padding: "10px 16px", borderBottom: "1px solid #ddd" }}>
-        <strong className="dashboard-header-title">FieldOps Dashboard</strong>
-        {/* .dashboard-header-nav (index.css) is grid-area: nav, min-width: 0 --
-            that min-width: 0 is what lets overflow-x: auto below actually
-            engage instead of the browser just growing the nav to fit its
-            content, which is what pushed the whole page wider before this
-            existed. Below 640px, index.css's media query moves this to its
-            own full-width row under title+user, so the scroller has real
-            room instead of being squeezed to ~0px next to two other
-            fixed-width neighbors. */}
-        <nav
-          className="dashboard-header-nav"
-          style={{ display: "flex", gap: 6, overflowX: "auto", flexWrap: "nowrap", paddingBottom: 2 }}
-        >
-            <button onClick={() => setTab("map")} disabled={tab === "map"}>
-              Map
-            </button>
-            <button onClick={() => setTab("ops")} disabled={tab === "ops"}>
-              Ops
-            </button>
-            <button onClick={() => setTab("assets")} disabled={tab === "assets"}>
-              Assets
-            </button>
-            <button onClick={() => setTab("documents")} disabled={tab === "documents"}>
-              Documents
-            </button>
-            <button onClick={() => setTab("crew")} disabled={tab === "crew"}>
-              Crew
-            </button>
-            <button onClick={() => setTab("sites")} disabled={tab === "sites"}>
-              Sites
-            </button>
-            <button onClick={() => setTab("vehicles")} disabled={tab === "vehicles"}>
-              Vehicles
-            </button>
-            <button onClick={() => setTab("loadouts")} disabled={tab === "loadouts"}>
-              Loadouts
-            </button>
-            <button onClick={() => setTab("vendors")} disabled={tab === "vendors"}>
-              Vendors
-            </button>
-            <button onClick={() => setTab("activity")} disabled={tab === "activity"}>
-              Activity
-            </button>
-            <button onClick={() => setTab("reports")} disabled={tab === "reports"}>
-              Reports
-            </button>
-            <button onClick={() => setTab("timesheets")} disabled={tab === "timesheets"}>
-              Timesheets
-            </button>
-            {isAdmin && (
-              // The 6 admin-only surfaces (Users/Payroll/Spending/Confirmations/
-              // Compliance/Notification Settings) used to each be their own
-              // top-level button -- folding them into one dropdown is most of
-              // what fixed nav crowding: only admin/owner ever saw the full
-              // 18-button row, since staff never had these 6 to begin with.
-              <div ref={adminMenuRef} style={{ position: "relative", flexShrink: 0 }}>
-                <button onClick={() => setAdminMenuOpen((v) => !v)} disabled={onAdminTab && !adminMenuOpen}>
-                  Admin {adminMenuOpen ? "▴" : "▾"}
-                </button>
-                {adminMenuOpen && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      marginTop: 4,
-                      background: "#fff",
-                      border: "1px solid #ddd",
-                      borderRadius: 4,
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                      zIndex: 10,
-                      display: "flex",
-                      flexDirection: "column",
-                      minWidth: 160,
-                    }}
-                  >
-                    {ADMIN_TABS.map((t) => (
-                      <button
-                        key={t.tab}
-                        onClick={() => {
-                          setTab(t.tab);
-                          setAdminMenuOpen(false);
-                        }}
-                        disabled={tab === t.tab}
-                        style={{ textAlign: "left", border: "none", borderRadius: 0 }}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </nav>
-        <div className="dashboard-header-user" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span>{user?.name}</span>
-          <button onClick={() => logout()}>Log out</button>
+    <div className="app-shell">
+      <div ref={sidebarRef} className={`sidebar${collapsed ? " collapsed" : ""}${mobileOpen ? " mobile-open" : ""}`}>
+        <div className="sidebar-header">
+          <span className="sidebar-title">FieldOps</span>
+          <button className="sidebar-collapse-btn" onClick={() => setCollapsed((v) => !v)} title={collapsed ? "Expand" : "Collapse"}>
+            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          </button>
         </div>
-      </header>
-      {tab === "map" && <MapPage />}
-      {tab === "ops" && <OpsOverviewPage />}
-      {tab === "assets" && <AssetsPage />}
-      {tab === "documents" && <DocumentsPage />}
-      {tab === "crew" && <CrewPage />}
-      {tab === "sites" && <SitesPage />}
-      {tab === "vehicles" && <VehicleHistoryPage />}
-      {tab === "loadouts" && <LoadoutsPage />}
-      {tab === "vendors" && <VendorsPage />}
-      {tab === "users" && <UsersPage />}
-      {tab === "activity" && <ActivityLogPage />}
-      {tab === "reports" && <ReportsPage />}
-      {tab === "timesheets" && <TimesheetsPage />}
-      {tab === "payroll" && <PayrollPage />}
-      {tab === "spending" && <SpendingPage />}
-      {tab === "confirmations" && <ConfirmationsPage />}
-      {tab === "compliance" && <CompliancePage />}
-      {tab === "notification-settings" && <NotificationSettingsPage />}
+        <nav className="sidebar-nav">
+          {groups.map((group) => (
+            <div key={group.label}>
+              <div className="sidebar-section-label">{group.label}</div>
+              {group.items.map((item) => (
+                <button key={item.tab} className="sidebar-link" onClick={() => selectTab(item.tab)} disabled={tab === item.tab}>
+                  <item.icon size={17} />
+                  <span className="sidebar-link-label">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <span className="sidebar-footer-name">{user?.name}</span>
+          <button onClick={() => logout()} title="Log out" style={{ padding: 6, border: "none", background: "transparent" }}>
+            <LogOut size={16} />
+          </button>
+        </div>
+      </div>
+      <div className="app-content">
+        <div className="app-topbar">
+          <button className="app-topbar-menu-btn" onClick={() => setMobileOpen((v) => !v)}>
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+          <strong>{activeItem?.label ?? "FieldOps"}</strong>
+          <span style={{ width: 20 }} />
+        </div>
+        {tab === "ops" && <OpsOverviewPage />}
+        {tab === "map" && <MapPage />}
+        {tab === "assets" && <AssetsPage />}
+        {tab === "documents" && <DocumentsPage />}
+        {tab === "crew" && <CrewPage />}
+        {tab === "sites" && <SitesPage />}
+        {tab === "vehicles" && <VehicleHistoryPage />}
+        {tab === "loadouts" && <LoadoutsPage />}
+        {tab === "vendors" && <VendorsPage />}
+        {tab === "users" && <UsersPage />}
+        {tab === "activity" && <ActivityLogPage />}
+        {tab === "reports" && <ReportsPage />}
+        {tab === "timesheets" && <TimesheetsPage />}
+        {tab === "payroll" && <PayrollPage />}
+        {tab === "spending" && <SpendingPage />}
+        {tab === "confirmations" && <ConfirmationsPage />}
+        {tab === "compliance" && <CompliancePage />}
+        {tab === "notification-settings" && <NotificationSettingsPage />}
+      </div>
     </div>
   );
 }

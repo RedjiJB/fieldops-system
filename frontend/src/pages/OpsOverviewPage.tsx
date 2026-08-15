@@ -10,6 +10,7 @@ import {
   type Shift,
   type Site,
 } from "../api/client";
+import { StatusBadge } from "../components/StatusBadge";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -142,6 +143,12 @@ function nextStatus(current: Order["status"]): Order["status"] | null {
   const idx = ORDER_STATUSES.indexOf(current);
   if (idx === -1 || idx === ORDER_STATUSES.length - 1) return null;
   return ORDER_STATUSES[idx + 1];
+}
+
+function orderStatusTone(status: Order["status"]): "neutral" | "warn" | "good" {
+  if (status === ORDER_STATUSES[0]) return "neutral";
+  if (status === ORDER_STATUSES[ORDER_STATUSES.length - 1]) return "good";
+  return "warn";
 }
 
 function OrderItemsPanel({ orderId }: { orderId: string }) {
@@ -341,9 +348,30 @@ export function OpsOverviewPage() {
     }
   }
 
+  const criticalOpenCount = notifications.filter((n) => n.priority === "critical" && !n.acknowledged_at).length;
+
   return (
     <div style={{ overflowY: "auto", flex: 1 }}>
       {error && <div style={{ padding: 8, color: "#c0392b" }}>{error}</div>}
+
+      <div className="kpi-row">
+        <div className="kpi-card">
+          <span className="kpi-card-label">Today's shifts</span>
+          <span className="kpi-card-value">{shifts.length}</span>
+        </div>
+        <div className={`kpi-card${alerts.length > 0 ? " status-bad" : ""}`}>
+          <span className="kpi-card-label">Unresolved alerts</span>
+          <span className="kpi-card-value">{alerts.length}</span>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-card-label">Order pipeline</span>
+          <span className="kpi-card-value">{orders.length}</span>
+        </div>
+        <div className={`kpi-card${criticalOpenCount > 0 ? " status-bad" : ""}`}>
+          <span className="kpi-card-label">Critical, unacknowledged</span>
+          <span className="kpi-card-value">{criticalOpenCount}</span>
+        </div>
+      </div>
 
       <section style={sectionStyle}>
         <h2 style={{ fontSize: 16 }}>Today's shifts</h2>
@@ -380,7 +408,8 @@ export function OpsOverviewPage() {
                 onChange={() => toggleAlertSelected(a.id)}
                 style={{ marginRight: 8 }}
               />
-              <strong>{a.type}</strong>
+              <strong>{a.type}</strong>{" "}
+              <StatusBadge label="unresolved" tone="bad" />
               <span style={{ color: "#888" }}> — raised {new Date(a.raised_at).toLocaleString()}</span>
             </span>
             <button onClick={() => onResolve(a)}>Resolve</button>
@@ -405,10 +434,8 @@ export function OpsOverviewPage() {
                     {expanded ? "▾" : "▸"}
                   </button>
                   <strong>{o.site_name ?? "Unknown site"}</strong>
-                  <span style={{ color: "#888" }}>
-                    {" "}
-                    — requested by {o.requester_name ?? "Unknown"} — <em>{o.status}</em>
-                  </span>
+                  <span style={{ color: "#888" }}> — requested by {o.requester_name ?? "Unknown"} — </span>
+                  <StatusBadge label={o.status} tone={orderStatusTone(o.status)} />
                 </span>
                 {next && <button onClick={() => onAdvance(o)}>Advance to: {next}</button>}
               </div>
@@ -439,7 +466,11 @@ export function OpsOverviewPage() {
                   style={{ marginRight: 8 }}
                 />
               )}
-              {n.priority === "critical" && <strong style={{ color: "#c0392b" }}>CRITICAL </strong>}
+              {n.priority === "critical" && (
+                <>
+                  <StatusBadge label="critical" tone="bad" /> {" "}
+                </>
+              )}
               {n.message}
               <span style={{ color: "#888" }}> — {new Date(n.created_at).toLocaleString()}</span>
               {n.acknowledged_at && <span style={{ color: "#888" }}> — acknowledged</span>}
