@@ -49,6 +49,12 @@ Runs nightly, scans every `~/.openclaw/agents/*/sessions/*.jsonl` transcript fil
 
 Built after realizing every agent turn already returns full token/cost usage, but nothing persisted it anywhere queryable -- `openclaw audit`'s own event log is deliberately `metadata_only` (no usage/cost fields), confirmed by inspecting it directly; the real numbers only ever lived inside each session's own transcript file.
 
+## `export-nightly-transcripts.mjs`
+
+Runs nightly, reads the same `~/.openclaw/agents/fieldops/sessions/*.jsonl` transcript files `sync-model-usage.mjs` reads (the plain per-turn log, not the `.trajectory.jsonl`/`.trajectory-path.json` siblings, which track internal replay state, not conversation content), and compiles a human-readable Markdown digest of the last 24h of conversations -- grouped by thread, each turn shown as `sender: message`, `bot: reply`, with tool calls noted compactly (`_(called: list_shifts, get_crew_status)_`) rather than dumped as raw JSON, and a literal `NO_REPLY` model output rendered as `_(chose not to reply)_` rather than left as an opaque sentinel. Writes one file per night to `~/fieldops-transcripts/YYYY-MM-DD.md` -- deliberately outside the repo and off the dashboard, same reasoning as `backup-database.mjs`'s dump location: real crew chat carries the same personnel/pay/HR-adjacent content AGENTS.md tells the agent never to act on, and that doesn't belong behind a web page, admin-gated or not, when SSH/SCP access already exists for exactly this kind of file. Sends one short WhatsApp summary (thread count, message count, silent-turn count, file path) to `TRANSCRIPT_NOTIFY_TARGET` when done -- not the content, just a nudge that the day's transcript is ready to read.
+
+Built the same night as the `send_role_digest`/group-chat rollout, after two real bugs (a `NO_REPLY` silence on a genuine @-mention, and a digest reply that narrated its own tool calls as literal message text) were only found by reading raw `.jsonl` session files by hand over SSH -- this is that same read, automated and delivered nightly instead of ad hoc.
+
 ## Environment variables
 
 - `BACKEND_URL` — defaults to `http://localhost:3000/api/v1`
@@ -56,6 +62,10 @@ Built after realizing every agent turn already returns full token/cost usage, bu
 - `OPENCLAW_BIN` — defaults to `openclaw` (works fine interactively). A cron `--command` job's `sh -lc` doesn't necessarily source the same `PATH` as an interactive SSH session — if delivery fails with `spawnSync openclaw ENOENT` in `openclaw cron runs --id <id>`, set this to the absolute path (`which openclaw` in an interactive shell) in the job's `--command-env`. Not needed by `sync-dashboard-url.mjs` — it never calls the `openclaw` binary, only `docker` and `fetch`.
 - `FIELDOPS_REPO_DIR` — used by `restart_dashboard_tunnel` (the `docker compose restart cloudflared` call), defaults to `$HOME/fieldops-system`. Not used by `sync-dashboard-url.mjs` itself anymore (no `docker` CLI dependency left).
 - `DASHBOARD_PUBLIC_URL` — `sync-dashboard-url.mjs` only, defaults to `https://dashboard.sodboysltd.org`. The known, stable named-tunnel hostname this script confirms is reachable each run.
+- `FIELDOPS_SESSIONS_DIR` — `export-nightly-transcripts.mjs` only, defaults to `~/.openclaw/agents/fieldops/sessions`.
+- `FIELDOPS_TRANSCRIPTS_DIR` — `export-nightly-transcripts.mjs` only, defaults to `~/fieldops-transcripts`. Deliberately outside the repo, same reasoning as `backup-database.mjs`'s dump location.
+- `TRANSCRIPT_NOTIFY_TARGET` — `export-nightly-transcripts.mjs` only, defaults to Redji's number. Set empty to skip the completion notification entirely.
+- `TRANSCRIPT_LOOKBACK_HOURS` — `export-nightly-transcripts.mjs` only, defaults to `24`.
 
 ## Install
 
@@ -118,6 +128,14 @@ openclaw cron add --name fieldops-model-usage --display-name "Model Usage Sync" 
   --command "node ~/fieldops-system/openclaw/notifier/sync-model-usage.mjs" \
   --command-env "AGENT_SERVICE_TOKEN=<real token>" \
   --cron "30 3 * * *" --timeout-seconds 120 --no-deliver
+```
+
+`export-nightly-transcripts.mjs` installs nightly, no `AGENT_SERVICE_TOKEN` needed (never calls the backend, just reads local session files and sends one WhatsApp message):
+
+```bash
+openclaw cron add --name fieldops-transcript-export --display-name "Nightly Transcript Export" \
+  --command "node ~/fieldops-system/openclaw/notifier/export-nightly-transcripts.mjs" \
+  --cron "15 3 * * *" --timeout-seconds 120 --no-deliver
 ```
 
 ## Live reply-id check (do once, not blocking)
