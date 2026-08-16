@@ -11,7 +11,15 @@ export const crewMembersRouter = Router();
 // rename, it never gated anything. owner is admin-equivalent-or-greater
 // everywhere requireAdmin is checked (see lib/roles.ts) and joins
 // management on the confirmation-approval gate (see confirmations.ts).
-const CREW_ROLES = ["crew", "foreman", "yard", "management", "owner"] as const;
+// IT added 2026-08-16 for the system operator's own crew_members row --
+// deliberately distinct from management so notification_settings'
+// it_escalation_roles can target IT-type alerts (backend/connectivity/disk
+// issues) at this person specifically, without also being swept into every
+// broader management-tier operational broadcast that isn't relevant to
+// running the system itself. Doesn't affect dashboard access (that's
+// users.role, a separate table/axis) -- this only governs WhatsApp-side
+// crew-tier notification routing and crew-portal display.
+const CREW_ROLES = ["crew", "foreman", "yard", "management", "owner", "IT"] as const;
 
 // Agent-facing only (see 0058_crew_preferred_language.sql) -- doesn't
 // translate the dashboard UI or system-generated notification templates.

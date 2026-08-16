@@ -178,7 +178,7 @@ export const DOCUMENT_TYPES = [
 ] as const;
 
 // Mirrors backend/src/routes/crewMembers.ts's CREW_ROLES.
-export const CREW_ROLES = ["crew", "foreman", "yard", "management", "owner"] as const;
+export const CREW_ROLES = ["crew", "foreman", "yard", "management", "owner", "IT"] as const;
 
 // Mirrors backend/src/lib/notificationSettings.ts's NotificationSettings.
 export type NotificationSettings = {
