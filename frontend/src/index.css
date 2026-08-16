@@ -382,6 +382,14 @@ button:disabled.btn-danger {
   white-space: nowrap;
 }
 
+.sidebar-build-stamp {
+  padding: 4px 16px 10px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  text-align: center;
+}
+
 .app-content {
   flex: 1;
   min-width: 0;

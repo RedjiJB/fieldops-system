@@ -29,6 +29,7 @@ import logo from "./assets/logo.png";
 import { AppBackdrop } from "./components/AppBackdrop";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import { ToastProvider } from "./components/Toast";
+import { WelcomeBanner } from "./components/WelcomeBanner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { AssetsPage } from "./pages/AssetsPage";
@@ -180,6 +181,7 @@ function Dashboard() {
             <LogOut size={16} />
           </button>
         </div>
+        <div className="sidebar-build-stamp">Sod Boys Ltd · {__BUILD_DATE__}</div>
       </div>
       <div className="app-content">
         <div className="app-topbar">
@@ -195,6 +197,7 @@ function Dashboard() {
           <strong>{activeItem?.label ?? "Sod Boys Ltd"}</strong>
           <span style={{ width: 20 }} />
         </div>
+        {user && <WelcomeBanner userId={user.id} userName={user.name} />}
         {tab === "ops" && <OpsOverviewPage onOpenMap={() => setTab("map")} />}
         {tab === "map" && <MapPage />}
         {tab === "assets" && <AssetsPage />}
