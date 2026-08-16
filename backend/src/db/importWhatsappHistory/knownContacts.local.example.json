@@ -1,0 +1,10 @@
+{
+  "_comment": "Template for knownContacts.local.json -- that file is real crew PII (names, phone numbers) transcribed from WhatsApp screenshots and is gitignored, never committed. Copy this, fill in real values, save as knownContacts.local.json alongside it. See knownFromScreenshots.ts for field meanings.",
+  "knownContacts": [
+    { "chatName": "Example Name", "phone": "+15555550100", "phonePartial": false, "source": "screenshot_member_list" }
+  ],
+  "currentMemberNames": ["Example Name"],
+  "screenshotMembershipEvents": [
+    { "chatName": "Example Name", "rawPhone": null, "eventType": "removed", "timestamp": "2026-01-01T00:00:00", "dateInferred": false }
+  ]
+}

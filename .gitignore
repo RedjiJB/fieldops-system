@@ -2,6 +2,7 @@
 .env
 *.pem
 *.key
+backend/src/db/importWhatsappHistory/knownContacts.local.json
 
 # Node
 node_modules/
