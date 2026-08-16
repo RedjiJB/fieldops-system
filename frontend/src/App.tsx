@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import logo from "./assets/logo.png";
+import { AppBackdrop } from "./components/AppBackdrop";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { AssetsPage } from "./pages/AssetsPage";
@@ -192,7 +193,7 @@ function Dashboard() {
           <strong>{activeItem?.label ?? "Sod Boys Ltd"}</strong>
           <span style={{ width: 20 }} />
         </div>
-        {tab === "ops" && <OpsOverviewPage />}
+        {tab === "ops" && <OpsOverviewPage onOpenMap={() => setTab("map")} />}
         {tab === "map" && <MapPage />}
         {tab === "assets" && <AssetsPage />}
         {tab === "documents" && <DocumentsPage />}
@@ -226,6 +227,10 @@ function Routed() {
 export function App() {
   return (
     <AuthProvider>
+      {/* Mounted once at the root, not per-page: it's position:fixed with a
+          negative z-index, so a per-page wrapper would create a stacking
+          context and trap it behind that page's own content. */}
+      <AppBackdrop />
       <Routed />
     </AuthProvider>
   );

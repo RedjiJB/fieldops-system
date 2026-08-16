@@ -5,13 +5,17 @@
    dark-mode work was requested. Neutral scale has a faint cool-slate
    bias rather than pure gray, so it reads as chosen rather than default. */
 :root {
-  --color-bg: #f5f7f4;
+  /* Neutrals are near-achromatic, NOT tinted toward the brand green -- an
+     earlier pass tinted every neutral green and the whole UI read murky.
+     Text/surface/border stay neutral; green appears only as the accent. */
+  --color-bg: #f5f5f7;
   --color-surface: #ffffff;
-  --color-border: #e3e7e1;
-  --color-border-strong: #cad1c6;
-  --color-text: #1b2419;
-  --color-text-muted: #5c6659;
-  --color-text-faint: #86917f;
+  --color-surface-2: #fbfbfd;
+  --color-border: #e8e8ed;
+  --color-border-strong: #d2d2d7;
+  --color-text: #1d1d1f;
+  --color-text-muted: #5b5e66;
+  --color-text-faint: #86868b;
 
   /* Every color that ever needs alpha (hover washes, focus rings, tinted
      card backgrounds) gets a channel triplet alongside its hex -- CSS
@@ -21,8 +25,10 @@
      for the same reason. */
   --color-accent: #2e8b3f;
   --color-accent-ch: 46 139 63;
-  --color-accent-hover: #256e33;
-  --color-accent-soft: #e6f4e8;
+  --color-accent-hover: #35a049;
+  --color-accent-active: #256e33;
+  --color-accent-text: #1f6b2d;
+  --color-accent-soft: #eef7f0;
   /* Sun gold from the mark -- sparing secondary highlight only (never
      body text, never a status color), so it stays an accent rather than
      fighting the palette. */
@@ -41,9 +47,9 @@
   --color-status-bad: #d92626;
   --color-status-bad-ch: 217 38 38;
   --color-status-bad-soft: #fbe8e8;
-  --color-status-neutral: #5c6659;
-  --color-status-neutral-ch: 92 102 89;
-  --color-status-neutral-soft: #ebede9;
+  --color-status-neutral: #5b5e66;
+  --color-status-neutral-ch: 91 94 102;
+  --color-status-neutral-soft: #ececf0;
 
   --sidebar-width: 232px;
   --sidebar-width-collapsed: 56px;
@@ -62,12 +68,13 @@
   --radius: var(--radius-lg);
 
   /* Five-level shadow scale, all deliberately subtle -- a card should
-     read as "sits slightly above the page," never a drop-shadow. */
-  --shadow-xs: 0 1px 2px rgba(20, 30, 18, 0.04);
-  --shadow-sm: 0 1px 2px rgba(20, 30, 18, 0.05), 0 1px 1px rgba(20, 30, 18, 0.04);
-  --shadow-md: 0 2px 6px rgba(20, 30, 18, 0.07), 0 1px 2px rgba(20, 30, 18, 0.05);
-  --shadow-lg: 0 8px 20px rgba(20, 30, 18, 0.09), 0 2px 6px rgba(20, 30, 18, 0.06);
-  --shadow-xl: 0 16px 40px rgba(20, 30, 18, 0.12), 0 4px 10px rgba(20, 30, 18, 0.07);
+     read as "sits slightly above the page," never a drop-shadow. Neutral
+     black rather than tinted, so shadows never add a colour cast. */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-xl: 0 24px 80px rgba(0, 0, 0, 0.14), 0 8px 24px rgba(0, 0, 0, 0.08);
   /* Kept as aliases for the same reason as --radius above. */
   --shadow-card: var(--shadow-sm);
   --shadow-raised: var(--shadow-lg);
@@ -102,9 +109,25 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* The type tuning here is doing more work than any single colour choice:
+     the -0.022em tracking and 1.47 leading are what make a dense
+     operational UI read as deliberate rather than cramped. Without them
+     the same layout looks like an unstyled form. */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  font-size: var(--text-base);
+  line-height: 1.47059;
+  letter-spacing: -0.022em;
   background: var(--color-bg);
   color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: -0.022em;
 }
 
 input,
@@ -303,7 +326,7 @@ button:disabled.btn-danger {
 }
 
 .sidebar-section-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -326,7 +349,7 @@ button:disabled.btn-danger {
   border-radius: var(--radius);
   background: transparent;
   color: var(--color-text);
-  font-size: 13.5px;
+  font-size: var(--text-sm);
   text-align: left;
   white-space: nowrap;
 }
@@ -535,19 +558,24 @@ button:disabled.btn-danger {
 /* Card -- the module-tile look every page's sections now share, replacing
    the old flush borderBottom dividers. See src/styles/shared.ts, which
    pages import instead of redefining their own sectionStyle per file. */
+/* 90% alpha, not solid -- this is what lets the backdrop's dot grid and
+   spotlight show through and makes the card read as floating above the
+   page rather than painted onto it. Solid white here and the whole
+   backdrop is invisible wherever content sits, which is most of it. */
 .card {
-  background: var(--color-surface);
+  background: rgb(255 255 255 / 0.9);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
   margin: 12px 20px;
   padding: 16px;
   transition: box-shadow var(--duration-base) var(--ease-standard), transform var(--duration-base) var(--ease-standard);
 }
 .card h2 {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--text-sm);
+  font-weight: 600;
   margin: 0 0 10px;
+  color: var(--color-text);
 }
 .card-hoverable {
   cursor: pointer;
@@ -577,10 +605,10 @@ button:disabled.btn-danger {
    default-gray until something's wrong" reads correctly at a glance. */
 .stat-card {
   flex: 1 1 180px;
-  background: var(--color-surface);
+  background: rgb(255 255 255 / 0.9);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
   padding: var(--space-4);
   display: flex;
   align-items: flex-start;
@@ -823,5 +851,185 @@ button:disabled.btn-danger {
      itself scrollable rather than letting it widen the page body. */
   .data-table {
     min-width: 520px;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   App backdrop -- see components/AppBackdrop.tsx. Four stacked layers
+   behind all content; the cards above sit at 90% alpha so this shows
+   through and they read as floating rather than pasted on.
+   --------------------------------------------------------------------- */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--color-bg);
+  --mx: 50%;
+  --my: 40%;
+}
+.app-backdrop > div {
+  position: absolute;
+  inset: 0;
+}
+/* Tinted hero halo, anchored above the viewport so it reads as light
+   falling in from the top rather than a visible blob. */
+.app-backdrop-spotlight {
+  background: radial-gradient(
+    80% 55% at 50% -10%,
+    rgb(var(--color-accent-ch) / 0.18) 0%,
+    rgb(var(--color-accent-ch) / 0.05) 35%,
+    rgb(var(--color-accent-ch) / 0) 65%
+  );
+}
+.app-backdrop-pointer {
+  background: radial-gradient(circle 380px at var(--mx) var(--my), rgb(var(--color-accent-ch) / 0.05), transparent 70%);
+  transition: background var(--duration-base) var(--ease-standard);
+}
+/* Masked so the grid fades out at the edges instead of ending on a hard
+   rectangle -- without the mask it reads as a texture swatch. */
+.app-backdrop-dots {
+  background-image: radial-gradient(circle, rgba(60, 60, 67, 0.16) 0.9px, transparent 0.9px);
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 75% at center, #000 25%, transparent 95%);
+  mask-image: radial-gradient(ellipse 80% 75% at center, #000 25%, transparent 95%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-backdrop-pointer {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Map card + companion vehicle panel (components/FleetMapCard.tsx).
+   1.5fr/1fr side by side on desktop, stacked on phone -- the map and the
+   list are two views of the same data, which reads faster at a glance
+   than either alone.
+   --------------------------------------------------------------------- */
+.map-card-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 12px;
+  margin: 12px 20px;
+  height: 19rem;
+}
+.map-card,
+.map-side-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.9);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
+}
+.map-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.map-card-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.map-side-count {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-faint);
+}
+.map-card-canvas {
+  flex: 1;
+  min-height: 0;
+}
+/* Leaflet paints its own controls/attribution above everything by default;
+   keep them under the app's own overlays (mobile drawer is z-index 20). */
+.map-card-canvas .leaflet-container {
+  z-index: 0;
+  font: inherit;
+}
+.map-side-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+}
+.map-side-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgb(251 251 253 / 0.6);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.map-side-cell:hover {
+  border-color: rgb(var(--color-accent-ch) / 0.4);
+}
+.map-side-cell-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.map-side-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+  background: rgb(var(--color-accent-ch) / 0.1);
+  color: var(--color-accent);
+}
+.map-side-pin.is-dark {
+  background: var(--color-status-neutral-soft);
+  color: var(--color-status-neutral);
+}
+.map-side-plate {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-side-sub {
+  font-size: 10px;
+  color: var(--color-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 26px;
+}
+.map-side-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+  margin: 0;
+}
+@media (max-width: 900px) {
+  .map-card-row {
+    grid-template-columns: 1fr;
+    height: auto;
+    margin: 8px 12px;
+  }
+  .map-card-canvas {
+    height: 14rem;
+  }
+  .map-side-grid {
+    max-height: 12rem;
   }
 }

@@ -10,9 +10,11 @@ import {
   type OrderDetail,
   type Shift,
   type Site,
+  type Vehicle,
 } from "../api/client";
 import { Button } from "../components/Button";
 import { EmptyState } from "../components/EmptyState";
+import { FleetMapCard } from "../components/FleetMapCard";
 import { StatCard } from "../components/StatCard";
 import { StatusBadge } from "../components/StatusBadge";
 
@@ -221,11 +223,12 @@ const rowStyle = {
   borderBottom: "1px solid var(--color-border)",
 };
 
-export function OpsOverviewPage() {
+export function OpsOverviewPage({ onOpenMap }: { onOpenMap: () => void }) {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [selectedAlertIds, setSelectedAlertIds] = useState<Set<string>>(new Set());
   const [selectedNotificationIds, setSelectedNotificationIds] = useState<Set<string>>(new Set());
@@ -234,12 +237,13 @@ export function OpsOverviewPage() {
   const [error, setError] = useState<string | null>(null);
 
   function reload() {
-    Promise.all([api.shiftsToday(), api.unresolvedAlerts(), api.orders(), api.notifications()])
-      .then(([s, a, o, n]) => {
+    Promise.all([api.shiftsToday(), api.unresolvedAlerts(), api.orders(), api.notifications(), api.vehicles()])
+      .then(([s, a, o, n, v]) => {
         setShifts(s);
         setAlerts(a);
         setOrders(o);
         setNotifications(n);
+        setVehicles(v);
         // Prune rather than wipe -- a poll firing mid-selection shouldn't
         // discard checkboxes for items that are still there; only ones
         // that dropped out of the new list (someone else resolved/
@@ -375,6 +379,8 @@ export function OpsOverviewPage() {
           tintValue={criticalOpenCount > 0}
         />
       </div>
+
+      <FleetMapCard vehicles={vehicles} onOpenMap={onOpenMap} />
 
       <section className="card">
         <h2>Today's shifts</h2>
