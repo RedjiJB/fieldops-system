@@ -186,6 +186,7 @@ export type NotificationSettings = {
   max_escalations: number;
   vehicle_dark_critical: boolean;
   critical_notification_roles: (typeof CREW_ROLES)[number][];
+  it_escalation_roles: (typeof CREW_ROLES)[number][];
   order_stall_hours: number;
   idle_hours: number;
   delay_buffer_minutes: number;

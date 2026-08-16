@@ -14,6 +14,7 @@ type FormState = {
   max_escalations: string;
   vehicle_dark_critical: boolean;
   critical_notification_roles: string[];
+  it_escalation_roles: string[];
   order_stall_hours: string;
   idle_hours: string;
   delay_buffer_minutes: string;
@@ -29,6 +30,7 @@ function toFormState(settings: NotificationSettings): FormState {
     max_escalations: String(settings.max_escalations),
     vehicle_dark_critical: settings.vehicle_dark_critical,
     critical_notification_roles: settings.critical_notification_roles,
+    it_escalation_roles: settings.it_escalation_roles,
     order_stall_hours: String(settings.order_stall_hours),
     idle_hours: String(settings.idle_hours),
     delay_buffer_minutes: String(settings.delay_buffer_minutes),
@@ -96,13 +98,11 @@ export function NotificationSettingsPage() {
     );
   }
 
-  function toggleRole(role: string) {
+  function toggleRole(field: "critical_notification_roles" | "it_escalation_roles", role: string) {
     if (!form) return;
-    const has = form.critical_notification_roles.includes(role);
-    const next = has
-      ? form.critical_notification_roles.filter((r) => r !== role)
-      : [...form.critical_notification_roles, role];
-    setForm({ ...form, critical_notification_roles: next });
+    const has = form[field].includes(role);
+    const next = has ? form[field].filter((r) => r !== role) : [...form[field], role];
+    setForm({ ...form, [field]: next });
   }
 
   async function save() {
@@ -119,11 +119,15 @@ export function NotificationSettingsPage() {
       if (form.critical_notification_roles.length === 0) {
         throw new Error("At least one role must be selected for critical notifications");
       }
+      if (form.it_escalation_roles.length === 0) {
+        throw new Error("At least one role must be selected for IT escalation");
+      }
       const patch = {
         escalation_threshold_minutes: positiveInt(form.escalation_threshold_minutes, "Escalation threshold"),
         max_escalations: positiveInt(form.max_escalations, "Max escalations"),
         vehicle_dark_critical: form.vehicle_dark_critical,
         critical_notification_roles: form.critical_notification_roles as NotificationSettings["critical_notification_roles"],
+        it_escalation_roles: form.it_escalation_roles as NotificationSettings["it_escalation_roles"],
         order_stall_hours: positiveInt(form.order_stall_hours, "Order stall hours"),
         idle_hours: positiveInt(form.idle_hours, "Idle hours"),
         delay_buffer_minutes: positiveInt(form.delay_buffer_minutes, "Delay buffer"),
@@ -203,7 +207,29 @@ export function NotificationSettingsPage() {
                     <input
                       type="checkbox"
                       checked={form.critical_notification_roles.includes(role)}
-                      onChange={() => toggleRole(role)}
+                      onChange={() => toggleRole("critical_notification_roles", role)}
+                    />
+                    {role}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <h3 style={{ fontSize: 14, marginTop: 24 }}>IT escalation roles</h3>
+            <div style={fieldRowStyle}>
+              <p style={{ ...helpStyle, margin: 0 }}>
+                Who gets paged for system/infrastructure alerts specifically (connectivity issues, low disk space, a
+                crew-reported IT problem) — separate from the broader critical-notification roles above, so an infra
+                problem reaches whoever actually handles IT rather than the whole management group. At least one
+                required.
+              </p>
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" as const }}>
+                {CREW_ROLES.map((role) => (
+                  <label key={role} style={checkboxRowStyle}>
+                    <input
+                      type="checkbox"
+                      checked={form.it_escalation_roles.includes(role)}
+                      onChange={() => toggleRole("it_escalation_roles", role)}
                     />
                     {role}
                   </label>

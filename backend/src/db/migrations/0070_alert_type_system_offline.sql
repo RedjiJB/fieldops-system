@@ -1,0 +1,11 @@
+-- Own migration file: ALTER TYPE ... ADD VALUE can't share a transaction
+-- with other statements. Deliberately never raised live -- if the backend
+-- or Postgres is down, nothing can POST an alert to the backend to record
+-- it happened. openclaw/notifier/heartbeat.mjs detects that condition and
+-- messages IT directly over WhatsApp (bypassing the notifications table
+-- entirely, see the script's own comments), then backfills a single
+-- alerts row with both raised_at and resolved_at already set once things
+-- recover, via POST /system/offline-recovery -- purely a historical
+-- record of an outage that already ended, never a live "currently open"
+-- alert the way every other type is.
+ALTER TYPE alert_type ADD VALUE 'system_offline';

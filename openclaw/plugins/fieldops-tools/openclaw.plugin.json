@@ -87,7 +87,8 @@
       "list_pending_confirmations",
       "approve_pending_confirmation",
       "reject_pending_confirmation",
-      "report_safety_incident"
+      "report_safety_incident",
+      "report_it_issue"
     ]
   }
 }

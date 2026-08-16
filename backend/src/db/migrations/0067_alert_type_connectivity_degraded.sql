@@ -1,0 +1,11 @@
+-- Own migration file: ALTER TYPE ... ADD VALUE can't share a transaction
+-- with other statements (same constraint as prior alert_type additions).
+-- Raised by openclaw/notifier/heartbeat.mjs (a new host-side script, see
+-- ARCHITECTURE.md) when the Pi's own internet uplink is degraded --
+-- confirmed via dmesg/journalctl on 2026-08-16 that a real ~20-minute
+-- dashboard outage that night was NOT the WiFi power-save issue (fixed
+-- earlier), NOT the tunnel software, and NOT anything restart_dashboard_
+-- tunnel could fix -- it was upstream/ISP-level packet loss the Pi's own
+-- WiFi link never noticed (no deauth/reassoc events). Nothing was watching
+-- for that failure mode before this.
+ALTER TYPE alert_type ADD VALUE 'connectivity_degraded';

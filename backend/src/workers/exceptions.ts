@@ -21,6 +21,10 @@ const CRITICAL_ALERT_TYPES = new Set([
   "loadout_gap",
   "dashboard_unreachable",
   "cron_job_failed",
+  "connectivity_degraded",
+  "disk_space_low",
+  "it_issue",
+  "system_offline",
 ]);
 
 const ALERT_MESSAGES: Record<string, string> = {
@@ -33,6 +37,10 @@ const ALERT_MESSAGES: Record<string, string> = {
   maintenance_due: "An asset's preventive maintenance interval has elapsed.",
   backup_failed: "🚨 The nightly database backup failed or hasn't run recently.",
   cron_job_failed: "🚨 A scheduled check failed to run.",
+  connectivity_degraded: "🚨 The Pi's internet connection is degraded or unreachable.",
+  disk_space_low: "🚨 The Pi is running low on disk space.",
+  it_issue: "🚨 A crew member reported a system/IT issue.",
+  system_offline: "The backend was unreachable for a period and has since recovered (see alert timing for the outage window).",
 };
 
 // Nightly backup, ~24h cadence -- 30h gives a night's worth of slack before
@@ -79,16 +87,27 @@ async function alertAlreadyOpen(
 // the first caller of this outside the periodic worker tick. criticalOverride
 // exists only for vehicle_dark's settings-driven priority (see checkVehicleDark
 // below) -- every other caller omits it and gets the static CRITICAL_ALERT_TYPES
-// answer, unchanged from before.
+// answer, unchanged from before. recipientRolesOverride is the same idea for
+// *who* gets paged, not just whether it's critical -- IT-type alerts route to
+// notification_settings.it_escalation_roles instead of the default
+// critical_notification_roles broadcast; every other caller omits it and
+// keeps today's behavior. relatedRecordId is nullable for alert types with
+// no natural backing record (it_issue is a freeform crew report, not tied
+// to an order/checkout/shift) -- alertAlreadyOpen's dedup check naturally
+// no-ops on a null related_record_id (SQL `= NULL` never matches), so
+// every it_issue report creates its own alert rather than being silently
+// deduped against an earlier one, which is the right behavior for
+// independent freeform reports.
 export async function raiseAlert(
   client: PoolClient,
   type: string,
   siteId: string | null,
-  relatedRecordId: string,
+  relatedRecordId: string | null,
   message?: string,
   criticalOverride?: boolean,
+  recipientRolesOverride?: string[],
 ): Promise<void> {
-  if (await alertAlreadyOpen(client, type, relatedRecordId)) return;
+  if (relatedRecordId !== null && (await alertAlreadyOpen(client, type, relatedRecordId))) return;
   await client.query(`INSERT INTO alerts (type, site_id, related_record_id) VALUES ($1, $2, $3)`, [
     type,
     siteId,
@@ -101,6 +120,7 @@ export async function raiseAlert(
     message ?? ALERT_MESSAGES[type] ?? `Alert raised: ${type}.`,
     "alert",
     relatedRecordId,
+    recipientRolesOverride,
   );
 }
 

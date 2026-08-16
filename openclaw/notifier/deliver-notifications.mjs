@@ -55,18 +55,32 @@ async function backendFetch(path, init) {
 // site-scopes an alert to "their" site) -- now lives in
 // notification_settings.critical_notification_roles, editable from the
 // dashboard's Notification Settings page without a code change or redeploy.
-async function getRecipients() {
-  const settings = await backendFetch("/notification-settings");
-  const roles = settings.critical_notification_roles;
+//
+// `roles` is now a parameter rather than always reading
+// critical_notification_roles directly -- a notification can carry its own
+// recipient_roles_override (e.g. IT-type alerts routing to
+// it_escalation_roles/"owner" instead of the broader management broadcast,
+// see backend/src/workers/exceptions.ts's raiseAlert). Resolved per
+// notification in main() below rather than once globally, since different
+// pending notifications in the same run can have different overrides.
+async function resolveRecipients(roles) {
   const phones = new Set();
   for (const role of roles) {
     const members = await backendFetch(`/crew-members?role=${role}&active=true`);
     for (const m of members) if (m.phone) phones.add(m.phone);
   }
   if (phones.size === 0) {
-    console.error(`No active crew member found with role in [${roles.join(", ")}] -- nowhere to deliver critical notifications.`);
+    console.error(`No active crew member found with role in [${roles.join(", ")}] -- nowhere to deliver this notification.`);
   }
   return [...phones];
+}
+
+async function recipientsFor(notification, defaultRoles) {
+  const roles =
+    notification.recipient_roles_override && notification.recipient_roles_override.length > 0
+      ? notification.recipient_roles_override
+      : defaultRoles;
+  return resolveRecipients(roles);
 }
 
 // The exact JSON field name for a sent message's id is unconfirmed as of
@@ -89,11 +103,14 @@ function sendWhatsApp(target, message) {
 }
 
 async function main() {
-  const recipients = await getRecipients();
-  if (recipients.length === 0) return; // already logged in getRecipients()
+  const settings = await backendFetch("/notification-settings");
+  const defaultRoles = settings.critical_notification_roles;
 
   const pending = await backendFetch("/notifications/pending");
   for (const notification of pending) {
+    const recipients = await recipientsFor(notification, defaultRoles);
+    if (recipients.length === 0) continue; // already logged in resolveRecipients()
+
     // One notifications row still means one delivered_at/whatsapp_message_id
     // -- the acknowledgment schema was never designed for per-recipient
     // tracking, and still isn't here. First successful send's id is what
@@ -142,6 +159,9 @@ async function main() {
 
   const escalations = await backendFetch("/notifications/escalation-candidates");
   for (const notification of escalations) {
+    const recipients = await recipientsFor(notification, defaultRoles);
+    if (recipients.length === 0) continue;
+
     let anySucceeded = false;
     for (const target of recipients) {
       try {

@@ -1376,5 +1376,21 @@ export default defineToolPlugin({
         });
       },
     }),
+    tool({
+      name: "report_it_issue",
+      label: "Report IT Issue",
+      description:
+        "Push an instant critical alert to IT for a system/technical problem -- the dashboard is broken, the WhatsApp bot is acting up, a device won't connect, anything infrastructure-related. Not for physical safety (use report_safety_incident) and not a business/operational complaint (those go through normal conversation). See AGENTS.md's 'Escalating an IT issue' -- overrides confirm-before-execute, call it immediately once you understand the problem.",
+      parameters: Type.Object({
+        message: Type.String({ description: "Brief summary of the problem reported." }),
+        crew_member_id: Type.Optional(Type.String({ description: "The reporting crew member's UUID, if resolved." })),
+      }),
+      async execute({ message, crew_member_id }, config) {
+        return callBackend(config, "/system/it-issue", {
+          method: "POST",
+          body: JSON.stringify({ message, crew_member_id }),
+        });
+      },
+    }),
   ],
 });

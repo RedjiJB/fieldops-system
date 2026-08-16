@@ -13,10 +13,16 @@ export async function insertNotification(
   message: string,
   sourceType: string,
   sourceId: string | null,
+  // NULL (omitted) means "use notification_settings.critical_notification_roles
+  // as always" -- only set this when a specific source needs a different
+  // audience than the default critical broadcast (e.g. IT-type alerts
+  // routing to it_escalation_roles instead). See deliver-notifications.mjs's
+  // getRecipients(), which checks this per-notification.
+  recipientRolesOverride?: string[],
 ): Promise<string> {
   const result = await db.query(
-    `INSERT INTO notifications (priority, message, source_type, source_id) VALUES ($1, $2, $3, $4) RETURNING id`,
-    [priority, message, sourceType, sourceId],
+    `INSERT INTO notifications (priority, message, source_type, source_id, recipient_roles_override) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [priority, message, sourceType, sourceId, recipientRolesOverride ?? null],
   );
   return result.rows[0].id;
 }

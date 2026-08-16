@@ -44,6 +44,7 @@ notificationSettingsRouter.patch(
       max_escalations,
       vehicle_dark_critical,
       critical_notification_roles,
+      it_escalation_roles,
       order_stall_hours,
       idle_hours,
       delay_buffer_minutes,
@@ -97,6 +98,17 @@ notificationSettingsRouter.patch(
       }
     }
 
+    if (it_escalation_roles !== undefined) {
+      if (!Array.isArray(it_escalation_roles) || it_escalation_roles.length === 0) {
+        throw new HttpError(400, "it_escalation_roles must be a non-empty array");
+      }
+      for (const role of it_escalation_roles) {
+        if (!CREW_ROLES.includes(role)) {
+          throw new HttpError(400, `it_escalation_roles: invalid role "${role}" -- must be one of: ${CREW_ROLES.join(", ")}`);
+        }
+      }
+    }
+
     const result = await pool.query(
       `UPDATE notification_settings SET
          escalation_threshold_minutes = COALESCE($1, escalation_threshold_minutes),
@@ -110,6 +122,7 @@ notificationSettingsRouter.patch(
          wind_speed_threshold_kmh = COALESCE($9, wind_speed_threshold_kmh),
          daily_overtime_hours = COALESCE($10, daily_overtime_hours),
          break_required_after_hours = COALESCE($11, break_required_after_hours),
+         it_escalation_roles = COALESCE($12, it_escalation_roles),
          updated_at = now()
        RETURNING *`,
       [
@@ -124,6 +137,7 @@ notificationSettingsRouter.patch(
         wind_speed_threshold_kmh ?? null,
         daily_overtime_hours ?? null,
         break_required_after_hours ?? null,
+        it_escalation_roles ?? null,
       ],
     );
     res.json(result.rows[0]);
