@@ -62,26 +62,21 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    # TEMPORARY: Quick Tunnel mode (no domain registered yet) -- prints a
-    # random *.trycloudflare.com URL to `docker compose logs cloudflared`
-    # on every start; the URL changes on every restart, and there's no
-    # login/access control on it. Once a real domain exists, switch back:
-    # command: tunnel --no-autoupdate run
-    # environment: [TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}]
-    # ...and add a public hostname in the Cloudflare Zero Trust dashboard
-    # instead of relying on the printed URL. See DEPLOYMENT.md.
+    # Named tunnel, real domain (sodboysltd.org) -- replaces the earlier
+    # Quick Tunnel mode (random *.trycloudflare.com URL, rotated on every
+    # restart, no login/access control). Ingress (which hostname maps to
+    # which local service) is configured cloud-side via the tunnel's Public
+    # Hostname settings in the Cloudflare Zero Trust dashboard, not here --
+    # this container just authenticates and connects using the token.
     #
-    # --protocol http2 (undocumented flag, confirmed working -- not listed in
-    # `cloudflared tunnel --help` but accepted) forces TCP/HTTP2 instead of
-    # the QUIC/UDP default. Confirmed via cloudflared logs this tunnel was
-    # dropping every ~8-13 min with "timeout: no recent network activity" on
-    # the QUIC connection -- classic symptom of a home router's UDP NAT table
-    # timing out an idle connection. A live side-by-side test on this host
-    # showed QUIC failing the "Cloudflare API" connectivity pre-check while
-    # HTTP2 passed all pre-checks cleanly and registered without a retry.
-    # Doesn't fix the underlying "no domain yet" tradeoff (URL still rotates
-    # on restart) -- only the periodic drops within a single run.
-    command: tunnel --no-autoupdate --protocol http2 --url http://frontend:80
+    # --protocol http2 kept from the Quick Tunnel config -- confirmed live
+    # this host's QUIC/UDP connections were dropping every ~8-13 min
+    # ("timeout: no recent network activity", a home router's UDP NAT table
+    # timing out an idle connection); HTTP2 doesn't have that failure mode.
+    # Applies the same regardless of quick vs. named tunnel mode.
+    command: tunnel --no-autoupdate --protocol http2 run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     # Originally the only service with a logging cap -- added when this was
     # also getting polled every 5 minutes (openclaw/notifier/sync-dashboard-url.mjs)
     # on a `restart: unless-stopped` service with no daemon-level default.
