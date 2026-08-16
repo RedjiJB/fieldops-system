@@ -1183,14 +1183,13 @@ export default defineToolPlugin({
     // its core action -- the OpenClaw gateway (and this plugin, running
     // inside it) is a native systemd service on the Pi host, not a
     // container, so it already has real `docker` CLI access the backend
-    // container doesn't. Reuses sync-dashboard-url.mjs's own URL-extraction
-    // and health-check logic (same script the cron job runs) rather than
-    // duplicating it here.
+    // container doesn't. Reuses sync-dashboard-url.mjs's own health-check
+    // logic (same script the cron job runs) rather than duplicating it here.
     tool({
       name: "restart_dashboard_tunnel",
       label: "Restart Dashboard Tunnel",
       description:
-        "Restart the Cloudflare Quick Tunnel that serves the web dashboard, when someone reports the dashboard link isn't working. Mints a brand-new URL (Quick Tunnel URLs change on every restart) and returns it. Won't actually restart if one already happened in the last 5 minutes and is currently healthy — returns the current link instead and says so, to avoid needless churn from repeated requests. This changes real infrastructure state, so confirm with the person first before calling it, same as any other action with a real effect.",
+        "Restart the Cloudflare named tunnel that serves the web dashboard, when someone reports the dashboard link isn't working. The hostname is fixed (dashboard.sodboysltd.org) and doesn't change on restart -- this just reconnects it and confirms it's reachable again. Won't actually restart if one already happened in the last 5 minutes and is currently healthy — returns the current status instead and says so, to avoid needless churn from repeated requests. This changes real infrastructure state, so confirm with the person first before calling it, same as any other action with a real effect.",
       parameters: Type.Object({}),
       async execute(_input, config) {
         const current = (await callBackend(config, "/system/dashboard-url")) as {
@@ -1213,11 +1212,11 @@ export default defineToolPlugin({
 
         const repoDir = process.env.FIELDOPS_REPO_DIR ?? `${process.env.HOME}/fieldops-system`;
         execFileSync("docker", ["compose", "restart", "cloudflared"], { cwd: repoDir, stdio: "pipe" });
-        // Give the container time to mint the new tunnel and for it to
-        // actually become reachable before the sync script's first
-        // log-read + health check -- empirically closer to 12s than 8s
-        // end-to-end on a live test (container start + tunnel negotiation
-        // + edge propagation), not just "the container is running again."
+        // Give the container time to reconnect the tunnel and for it to
+        // actually become reachable before the sync script's health check --
+        // empirically closer to 12s than 8s end-to-end on a live test
+        // (container start + tunnel negotiation + edge propagation), not
+        // just "the container is running again."
         await new Promise((resolve) => setTimeout(resolve, 12000));
         execFileSync("node", [`${repoDir}/openclaw/notifier/sync-dashboard-url.mjs`], {
           env: { ...process.env, AGENT_SERVICE_TOKEN: config.serviceToken ?? "", DASHBOARD_URL_JUST_RESTARTED: "1" },
