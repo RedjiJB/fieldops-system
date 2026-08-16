@@ -11,6 +11,8 @@ import {
 } from "../api/client";
 import { EmptyState } from "../components/EmptyState";
 import { Button } from "../components/Button";
+import { useConfirm } from "../components/ConfirmDialog";
+import { useToast } from "../components/Toast";
 
 const pageStyle = { display: "flex", flex: 1, overflow: "hidden" };
 const listColStyle = { width: 320, borderRight: "1px solid var(--color-border)", overflowY: "auto" as const, padding: 16 };
@@ -97,6 +99,8 @@ function ItemPicker({
 }
 
 export function LoadoutsPage() {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [loadouts, setLoadouts] = useState<Loadout[]>([]);
   const [jobTypes, setJobTypes] = useState<JobType[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -171,10 +175,11 @@ export function LoadoutsPage() {
 
   async function deleteLoadout() {
     if (!detail) return;
-    if (!window.confirm(`Delete loadout "${detail.name}" and all its items?`)) return;
+    if (!(await confirm(`Delete loadout "${detail.name}" and all its items?`))) return;
     try {
       await api.deleteLoadout(detail.id);
       setLoadouts((prev) => prev.filter((l) => l.id !== detail.id));
+      toast(`Loadout "${detail.name}" deleted.`);
       setDetail(null);
       setSelectedId(null);
     } catch (err) {
@@ -220,10 +225,11 @@ export function LoadoutsPage() {
 
   async function removeItem(itemId: string, itemName: string) {
     if (!detail) return;
-    if (!window.confirm(`Remove "${itemName}" from this loadout?`)) return;
+    if (!(await confirm(`Remove "${itemName}" from this loadout?`))) return;
     try {
       await api.deleteLoadoutItem(itemId);
       setDetail({ ...detail, items: detail.items.filter((i) => i.id !== itemId) });
+      toast(`"${itemName}" removed.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove item");
     }

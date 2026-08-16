@@ -12,6 +12,7 @@ import {
   type MySiteOrder,
 } from "../api/client";
 import { StatusBadge } from "../components/StatusBadge";
+import { SkeletonRows } from "../components/Skeleton";
 
 // Deliberately not a cut-down version of the 17-tab admin Dashboard --
 // crew are on their phones mid-job, not at a desk. One page, four short
@@ -134,7 +135,7 @@ export function CrewPortalPage() {
             ))}
           </>
         ) : (
-          <p style={labelStyle}>Loading…</p>
+          <SkeletonRows count={3} />
         )}
       </section>
 
@@ -162,7 +163,7 @@ export function CrewPortalPage() {
             ))}
           </>
         ) : (
-          <p style={labelStyle}>Loading…</p>
+          <SkeletonRows count={3} />
         )}
       </section>
 
@@ -202,7 +203,7 @@ export function CrewPortalPage() {
           <section className="card">
             <h3 style={{ fontSize: 14 }}>Site roster — today</h3>
             {siteRoster === null ? (
-              <p style={labelStyle}>Loading…</p>
+              <SkeletonRows count={3} />
             ) : siteRoster.length === 0 ? (
               <p style={labelStyle}>No confirmed shift today — nothing to show.</p>
             ) : (
@@ -223,7 +224,7 @@ export function CrewPortalPage() {
           <section className="card">
             <h3 style={{ fontSize: 14 }}>Checked out at your site</h3>
             {siteCheckouts === null ? (
-              <p style={labelStyle}>Loading…</p>
+              <SkeletonRows count={3} />
             ) : siteCheckouts.length === 0 ? (
               <p style={labelStyle}>Nothing currently checked out at your site.</p>
             ) : (
@@ -239,7 +240,7 @@ export function CrewPortalPage() {
           <section className="card">
             <h3 style={{ fontSize: 14 }}>Site orders</h3>
             {siteOrders === null ? (
-              <p style={labelStyle}>Loading…</p>
+              <SkeletonRows count={3} />
             ) : siteOrders.length === 0 ? (
               <p style={labelStyle}>No orders for your site.</p>
             ) : (

@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { api, CREW_ROLES, PREFERRED_LANGUAGES, type CrewMember } from "../api/client";
 import { EmptyState } from "../components/EmptyState";
 import { Button } from "../components/Button";
+import { useConfirm } from "../components/ConfirmDialog";
+import { useToast } from "../components/Toast";
 
 const LANGUAGE_LABELS: Record<(typeof PREFERRED_LANGUAGES)[number], string> = { en: "English", fr: "French" };
 
@@ -16,6 +18,8 @@ const rowStyle = {
 const filterBarStyle = { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" as const };
 
 export function CrewPage() {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [crew, setCrew] = useState<CrewMember[]>([]);
   const [role, setRole] = useState("");
   const [active, setActive] = useState("");
@@ -69,10 +73,11 @@ export function CrewPage() {
 
   async function toggleActive(member: CrewMember) {
     const nextActive = !member.active;
-    if (!window.confirm(`Mark "${member.name}" as ${nextActive ? "active" : "inactive"}?`)) return;
+    if (!(await confirm(`Mark "${member.name}" as ${nextActive ? "active" : "inactive"}?`))) return;
     try {
       const updated = await api.updateCrewMember(member.id, { active: nextActive });
       setCrew((prev) => prev.map((c) => (c.id === member.id ? { ...c, ...updated } : c)));
+      toast(`${member.name} marked ${nextActive ? "active" : "inactive"}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update crew member");
     }

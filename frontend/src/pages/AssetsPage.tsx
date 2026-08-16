@@ -4,6 +4,8 @@ import { api, ASSET_DIRECTLY_SETTABLE_STATUSES, type Asset } from "../api/client
 import { EmptyState } from "../components/EmptyState";
 import { Button } from "../components/Button";
 import { StatusBadge } from "../components/StatusBadge";
+import { useConfirm } from "../components/ConfirmDialog";
+import { useToast } from "../components/Toast";
 
 const rowStyle = {
   display: "flex",
@@ -80,6 +82,8 @@ function MaintenanceControls({
 }
 
 export function AssetsPage() {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
   const [status, setStatus] = useState("");
@@ -123,10 +127,11 @@ export function AssetsPage() {
   }
 
   async function onChangeStatus(asset: Asset, newStatus: string) {
-    if (!window.confirm(`Change "${asset.name}" status to "${newStatus}"?`)) return;
+    if (!(await confirm(`Change "${asset.name}" status to "${newStatus}"?`))) return;
     try {
       const updated = await api.updateAssetStatus(asset.id, newStatus);
       setAssets((prev) => prev.map((a) => (a.id === asset.id ? { ...a, ...updated } : a)));
+      toast(`${asset.name} marked ${newStatus}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update asset status");
     }
@@ -142,10 +147,11 @@ export function AssetsPage() {
   }
 
   async function onLogService(asset: Asset) {
-    if (!window.confirm(`Log "${asset.name}" as serviced today?`)) return;
+    if (!(await confirm(`Log "${asset.name}" as serviced today?`))) return;
     try {
       const updated = await api.logAssetService(asset.id);
       setAssets((prev) => prev.map((a) => (a.id === asset.id ? { ...a, ...updated } : a)));
+      toast(`${asset.name} logged as serviced.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log service");
     }
@@ -158,7 +164,7 @@ export function AssetsPage() {
   async function onBulkChangeStatus() {
     if (!bulkStatus || selectedIds.size === 0) return;
     const ids = [...selectedIds];
-    if (!window.confirm(`Change ${ids.length} selected asset${ids.length === 1 ? "" : "s"} to "${bulkStatus}"?`)) return;
+    if (!(await confirm(`Change ${ids.length} selected asset${ids.length === 1 ? "" : "s"} to "${bulkStatus}"?`))) return;
     setBulkApplying(true);
     setError(null);
     try {
@@ -172,7 +178,10 @@ export function AssetsPage() {
       setAssets((prev) => prev.map((a) => (updatedById.has(a.id) ? { ...a, ...updatedById.get(a.id) } : a)));
       setSelectedIds((prev) => new Set([...prev].filter((id) => !updatedById.has(id))));
       if (failedCount > 0) setError(`${failedCount} of ${ids.length} assets failed to update.`);
-      else setBulkStatus("");
+      else {
+        setBulkStatus("");
+        toast(`${updatedById.size} asset${updatedById.size === 1 ? "" : "s"} updated.`);
+      }
     } finally {
       setBulkApplying(false);
     }

@@ -4,6 +4,8 @@ import { api, PO_STATUSES, type PurchaseOrder, type PurchaseOrderDetail, type Ve
 import { EmptyState } from "../components/EmptyState";
 import { Button } from "../components/Button";
 import { StatusBadge } from "../components/StatusBadge";
+import { useConfirm } from "../components/ConfirmDialog";
+import { useToast } from "../components/Toast";
 
 function poStatusTone(status: (typeof PO_STATUSES)[number]): "neutral" | "warn" | "good" {
   if (status === PO_STATUSES[0]) return "neutral";
@@ -112,6 +114,8 @@ function VendorsSection() {
 }
 
 function PurchaseOrdersSection() {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [status, setStatus] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -152,6 +156,7 @@ function PurchaseOrdersSection() {
     try {
       await api.sendPurchaseOrder(detail.id, sentTo);
       await refreshDetail();
+      toast(`Purchase order sent to ${sentTo}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send purchase order");
     }
@@ -159,10 +164,11 @@ function PurchaseOrdersSection() {
 
   async function markFulfilled() {
     if (!detail) return;
-    if (!window.confirm(`Mark PO for "${detail.vendor_name ?? "unknown vendor"}" as fulfilled?`)) return;
+    if (!(await confirm(`Mark PO for "${detail.vendor_name ?? "unknown vendor"}" as fulfilled?`))) return;
     try {
       await api.markPurchaseOrderFulfilled(detail.id);
       await refreshDetail();
+      toast("Purchase order marked fulfilled.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to mark fulfilled");
     }

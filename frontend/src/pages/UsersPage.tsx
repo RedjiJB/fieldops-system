@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { api, USER_ROLES, type User } from "../api/client";
 import { EmptyState } from "../components/EmptyState";
 import { Button } from "../components/Button";
+import { useConfirm } from "../components/ConfirmDialog";
+import { useToast } from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
 
 const rowStyle = {
@@ -108,6 +110,8 @@ function ResetPasswordInline({ user }: { user: User }) {
 }
 
 export function UsersPage() {
+  const confirm = useConfirm();
+  const toast = useToast();
   const { user: me } = useAuth();
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
@@ -143,10 +147,11 @@ export function UsersPage() {
 
   async function toggleActive(u: User) {
     const nextActive = !u.active;
-    if (!window.confirm(`Mark "${u.name}" as ${nextActive ? "active" : "inactive"}?`)) return;
+    if (!(await confirm(`Mark "${u.name}" as ${nextActive ? "active" : "inactive"}?`))) return;
     try {
       const updated = await api.updateUser(u.id, { active: nextActive });
       setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, ...updated } : x)));
+      toast(`${u.name} marked ${nextActive ? "active" : "inactive"}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update user");
     }

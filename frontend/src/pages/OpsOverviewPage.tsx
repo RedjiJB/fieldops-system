@@ -15,8 +15,11 @@ import {
 import { Button } from "../components/Button";
 import { EmptyState } from "../components/EmptyState";
 import { FleetMapCard } from "../components/FleetMapCard";
+import { SkeletonRows } from "../components/Skeleton";
 import { StatCard } from "../components/StatCard";
 import { StatusBadge } from "../components/StatusBadge";
+import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/ConfirmDialog";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -188,7 +191,7 @@ function OrderItemsPanel({ orderId }: { orderId: string }) {
     }
   }
 
-  if (!detail) return <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>Loading items…</p>;
+  if (!detail) return <SkeletonRows count={2} />;
 
   return (
     <div style={{ padding: "8px 0 8px 16px" }}>
@@ -224,6 +227,8 @@ const rowStyle = {
 };
 
 export function OpsOverviewPage({ onOpenMap }: { onOpenMap: () => void }) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -283,10 +288,11 @@ export function OpsOverviewPage({ onOpenMap }: { onOpenMap: () => void }) {
   }
 
   async function onResolve(alert: Alert) {
-    if (!window.confirm(`Resolve this "${alert.type}" alert?`)) return;
+    if (!(await confirm(`Resolve this "${alert.type}" alert?`))) return;
     try {
       await api.resolveAlert(alert.id);
       setAlerts((prev) => prev.filter((a) => a.id !== alert.id));
+      toast("Alert resolved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to resolve alert");
     }
@@ -298,7 +304,7 @@ export function OpsOverviewPage({ onOpenMap }: { onOpenMap: () => void }) {
   async function onBulkResolve() {
     const ids = [...selectedAlertIds];
     if (ids.length === 0) return;
-    if (!window.confirm(`Resolve ${ids.length} selected alert${ids.length === 1 ? "" : "s"}?`)) return;
+    if (!(await confirm(`Resolve ${ids.length} selected alert${ids.length === 1 ? "" : "s"}?`))) return;
     setBulkResolving(true);
     setError(null);
     try {
@@ -307,7 +313,11 @@ export function OpsOverviewPage({ onOpenMap }: { onOpenMap: () => void }) {
       const failedCount = results.filter((r) => r.status === "rejected").length;
       setAlerts((prev) => prev.filter((a) => !succeededIds.has(a.id)));
       setSelectedAlertIds((prev) => new Set([...prev].filter((id) => !succeededIds.has(id))));
-      if (failedCount > 0) setError(`${failedCount} of ${ids.length} alerts failed to resolve.`);
+      if (failedCount > 0) {
+        setError(`${failedCount} of ${ids.length} alerts failed to resolve.`);
+      } else {
+        toast(`${succeededIds.size} alert${succeededIds.size === 1 ? "" : "s"} resolved.`);
+      }
     } finally {
       setBulkResolving(false);
     }
@@ -316,7 +326,7 @@ export function OpsOverviewPage({ onOpenMap }: { onOpenMap: () => void }) {
   async function onBulkAcknowledge() {
     const ids = [...selectedNotificationIds];
     if (ids.length === 0) return;
-    if (!window.confirm(`Acknowledge ${ids.length} selected notification${ids.length === 1 ? "" : "s"}?`)) return;
+    if (!(await confirm(`Acknowledge ${ids.length} selected notification${ids.length === 1 ? "" : "s"}?`))) return;
     setBulkAcknowledging(true);
     setError(null);
     try {
@@ -327,7 +337,11 @@ export function OpsOverviewPage({ onOpenMap }: { onOpenMap: () => void }) {
         prev.map((n) => (succeededIds.has(n.id) ? { ...n, acknowledged_at: new Date().toISOString() } : n)),
       );
       setSelectedNotificationIds((prev) => new Set([...prev].filter((id) => !succeededIds.has(id))));
-      if (failedCount > 0) setError(`${failedCount} of ${ids.length} notifications failed to acknowledge.`);
+      if (failedCount > 0) {
+        setError(`${failedCount} of ${ids.length} notifications failed to acknowledge.`);
+      } else {
+        toast(`${succeededIds.size} notification${succeededIds.size === 1 ? "" : "s"} acknowledged.`);
+      }
     } finally {
       setBulkAcknowledging(false);
     }
@@ -336,20 +350,22 @@ export function OpsOverviewPage({ onOpenMap }: { onOpenMap: () => void }) {
   async function onAdvance(order: Order) {
     const next = nextStatus(order.status);
     if (!next) return;
-    if (!window.confirm(`Advance order ${order.id.slice(0, 8)} from "${order.status}" to "${next}"?`)) return;
+    if (!(await confirm(`Advance order ${order.id.slice(0, 8)} from "${order.status}" to "${next}"?`))) return;
     try {
       const updated = await api.advanceOrder(order.id, next);
       setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
+      toast(`Order advanced to "${next}".`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to advance order");
     }
   }
 
   async function onAcknowledge(notification: Notification) {
-    if (!window.confirm("Acknowledge this notification?")) return;
+    if (!(await confirm("Acknowledge this notification?"))) return;
     try {
       const updated = await api.acknowledgeNotification(notification.id);
       setNotifications((prev) => prev.map((n) => (n.id === notification.id ? updated : n)));
+      toast("Notification acknowledged.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to acknowledge notification");
     }

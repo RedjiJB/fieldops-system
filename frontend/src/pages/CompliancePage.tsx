@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type PeriodCloseSummary, type SpendRecord } from "../api/client";
+import { SkeletonRows } from "../components/Skeleton";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
 
@@ -110,7 +111,7 @@ function PeriodCloseSection() {
       {!dateFrom || !dateTo ? (
         <p style={{ color: "var(--color-text-muted)" }}>Pick both a start and end date to see a rollup.</p>
       ) : !summary ? (
-        <p style={{ color: "var(--color-text-muted)" }}>Loading…</p>
+        <SkeletonRows count={4} />
       ) : (
         <>
           <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" as const }}>

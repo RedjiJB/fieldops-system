@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, CREW_ROLES, type NotificationSettings } from "../api/client";
+import { SkeletonRows } from "../components/Skeleton";
 import { useAuth } from "../context/AuthContext";
 
 const fieldRowStyle = { display: "flex", flexDirection: "column" as const, gap: 4, marginBottom: 16 };
@@ -156,7 +157,7 @@ export function NotificationSettingsPage() {
         {saved && !error && <div style={{ color: "var(--color-status-good)", fontSize: 13, marginBottom: 12 }}>Saved.</div>}
 
         {!settings || !form ? (
-          <p style={{ color: "var(--color-text-muted)" }}>Loading…</p>
+          <SkeletonRows count={4} />
         ) : (
           <>
             <h3 style={{ fontSize: 14, marginTop: 24 }}>Escalation</h3>

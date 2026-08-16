@@ -27,6 +27,8 @@ import {
 import { useEffect, useRef, useState } from "react";
 import logo from "./assets/logo.png";
 import { AppBackdrop } from "./components/AppBackdrop";
+import { ConfirmProvider } from "./components/ConfirmDialog";
+import { ToastProvider } from "./components/Toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { AssetsPage } from "./pages/AssetsPage";
@@ -226,12 +228,16 @@ function Routed() {
 
 export function App() {
   return (
-    <AuthProvider>
-      {/* Mounted once at the root, not per-page: it's position:fixed with a
-          negative z-index, so a per-page wrapper would create a stacking
-          context and trap it behind that page's own content. */}
-      <AppBackdrop />
-      <Routed />
-    </AuthProvider>
+    <ToastProvider>
+      <ConfirmProvider>
+        <AuthProvider>
+          {/* Mounted once at the root, not per-page: it's position:fixed with a
+              negative z-index, so a per-page wrapper would create a stacking
+              context and trap it behind that page's own content. */}
+          <AppBackdrop />
+          <Routed />
+        </AuthProvider>
+      </ConfirmProvider>
+    </ToastProvider>
   );
 }
