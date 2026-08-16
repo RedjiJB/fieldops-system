@@ -33,7 +33,7 @@
       "log_document", "list_documents", "list_expiring_documents", "classify_document", "list_missing_receipts",
       "get_dashboard_url", "restart_dashboard_tunnel", "send_dashboard_login_link", "get_backup_status", "get_model_usage_summary",
       "list_my_spend_records", "dispute_rejected_claim",
-      "list_notifications", "acknowledge_notification", "report_safety_incident", "report_it_issue",
+      "list_notifications", "acknowledge_notification", "report_safety_incident", "report_it_issue", "send_role_digest",
       "list_pending_confirmations", "approve_pending_confirmation", "reject_pending_confirmation"
     ],
     "media": {

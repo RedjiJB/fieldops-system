@@ -1375,6 +1375,61 @@ export default defineToolPlugin({
         });
       },
     }),
+    // The only tool here that sends a WhatsApp message directly rather than
+    // returning data for the agent's own reply to carry -- needed because a
+    // single agent turn only has one outbound "announce" target (whatever
+    // the triggering cron's `delivery.to` is set to), so fanning a message
+    // out to several *other* people/numbers has no path except sending it
+    // explicitly, mid-turn, the same way the host notifier scripts do.
+    // Shells out to the `openclaw` CLI already on this host (this plugin
+    // runs as part of the same native systemd service, not a container --
+    // see restart_dashboard_tunnel's `docker` shell-out just above for the
+    // same reasoning), reusing the exact `message send` invocation
+    // deliver-notifications.mjs already relies on rather than inventing a
+    // second way to deliver WhatsApp messages.
+    //
+    // Narrowly scoped on purpose: this exists for the three scheduled
+    // digest crons (see AGENTS.md's "Scheduled digests: group vs. DM") to
+    // DM the full-detail version to management/owner/IT before posting a
+    // basic version to the group as their own final reply -- never call
+    // this from a normal conversation, even at management's request; that
+    // would let one person trigger a broadcast to everyone else's phone.
+    tool({
+      name: "send_role_digest",
+      label: "Send Role Digest",
+      description:
+        "Send a WhatsApp message directly to every active crew member holding any of the given roles -- ONLY call this from within the three scheduled digest routines (morning/midday/end-of-day), to DM the full-detail version to management/owner/IT before your own final reply (which goes to the crew group) drops down to the basic, least-privileged version. Never call this in response to a conversational request, even from management or owner -- it messages other people's phones directly and has no place in an ordinary reply.",
+      parameters: Type.Object({
+        roles: Type.Array(Type.String(), { description: "Crew roles to DM, e.g. [\"management\", \"owner\", \"IT\"]." }),
+        message: Type.String({ description: "The full-detail digest text to send, verbatim, to each matching crew member." }),
+      }),
+      async execute({ roles, message }, config) {
+        const seenPhones = new Set<string>();
+        for (const role of roles) {
+          const result = await callBackend(config, `/crew-members?role=${encodeURIComponent(role)}&active=true`);
+          if (!Array.isArray(result)) continue;
+          for (const member of result as { phone?: string }[]) {
+            if (member.phone) seenPhones.add(member.phone);
+          }
+        }
+        let sent = 0;
+        const failures: string[] = [];
+        for (const phone of seenPhones) {
+          try {
+            execFileSync(
+              process.env.OPENCLAW_BIN ?? "openclaw",
+              ["message", "send", "--channel", "whatsapp", "--target", phone, "--message", message, "--json"],
+              { stdio: "pipe" },
+            );
+            sent += 1;
+          } catch {
+            failures.push(phone);
+          }
+        }
+        return { sent_to: sent, recipient_count: seenPhones.size, failures };
+      },
+    }),
+
     tool({
       name: "report_it_issue",
       label: "Report IT Issue",
