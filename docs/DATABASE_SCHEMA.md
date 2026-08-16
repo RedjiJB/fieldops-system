@@ -175,7 +175,8 @@ CREATE TABLE checkouts (
   damage_note        TEXT,
   photo_url          TEXT,
   returned_by         UUID REFERENCES crew_members(id), -- added in 0039; mutually exclusive with returned_by_user_id
-  returned_by_user_id UUID REFERENCES users(id)
+  returned_by_user_id UUID REFERENCES users(id),
+  import_source       TEXT -- added in 0066, same meaning as shifts.import_source. Column exists but is never actually populated in practice: the WhatsApp chat-history import's checkout candidates are text-only (a freeform tool keyword like "roller", no asset reference) and are deliberately never written here, since asset_id above is a required FK with nothing real to point at -- see backend/src/db/importWhatsappHistory/applyActivity.ts's own comments
 );
 
 -- Equipment moving job-to-job directly, without passing back through a depot
@@ -258,10 +259,11 @@ CREATE TABLE crew_members (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name        TEXT NOT NULL,
   phone       TEXT UNIQUE NOT NULL, -- WhatsApp identity
-  role        TEXT NOT NULL DEFAULT 'crew', -- crew, foreman, yard, management, owner (foreman replaced crew_lead in 0048, a pure rename -- it never gated anything; owner is admin-equivalent-or-greater wherever requireAdmin/the confirmation-approval gate check role)
+  role        TEXT NOT NULL DEFAULT 'crew', -- crew, foreman, yard, management, owner, IT (foreman replaced crew_lead in 0048, a pure rename -- it never gated anything; owner is admin-equivalent-or-greater wherever requireAdmin/the confirmation-approval gate check role; IT added 2026-08-16 for the system operator's own row, kept distinct from management so notification_settings.it_escalation_roles can target them specifically without sweeping them into every broader management-tier broadcast)
   active      BOOLEAN NOT NULL DEFAULT true,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  preferred_language TEXT -- added in 0058; 'en'/'fr' or NULL (no preference set). Agent-facing only -- the WhatsApp agent converses in this language once known (see openclaw/agent-workspace/AGENTS.md's "Language" section), but it doesn't translate the dashboard UI or system-generated notification templates (alerts, dispatch, etc.), both explicitly out of scope for this pass
+  preferred_language TEXT, -- added in 0058; 'en'/'fr' or NULL (no preference set). Agent-facing only -- the WhatsApp agent converses in this language once known (see openclaw/agent-workspace/AGENTS.md's "Language" section), but it doesn't translate the dashboard UI or system-generated notification templates (alerts, dispatch, etc.), both explicitly out of scope for this pass
+  deactivated_at TIMESTAMPTZ -- added in 0065. No way to know *when* someone was deactivated before this, only the boolean. Needed for the WhatsApp-history import (past crew members reconstructed from group add/remove system messages, which do have real timestamps) -- nullable, current crew members and any future deactivation via the existing PATCH route leave this NULL unless the caller sets it
 );
 
 CREATE TYPE shift_status AS ENUM ('assigned', 'confirmed', 'declined', 'no_show'); -- 'declined' covers the API's confirm-or-decline flow
@@ -275,7 +277,8 @@ CREATE TABLE shifts (
   end_time        TIME,
   status          shift_status NOT NULL DEFAULT 'assigned',
   nudged_at       TIMESTAMPTZ, -- set by openclaw/notifier/nudge-shifts.mjs once a confirm/decline reminder is sent, so a same-evening cron re-run doesn't double-nudge
-  job_id          UUID REFERENCES jobs(id) -- nullable; only set when the dispatch message identified a job type
+  job_id          UUID REFERENCES jobs(id), -- nullable; only set when the dispatch message identified a job type
+  import_source   TEXT -- added in 0066. NULL means system-captured/real (an agent tool call, a dashboard action); a non-NULL value (e.g. 'whatsapp_history_import') means reconstructed from historical chat text and should never be treated as equivalent to a real dispatch assignment -- see backend/src/db/importWhatsappHistory/'s own comments
 );
 
 CREATE TYPE timeclock_event AS ENUM ('in', 'break_start', 'break_end', 'out');
@@ -286,7 +289,8 @@ CREATE TABLE timeclock_entries (
   event_type        timeclock_event NOT NULL,
   site_id           UUID REFERENCES sites(id),
   timestamp         TIMESTAMPTZ NOT NULL DEFAULT now(),
-  geofence_verified BOOLEAN NOT NULL DEFAULT false
+  geofence_verified BOOLEAN NOT NULL DEFAULT false,
+  import_source     TEXT -- same meaning/reasoning as shifts.import_source above
 );
 ```
 
@@ -352,7 +356,7 @@ CREATE TABLE documents (
 The exceptions engine's output — see [EXCEPTION_HANDLING.md](EXCEPTION_HANDLING.md). This table doesn't own operational data; it watches for deviations elsewhere and raises flags.
 
 ```sql
-CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue', 'vehicle_dark', 'weather', 'dashboard_unreachable');
+CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue', 'vehicle_dark', 'weather', 'dashboard_unreachable', 'maintenance_due', 'backup_failed', 'cron_job_failed', 'connectivity_degraded', 'disk_space_low', 'it_issue', 'system_offline'); -- last four added 0067-0070 (2026-08-16) for IT monitoring/escalation, see below
 
 CREATE TABLE alerts (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -372,9 +376,11 @@ CREATE TABLE alerts (
 
 `backup_failed` is raised two ways (see `backup_status` below): immediately by `POST /system/backup-status` on an explicit `{success: false}` report, or by the exceptions worker's periodic `checkBackupStale` when `last_success_at` is null or more than ~30 hours old — the latter is what catches the backup cron job not running at all, which the former can never report on its own.
 
+`connectivity_degraded`, `disk_space_low`, `it_issue`, and `system_offline` (added 2026-08-16, migrations `0067`-`0070`) are the IT-monitoring alert types — see [ARCHITECTURE.md](ARCHITECTURE.md#it-monitoring-and-escalation). The first three route through `POST /system/connectivity-health`, `/system/disk-health`, `/system/it-issue` respectively, using `raiseAlert`'s `recipientRolesOverride` parameter (see `notifications` below) to target `notification_settings.it_escalation_roles` instead of the broader `critical_notification_roles`. `connectivity_degraded`/`disk_space_low` use a fixed, hardcoded `related_record_id` (not a real row) so a still-ongoing problem dedupes against its own still-open alert on repeated polls rather than spawning a new row every cycle. `system_offline` is different in kind: it's the one alert type never raised "live" through this table's normal path, since by definition the backend was unreachable while the outage was happening — `openclaw/notifier/heartbeat.mjs` messages IT directly over WhatsApp the moment it detects this, bypassing the backend entirely, then calls `POST /system/offline-recovery` once recovery is confirmed to backfill a row with both `raised_at` and `resolved_at` already known.
+
 ## dashboard_url
 
-Tracks the current Cloudflare Quick Tunnel URL for the web dashboard and whether it's currently reachable. This repo runs Quick Tunnel mode (no domain registered — see [DEPLOYMENT.md](DEPLOYMENT.md)), which mints a new random `*.trycloudflare.com` URL on every restart and has no uptime guarantee, so this can't be a static value anywhere. Singleton table — exactly one row, seeded by migration, always `UPDATE`d afterward. `openclaw/notifier/sync-dashboard-url.mjs` (host-side, polls every 5 minutes — no container in this stack has Docker socket access) is the only writer; the agent's `get_dashboard_url` tool is the only reader.
+Tracks the current dashboard URL and whether it's currently reachable. As of 2026-08-16 this repo runs a **named** Cloudflare Tunnel on a real domain (`dashboard.sodboysltd.org` — see [DEPLOYMENT.md](DEPLOYMENT.md)), a stable URL that no longer changes on every restart, unlike the earlier Quick Tunnel mode this table was originally built for. Kept anyway: the tunnel connector can still drop and reconnect independent of the hostname, so reachability tracking is still real work, and `get_dashboard_url` stays the one source of truth the agent reads regardless of which tunnel mode is running underneath. Singleton table — exactly one row, seeded by migration, always `UPDATE`d afterward. `openclaw/notifier/sync-dashboard-url.mjs` (host-side, polls every 5 minutes — no container in this stack has Docker socket access) is the only writer; the agent's `get_dashboard_url` tool is the only reader.
 
 `checked_at` is touched on **every** poll, restart or not — it cannot answer "was this just restarted." `last_restarted_at` (added `0050`) is the field that actually can: it's set only when `POST /system/dashboard-url/health` is called with `{restarted: true}`, which only ever happens from `restart_dashboard_tunnel`'s own post-restart sync invocation, never the routine cron run. `restart_dashboard_tunnel`'s 5-minute cooldown checks `last_restarted_at`, not `checked_at` — an earlier version of this checked `checked_at` and was effectively always "on cooldown" once the cron job existed, since the cron touches it every 5 minutes regardless of restarts. Fixed after a live test surfaced it.
 
@@ -450,7 +456,8 @@ CREATE TABLE notifications (
   whatsapp_message_id    TEXT, -- captured at delivery, for matching a later quote-reply back to this row (see AGENTS.md)
   escalated_count        INTEGER NOT NULL DEFAULT 0,
   last_escalated_at      TIMESTAMPTZ,
-  send_attempts          INTEGER NOT NULL DEFAULT 0 -- added in 0053; caps retries of an undelivered row, see below
+  send_attempts          INTEGER NOT NULL DEFAULT 0, -- added in 0053; caps retries of an undelivered row, see below
+  recipient_roles_override TEXT[] -- added in 0072. NULL (the default) means "use notification_settings.critical_notification_roles", the original behavior. Non-NULL lets one notification route to a different role list than the broadcast default -- IT-type alerts (connectivity_degraded/disk_space_low/it_issue/system_offline) set this to it_escalation_roles instead, so an infra problem pages the person who can actually act on it rather than the whole management group. See backend/src/workers/exceptions.ts's raiseAlert and openclaw/notifier/deliver-notifications.mjs's resolveRecipients.
 );
 ```
 
@@ -468,6 +475,7 @@ CREATE TABLE notification_settings (
   max_escalations              INTEGER NOT NULL DEFAULT 3,
   vehicle_dark_critical        BOOLEAN NOT NULL DEFAULT false,
   critical_notification_roles  TEXT[] NOT NULL DEFAULT ARRAY['management', 'owner'],
+  it_escalation_roles          TEXT[] NOT NULL DEFAULT ARRAY['owner'], -- added in 0071. Same shape as critical_notification_roles above, but for IT-type alerts specifically (see notifications.recipient_roles_override and the alert_type additions below) -- kept separate so IT problems can be routed narrowly (default: just the owner/operator) without also widening or narrowing the broader management broadcast
   order_stall_hours            INTEGER NOT NULL DEFAULT 24,
   idle_hours                   INTEGER NOT NULL DEFAULT 2,
   delay_buffer_minutes         INTEGER NOT NULL DEFAULT 30,
