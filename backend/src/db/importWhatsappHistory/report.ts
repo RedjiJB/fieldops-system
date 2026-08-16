@@ -39,13 +39,13 @@ export function generateReport(
   push();
   push("Reconstructed from WhatsApp's own add/removed system messages (mechanical, timestamped) plus phone numbers/leave-events manually transcribed from the group-info screenshots. The screenshot's \"Member changes\" list was itself cut off at the top (\"more\" visible above the earliest row shown) -- there may be earlier history neither source captures.");
   push();
-  push("| Name | Phone | Status | First seen | Last seen | Messages | Flags |");
-  push("|---|---|---|---|---|---|---|");
+  push("| Name (chat) | Import as | Phone | Status | First seen | Last seen | Messages | Flags |");
+  push("|---|---|---|---|---|---|---|---|");
   for (const r of roster) {
     const status = r.isVendorNotCrew ? "vendor, not crew" : r.currentlyActive ? "active" : "inactive";
     const phone = r.phone ? (r.phoneComplete ? r.phone : `${r.phone}... (incomplete)`) : "**missing**";
     push(
-      `| ${escapeCell(r.name)} | ${phone} | ${status} | ${fmtDate(r.firstSeenInChat)} | ${fmtDate(r.lastSeenInChat)} | ${r.messageCount} | ${r.flags.length ? "⚠️ " + r.flags.length : ""} |`,
+      `| ${escapeCell(r.name)} | ${r.realName ? `**${escapeCell(r.realName)}**` : "—"} | ${phone} | ${status} | ${fmtDate(r.firstSeenInChat)} | ${fmtDate(r.lastSeenInChat)} | ${r.messageCount} | ${r.flags.length ? "⚠️ " + r.flags.length : ""} |`,
     );
   }
   push();

@@ -61,6 +61,8 @@ export function extractChatMembershipEvents(messages: ParsedMessage[]): ChatMemb
 
 export interface RosterEntry {
   name: string;
+  /** Set when `name` is a WhatsApp pseudonym -- see KnownContact.realName. */
+  realName?: string;
   phone: string | null;
   phoneComplete: boolean;
   currentlyActive: boolean;
@@ -122,8 +124,13 @@ export function buildRoster(messages: ParsedMessage[]): RosterEntry[] {
       flags.push("No membership event found in either source -- appeared only as a message sender. First/last message timestamps used as a rough activity window instead of real join/leave dates.");
     }
 
+    if (known?.realName) {
+      flags.push(`"${name}" is a WhatsApp pseudonym -- import as "${known.realName}" instead.${known.note ? " " + known.note : ""}`);
+    }
+
     roster.push({
       name,
+      realName: known?.realName,
       phone: known?.phone ?? null,
       phoneComplete: known ? !known.phonePartial : false,
       currentlyActive,

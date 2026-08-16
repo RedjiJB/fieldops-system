@@ -23,10 +23,19 @@ const DATA_PATH = join(dirname(fileURLToPath(import.meta.url)), "knownContacts.l
 export interface KnownContact {
   /** Matches ParsedMessage.senderName for cross-referencing, where applicable. */
   chatName: string | null;
+  /**
+   * Set when chatName is a pseudonym/nickname rather than the person's real
+   * name (e.g. a WhatsApp display name chosen as a joke) -- when present,
+   * this is what should be used as crew_members.name on import, not
+   * chatName. chatName is never replaced outright since it's what actually
+   * appears in the parsed chat text and is required for message matching.
+   */
+  realName?: string;
   phone: string | null;
   /** True if the digits shown were cut off in the screenshot (not a full number). */
   phonePartial: boolean;
   source: "screenshot_member_list" | "screenshot_contact_card";
+  note?: string;
 }
 
 export interface ScreenshotMembershipEvent {
