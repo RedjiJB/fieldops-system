@@ -53,14 +53,14 @@ export function MapPage() {
   const located = vehicles.filter((v) => v.latest_location);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {error && <div style={{ padding: 8, color: "var(--color-status-bad)" }}>{error}</div>}
       {lastUpdated && (
         <div style={{ padding: "4px 8px", fontSize: 12, color: "var(--color-text-muted)" }}>
           Live — updated {lastUpdated.toLocaleTimeString()}
         </div>
       )}
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
         <MapContainer center={DEFAULT_CENTER} zoom={11} style={{ height: "100%", width: "100%" }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
