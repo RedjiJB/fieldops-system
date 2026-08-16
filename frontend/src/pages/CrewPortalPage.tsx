@@ -21,14 +21,14 @@ import { SkeletonRows } from "../components/Skeleton";
 // other page in this app.
 //
 // Foreman/management/owner-role crew sessions get three more sections
-// (site roster, site checkouts, site orders) -- "a little more" per the
-// original ask, scoped concretely for foreman specifically. management's
-// "even more" is meant to come from a real dashboard account instead (see
-// AGENTS.md's "Sharing the dashboard link"), but a management-role crew
-// session shouldn't see less than foreman if that's the path they end up
-// on, same additive-not-restrictive principle used for owner elsewhere
-// this session. Still one page, not a second admin-style surface -- the
-// extra sections just render below the base four when they apply.
+// (site roster, site checkouts, site orders) -- but not identically scoped
+// data. foreman is "a little more": their own site(s) only. management/
+// owner is "even more": every active site, org-wide -- see
+// backend/src/routes/me.ts's resolveVisibleSiteIds for where that split
+// actually happens; this frontend set only controls which sessions see the
+// three extra sections at all, not how much data lands in them. Still one
+// page, not a second admin-style surface -- the extra sections just render
+// below the base four when they apply.
 const FOREMAN_TIER_ROLES = new Set(["foreman", "management", "owner"]);
 
 const rowStyle = { display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 14 };

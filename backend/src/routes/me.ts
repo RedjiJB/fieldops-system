@@ -16,32 +16,40 @@ function requireCrewSession(req: import("express").Request): string {
   return req.auth.crewMemberId;
 }
 
-// Foreman's "a little more" tier, scoped this session per an explicit ask:
-// site roster, site checkouts, site pending orders. management gets the
-// same tier here (their "even more" is meant to come from a real users
-// account instead -- see AGENTS.md's "Sharing the dashboard link" -- but a
-// management-role crew session should never see LESS than foreman, same
-// "additive, never a separate restricted path" principle as the owner/admin
-// widening earlier this session). yard is deliberately excluded -- nothing
-// was asked for it.
+// Foreman's "a little more" tier: site roster, site checkouts, site
+// pending orders. management/owner also reach these three routes -- but,
+// corrected 2026-08-16 after review, NOT scoped identically to foreman
+// anymore (see resolveVisibleSiteIds below). foreman stays scoped to
+// wherever *they themselves* have a shift today, a genuinely narrower
+// tier; management/owner see every active site's data, org-wide -- their
+// actual "even more" tier, distinct from foreman rather than a relabeled
+// copy of it. yard is deliberately excluded -- nothing was asked for it.
 const FOREMAN_TIER_ROLES = ["foreman", "management", "owner"];
+const MANAGEMENT_TIER_ROLES = ["management", "owner"];
 
-function requireForemanTierSession(req: import("express").Request): string {
+function requireForemanTierSession(req: import("express").Request): { crewMemberId: string; role: string } {
   if (req.auth?.type !== "crew") throw new HttpError(403, "Crew session required");
   if (!FOREMAN_TIER_ROLES.includes(req.auth.role)) {
     throw new HttpError(403, "This view is only available to foreman, management, or owner crew sessions");
   }
-  return req.auth.crewMemberId;
+  return { crewMemberId: req.auth.crewMemberId, role: req.auth.role };
 }
 
-// "Their site" = wherever they have a confirmed shift today -- same
-// definition backend/src/workers/exceptions.ts already uses for
+// Foreman: "their site" = wherever they have a confirmed shift today --
+// same definition backend/src/workers/exceptions.ts already uses for
 // checkWrongSite/checkVehicleDark/checkDelayedArrivals, not a fixed
 // per-person site assignment (none exists in this schema). Multiple
 // confirmed shifts today means multiple sites; none today means an empty
 // site list, and every route below returns an empty result rather than
 // erroring in that case.
-async function todaysSiteIds(crewMemberId: string): Promise<string[]> {
+//
+// management/owner: every site with any confirmed shift today, not just
+// their own -- the actual breadth difference from foreman's tier.
+async function resolveVisibleSiteIds(crewMemberId: string, role: string): Promise<string[]> {
+  if (MANAGEMENT_TIER_ROLES.includes(role)) {
+    const result = await pool.query(`SELECT DISTINCT site_id FROM shifts WHERE date = CURRENT_DATE AND status = 'confirmed'`);
+    return result.rows.map((r) => r.site_id);
+  }
   const result = await pool.query(
     `SELECT DISTINCT site_id FROM shifts WHERE crew_member_id = $1 AND date = CURRENT_DATE AND status = 'confirmed'`,
     [crewMemberId],
@@ -128,8 +136,8 @@ meRouter.get(
 meRouter.get(
   "/me/site-roster",
   asyncHandler(async (req, res) => {
-    const crewMemberId = requireForemanTierSession(req);
-    const siteIds = await todaysSiteIds(crewMemberId);
+    const { crewMemberId, role } = requireForemanTierSession(req);
+    const siteIds = await resolveVisibleSiteIds(crewMemberId, role);
     if (siteIds.length === 0) {
       res.json([]);
       return;
@@ -159,8 +167,8 @@ meRouter.get(
 meRouter.get(
   "/me/site-checkouts",
   asyncHandler(async (req, res) => {
-    const crewMemberId = requireForemanTierSession(req);
-    const siteIds = await todaysSiteIds(crewMemberId);
+    const { crewMemberId, role } = requireForemanTierSession(req);
+    const siteIds = await resolveVisibleSiteIds(crewMemberId, role);
     if (siteIds.length === 0) {
       res.json([]);
       return;
@@ -185,8 +193,8 @@ meRouter.get(
 meRouter.get(
   "/me/site-orders",
   asyncHandler(async (req, res) => {
-    const crewMemberId = requireForemanTierSession(req);
-    const siteIds = await todaysSiteIds(crewMemberId);
+    const { crewMemberId, role } = requireForemanTierSession(req);
+    const siteIds = await resolveVisibleSiteIds(crewMemberId, role);
     if (siteIds.length === 0) {
       res.json([]);
       return;
