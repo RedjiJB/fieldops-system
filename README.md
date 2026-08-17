@@ -2,7 +2,7 @@
 
 A WhatsApp-native inventory, equipment, and dispatch system for a landscaping/construction crew — built so that scheduling, equipment loadouts, material ordering, and check-ins run through conversational messages instead of scattered group chats, spreadsheets, and memory.
 
-**Status: Proof of concept, backend + agent + dashboard v1 built.** Backend API, the WhatsApp agent (44+ tools), status digests, photo auto-logging, and a web dashboard (login + live vehicle map) are all built and deployed. See [docs/ROADMAP.md](docs/ROADMAP.md) and `openclaw/README.md` for what's done vs. still open.
+**Status: v1, demo-ready.** Backend API, the WhatsApp agent (78 tools), status digests with an IT-reviewed message-draft queue, photo auto-logging, geofence-verified check-in, shift reminders, crew/vehicle live location with staleness alerts, shift extension, carpool coordination, and a full web dashboard (not just the map) are all built and deployed. See [CHANGELOG.md](CHANGELOG.md) for how it got here, [docs/ROADMAP.md](docs/ROADMAP.md) for what's done vs. still open, and `openclaw/README.md` for the agent/plugin layer.
 
 ## What this is
 
@@ -22,6 +22,8 @@ This system was designed directly from a real WhatsApp export from an active cre
 ```
 fieldops-system/
 ├── README.md                    ← you are here
+├── CHANGELOG.md                 ← full build history, dated
+├── CONTRIBUTING.md              ← dev setup, testing, deploy process, conventions
 ├── docker-compose.yml           ← Postgres + backend + OpenClaw + Cloudflare Tunnel
 ├── .env.example                 ← required environment variables
 ├── .gitignore
@@ -35,13 +37,16 @@ fieldops-system/
 │   ├── USER_STORIES.md          ← full user stories by role
 │   ├── DEPLOYMENT.md            ← self-hosting setup (Pi + Docker + Cloudflare Tunnel)
 │   ├── SECURITY.md              ← threat model, verified findings, what's fixed vs. still open
+│   ├── DEMO_SCRIPT.md           ← timed walkthrough + WiFi-outage fallback plan
 │   └── ROADMAP.md               ← build phases + timeline
 ├── backend/                     ← Postgres schema migrations + REST API + dashboard auth
-├── frontend/                    ← web dashboard (React + Vite + Leaflet) — login + live vehicle map
-├── openclaw/                    ← OpenClaw config, agent workspace, and tool/hook plugins
+├── frontend/                    ← web dashboard (React + Vite + Leaflet) — full admin/crew/foreman UI
+├── openclaw/                    ← OpenClaw config, agent workspace, tool/hook plugins, notifier scripts, agent-tests
 │   ├── openclaw.config.example.json
 │   ├── agent-workspace/         ← the fieldops agent's system prompt (AGENTS.md, etc.)
 │   ├── plugins/                 ← fieldops-tools (agent tools), fieldops-media (WhatsApp photo hook)
+│   ├── notifier/                ← host-side cron scripts (digests, reminders, backups, monitoring)
+│   ├── agent-tests/             ← live tool-calling behavior suite (no real WhatsApp sends)
 │   └── README.md
 └── scripts/                     ← one-off tooling (QR generation, bootstrap audit helpers)
     └── README.md
@@ -66,3 +71,5 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full self-hosting setup, in
 4. [docs/GLOSSARY.md](docs/GLOSSARY.md) + [docs/LOADOUT_TEMPLATES.md](docs/LOADOUT_TEMPLATES.md) — the real-world vocabulary and kits this system has to get right
 5. [docs/EXCEPTION_HANDLING.md](docs/EXCEPTION_HANDLING.md) — the failure modes this system exists to catch
 6. [docs/ROADMAP.md](docs/ROADMAP.md) — what's built, what's next
+7. [CONTRIBUTING.md](CONTRIBUTING.md) — before making a change: local setup, testing, migrations, and the conventions this repo actually enforces
+8. [CHANGELOG.md](CHANGELOG.md) — how the system got here, in order
