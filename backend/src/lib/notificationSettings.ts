@@ -18,6 +18,7 @@ export type NotificationSettings = {
   wind_speed_threshold_kmh: number;
   daily_overtime_hours: number;
   break_required_after_hours: number;
+  crew_location_stale_minutes: number;
   updated_at: string;
 };
 

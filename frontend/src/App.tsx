@@ -4,6 +4,7 @@ import {
   Bell,
   Boxes,
   Building2,
+  Car,
   CheckSquare,
   ChevronLeft,
   ChevronRight,
@@ -33,6 +34,7 @@ import { WelcomeBanner } from "./components/WelcomeBanner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { AssetsPage } from "./pages/AssetsPage";
+import { CarpoolPage } from "./pages/CarpoolPage";
 import { CompliancePage } from "./pages/CompliancePage";
 import { ConfirmationsPage } from "./pages/ConfirmationsPage";
 import { CrewPage } from "./pages/CrewPage";
@@ -62,6 +64,7 @@ type Tab =
   | "vehicles"
   | "loadouts"
   | "vendors"
+  | "carpool"
   | "activity"
   | "reports"
   | "timesheets"
@@ -91,6 +94,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { tab: "vehicles", label: "Vehicles", icon: Truck },
       { tab: "loadouts", label: "Loadouts", icon: Boxes },
       { tab: "vendors", label: "Vendors", icon: Store },
+      { tab: "carpool", label: "Carpool", icon: Car },
     ],
   },
   {
@@ -207,6 +211,7 @@ function Dashboard() {
         {tab === "vehicles" && <VehicleHistoryPage />}
         {tab === "loadouts" && <LoadoutsPage />}
         {tab === "vendors" && <VendorsPage />}
+        {tab === "carpool" && <CarpoolPage />}
         {tab === "users" && <UsersPage />}
         {tab === "activity" && <ActivityLogPage />}
         {tab === "reports" && <ReportsPage />}

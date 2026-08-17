@@ -65,6 +65,22 @@ export type Vehicle = {
   latest_location: VehicleLocation | null;
 };
 
+export type RideRequest = {
+  id: string;
+  crew_member_id: string;
+  crew_member_name: string;
+  crew_member_phone: string;
+  request_type: "need_ride" | "offering_ride";
+  date: string;
+  site_id: string | null;
+  site_name: string | null;
+  seats_available: number | null;
+  notes: string | null;
+  status: "open" | "matched" | "cancelled";
+  matched_request_id: string | null;
+  created_at: string;
+};
+
 export type Trip = {
   id: string;
   vehicle_id: string;
@@ -598,6 +614,13 @@ export const api = {
   mySiteCheckouts: () => request<MySiteCheckout[]>("/me/site-checkouts"),
   mySiteOrders: () => request<MySiteOrder[]>("/me/site-orders"),
   vehicles: () => request<Vehicle[]>("/vehicles"),
+  rideRequests: (params?: { status?: string; date?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.date) qs.set("date", params.date);
+    const suffix = qs.toString();
+    return request<RideRequest[]>(`/ride-requests${suffix ? `?${suffix}` : ""}`);
+  },
   shiftsToday: () => request<Shift[]>(`/shifts?date=${todayIso()}`),
   createShiftsBatch: (
     shifts: {

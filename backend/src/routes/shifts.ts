@@ -1,11 +1,38 @@
+import type { PoolClient } from "pg";
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
+import { haversineDistanceMeters } from "../lib/geo.js";
 
 export const shiftsRouter = Router();
 
 export const TIMECLOCK_EVENTS = ["in", "break_start", "break_end", "out"] as const;
+
+// Server-derived, never client-asserted -- this replaces the old "trust
+// whatever boolean the agent sends" behavior. No site_id, no lat/lng, or a
+// site with no geofence configured all fall through to `false`, same
+// default as before -- there's just no path left to assert `true` without
+// actual coordinates now. Circular geofences only, same limitation as
+// exceptions.ts's checkWrongSite (geofence_polygon still isn't checked
+// anywhere in this codebase).
+export async function resolveGeofenceVerified(
+  client: PoolClient,
+  siteId: string | null | undefined,
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): Promise<boolean> {
+  if (!siteId || lat == null || lng == null) return false;
+  const result = await client.query(
+    "SELECT center_lat, center_lng, geofence_radius_m FROM sites WHERE id = $1",
+    [siteId],
+  );
+  const site = result.rows[0];
+  if (!site || site.center_lat == null || site.center_lng == null || site.geofence_radius_m == null) {
+    return false;
+  }
+  return haversineDistanceMeters(lat, lng, site.center_lat, site.center_lng) <= site.geofence_radius_m;
+}
 
 // What event can legally follow a crew member's last recorded event —
 // e.g. you can't log a break without having clocked in first. Exported for
@@ -181,10 +208,24 @@ shiftsRouter.patch(
   }),
 );
 
+// Same idempotency pattern as /nudged above, for shift-reminder.mjs's
+// 1-hour-before "starting soon" ping -- a distinct notification from the
+// evening-before confirm/decline nudge, so it gets its own column.
+shiftsRouter.patch(
+  "/shifts/:id/reminder-sent",
+  asyncHandler(async (req, res) => {
+    const result = await pool.query(`UPDATE shifts SET reminder_sent_at = now() WHERE id = $1 RETURNING *`, [
+      req.params.id,
+    ]);
+    if (!result.rows[0]) throw new HttpError(404, "Shift not found");
+    res.json(result.rows[0]);
+  }),
+);
+
 shiftsRouter.post(
   "/timeclock",
   asyncHandler(async (req, res) => {
-    const { crew_member_id, event_type, site_id, geofence_verified } = req.body;
+    const { crew_member_id, event_type, site_id, lat, lng } = req.body;
     if (!crew_member_id || !TIMECLOCK_EVENTS.includes(event_type)) {
       throw new HttpError(
         400,
@@ -213,11 +254,12 @@ shiftsRouter.post(
         );
       }
 
+      const geofenceVerified = await resolveGeofenceVerified(client, site_id, lat, lng);
       const result = await client.query(
         `INSERT INTO timeclock_entries (crew_member_id, event_type, site_id, geofence_verified)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [crew_member_id, event_type, site_id ?? null, !!geofence_verified],
+        [crew_member_id, event_type, site_id ?? null, geofenceVerified],
       );
 
       await client.query("COMMIT");

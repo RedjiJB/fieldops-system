@@ -2,6 +2,10 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
+import { metersBetween, reverseGeocode } from "../lib/geocode.js";
+
+const TELEMETRY_SOURCES = ["whatsapp_location", "obd"] as const;
+const GEOCODE_REUSE_RADIUS_METERS = 100;
 
 export const crewMembersRouter = Router();
 
@@ -112,5 +116,58 @@ crewMembersRouter.patch(
     );
     if (!result.rows[0]) throw new HttpError(404, "Crew member not found");
     res.json(result.rows[0]);
+  }),
+);
+
+// Person-level counterpart to POST /vehicles/:id/telemetry -- same
+// reverse-geocode-reuse-within-100m logic, same source enum, deliberately
+// identical shape so a WhatsApp location share can be logged here even for
+// a crew member with no assigned vehicle (or riding as a carpool
+// passenger), which had no location path at all before this.
+crewMembersRouter.post(
+  "/crew-members/:id/telemetry",
+  asyncHandler(async (req, res) => {
+    const { lat, lng, source } = req.body;
+    if (typeof lat !== "number" || typeof lng !== "number") {
+      throw new HttpError(400, "lat and lng (numbers) are required");
+    }
+    if (source && !TELEMETRY_SOURCES.includes(source)) {
+      throw new HttpError(400, `source must be one of: ${TELEMETRY_SOURCES.join(", ")}`);
+    }
+
+    const crewMember = await pool.query("SELECT id FROM crew_members WHERE id = $1", [req.params.id]);
+    if (!crewMember.rows[0]) throw new HttpError(404, "Crew member not found");
+
+    const lastPoint = await pool.query(
+      "SELECT lat, lng, address FROM crew_telemetry WHERE crew_member_id = $1 ORDER BY timestamp DESC LIMIT 1",
+      [req.params.id],
+    );
+    const last = lastPoint.rows[0] as { lat: number; lng: number; address: string | null } | undefined;
+
+    let address: string | null;
+    if (last?.address && metersBetween(lat, lng, last.lat, last.lng) < GEOCODE_REUSE_RADIUS_METERS) {
+      address = last.address;
+    } else {
+      address = await reverseGeocode(lat, lng);
+    }
+
+    const result = await pool.query(
+      `INSERT INTO crew_telemetry (crew_member_id, lat, lng, source, address)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [req.params.id, lat, lng, source ?? "whatsapp_location", address],
+    );
+    res.status(201).json(result.rows[0]);
+  }),
+);
+
+crewMembersRouter.get(
+  "/crew-members/:id/telemetry",
+  asyncHandler(async (req, res) => {
+    const result = await pool.query(
+      "SELECT * FROM crew_telemetry WHERE crew_member_id = $1 ORDER BY timestamp DESC LIMIT 1",
+      [req.params.id],
+    );
+    res.json(result.rows[0] ?? null);
   }),
 );

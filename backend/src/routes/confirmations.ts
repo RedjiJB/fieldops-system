@@ -6,7 +6,7 @@ import { asyncHandler } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/httpError.js";
 import { insertNotification } from "../lib/notify.js";
 import { requireAdmin } from "../lib/roles.js";
-import { LEGAL_NEXT_EVENTS, TIMECLOCK_EVENTS } from "./shifts.js";
+import { LEGAL_NEXT_EVENTS, resolveGeofenceVerified, TIMECLOCK_EVENTS } from "./shifts.js";
 import { PO_FULFILLABLE_STATUSES } from "./vendors.js";
 
 export const confirmationsRouter = Router();
@@ -18,6 +18,7 @@ const ACTION_TYPES = [
   "mileage_claim",
   "asset_verification",
   "purchase_order_fulfillment",
+  "shift_extension",
 ] as const;
 type ActionType = (typeof ACTION_TYPES)[number];
 
@@ -77,6 +78,10 @@ function validatePayload(actionType: ActionType, payload: Record<string, unknown
     if (!payload.asset_id) throw new HttpError(400, "payload.asset_id is required");
   } else if (actionType === "purchase_order_fulfillment") {
     if (!payload.purchase_order_id) throw new HttpError(400, "payload.purchase_order_id is required");
+  } else if (actionType === "shift_extension") {
+    if (!payload.shift_id || !payload.new_end_time) {
+      throw new HttpError(400, "payload.shift_id and payload.new_end_time are required");
+    }
   }
 }
 
@@ -183,7 +188,7 @@ confirmationsRouter.get(
 
 async function approveTimeclockEvent(client: PoolClient, pc: any): Promise<string> {
   const { crew_member_id } = pc;
-  const { event_type, site_id, geofence_verified } = pc.payload;
+  const { event_type, site_id, lat, lng } = pc.payload;
 
   // Re-runs the exact legal-transition check shifts.ts's POST /timeclock
   // does -- state may have shifted while this sat awaiting approval.
@@ -204,11 +209,16 @@ async function approveTimeclockEvent(client: PoolClient, pc: any): Promise<strin
     );
   }
 
+  // Uses the lat/lng captured at submission time, not anything live at
+  // approval time -- the manager approving this isn't the one whose
+  // location matters, and re-checking "now" would verify the wrong
+  // moment entirely.
+  const geofenceVerified = await resolveGeofenceVerified(client, site_id, lat, lng);
   const result = await client.query(
     `INSERT INTO timeclock_entries (crew_member_id, event_type, site_id, geofence_verified)
      VALUES ($1, $2, $3, $4)
      RETURNING id`,
-    [crew_member_id, event_type, site_id ?? null, !!geofence_verified],
+    [crew_member_id, event_type, site_id ?? null, geofenceVerified],
   );
   return result.rows[0].id;
 }
@@ -288,6 +298,23 @@ async function approveMileageClaim(
       reviewer.reviewedBy,
       reviewer.reviewedByUserId,
     ],
+  );
+  return result.rows[0].id;
+}
+
+// Payroll-relevant -- this is why shift_extension joined the two-party
+// pilot (see AGENTS.md) instead of staying a single-party confirm like
+// most other shift actions. new_end_time overwrites whatever end_time
+// was there before; there's no "extend by N hours" math here, the crew
+// member already stated the new end time when they requested it.
+async function approveShiftExtension(client: PoolClient, pc: any): Promise<string> {
+  const { shift_id, new_end_time } = pc.payload;
+  const existing = await client.query("SELECT * FROM shifts WHERE id = $1 FOR UPDATE", [shift_id]);
+  if (!existing.rows[0]) throw new HttpError(404, "Shift not found");
+
+  const result = await client.query(
+    `UPDATE shifts SET end_time = $2 WHERE id = $1 RETURNING id`,
+    [shift_id, new_end_time],
   );
   return result.rows[0].id;
 }
@@ -384,6 +411,8 @@ confirmationsRouter.patch(
         resultId = await approveAssetVerification(client, pc);
       } else if (pc.action_type === "purchase_order_fulfillment") {
         resultId = await approvePurchaseOrderFulfillment(client, pc, reviewer);
+      } else if (pc.action_type === "shift_extension") {
+        resultId = await approveShiftExtension(client, pc);
       } else {
         throw new HttpError(500, `Unknown action_type: ${pc.action_type}`);
       }

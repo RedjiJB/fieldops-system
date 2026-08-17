@@ -782,27 +782,26 @@ export default defineToolPlugin({
       name: "log_timeclock_event",
       label: "Log Timeclock Event",
       description:
-        "Request logging a check-in/break/check-out event for a crew member. Two-party confirm-before-execute pilot: this now requires management's confirmation before it's recorded — tell the crew member it's been sent for approval, they'll be told the outcome automatically, they don't need to check back. Events must still follow a legal sequence per crew member — 'in' first, then break_start/break_end can alternate, then 'out' — that's re-checked at approval time, since it may have changed while this sat pending.",
+        "Request logging a check-in/break/check-out event for a crew member. Two-party confirm-before-execute pilot: this now requires management's confirmation before it's recorded — tell the crew member it's been sent for approval, they'll be told the outcome automatically, they don't need to check back. Events must still follow a legal sequence per crew member — 'in' first, then break_start/break_end can alternate, then 'out' — that's re-checked at approval time, since it may have changed while this sat pending. If a location share came in alongside or shortly before this (a 📍/🛰 coordinate line per 'Live vehicle location'), pass its lat/lng — the backend independently verifies it against the site's geofence, you never assert whether it matched yourself.",
       parameters: Type.Object({
         crew_member_id: Type.String(),
         event_type: Type.Union(["in", "break_start", "break_end", "out"].map((s) => Type.Literal(s))),
         site_id: Type.Optional(Type.String()),
-        geofence_verified: Type.Optional(
-          Type.Boolean({ description: "Whether the crew member's location matched the assigned site's geofence." }),
-        ),
+        lat: Type.Optional(Type.Number({ description: "Latitude from a location share received alongside this event, if any." })),
+        lng: Type.Optional(Type.Number({ description: "Longitude from a location share received alongside this event, if any." })),
         summary: Type.String({
           description:
             "Short plain-language summary of the request for management to review, reusing the wording already confirmed with the crew member, e.g. \"Redji clocking in at Site 7\".",
         }),
       }),
-      async execute({ crew_member_id, event_type, site_id, geofence_verified, summary }, config) {
+      async execute({ crew_member_id, event_type, site_id, lat, lng, summary }, config) {
         return callBackend(config, "/pending-confirmations", {
           method: "POST",
           body: JSON.stringify({
             action_type: "timeclock_event",
             summary,
             crew_member_id,
-            payload: { event_type, site_id, geofence_verified },
+            payload: { event_type, site_id, lat, lng },
           }),
         });
       },
@@ -830,6 +829,39 @@ export default defineToolPlugin({
             summary,
             crew_member_id,
             payload: { distance_km, description },
+          }),
+        });
+      },
+    }),
+
+    // Two-party pilot member, not single-party -- an extension changes
+    // payroll hours, same "the crew member's own statement isn't
+    // independent verification" reasoning as the other five (see
+    // AGENTS.md). new_end_time overwrites the shift's end_time outright on
+    // approval, no "+N hours" math on the backend side.
+    tool({
+      name: "request_shift_extension",
+      label: "Request Shift Extension",
+      description:
+        "Request extending a crew member's shift to a new end time (e.g. running behind on a job). Two-party confirm-before-execute: management reviews it before the shift's end_time actually changes — the crew member is told the outcome automatically once decided, they don't need to check back.",
+      parameters: Type.Object({
+        crew_member_id: Type.String(),
+        shift_id: Type.String(),
+        new_end_time: Type.String({ description: "New end time, HH:MM:SS (24h)." }),
+        reason: Type.Optional(Type.String({ description: "Why the extension is needed." })),
+        summary: Type.String({
+          description:
+            "Short plain-language summary of the request for management to review, e.g. \"Redji requesting shift extended to 18:30 at Site 7, running behind on cleanup\".",
+        }),
+      }),
+      async execute({ crew_member_id, shift_id, new_end_time, reason, summary }, config) {
+        return callBackend(config, "/pending-confirmations", {
+          method: "POST",
+          body: JSON.stringify({
+            action_type: "shift_extension",
+            summary,
+            crew_member_id,
+            payload: { shift_id, new_end_time, reason },
           }),
         });
       },
@@ -938,6 +970,31 @@ export default defineToolPlugin({
       }),
       async execute({ id, ...body }, config) {
         return callBackend(config, `/vehicles/${id}/telemetry`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+      },
+    }),
+
+    // Person-level counterpart to log_vehicle_location, same "passive
+    // telemetry, no confirmation needed" reasoning -- a location share is
+    // something the crew member already chose to send. Log this one in
+    // addition to log_vehicle_location whenever a location share comes in,
+    // not instead of it -- a crew member can have both an assigned vehicle
+    // and their own location stream at once.
+    tool({
+      name: "log_crew_location",
+      label: "Log Crew Location",
+      description:
+        "Log a WhatsApp shared-location point (a one-time pin or a live share, e.g. an 8-hour shift-long share) against the crew member themselves, independent of any vehicle. The response includes a reverse-geocoded `address` — use that in replies, not the raw lat/lng.",
+      parameters: Type.Object({
+        id: Type.String({ description: "The crew member's UUID." }),
+        lat: Type.Number(),
+        lng: Type.Number(),
+        source: Type.Optional(Type.Union([Type.Literal("whatsapp_location"), Type.Literal("obd")])),
+      }),
+      async execute({ id, ...body }, config) {
+        return callBackend(config, `/crew-members/${id}/telemetry`, {
           method: "POST",
           body: JSON.stringify(body),
         });
@@ -1375,6 +1432,106 @@ export default defineToolPlugin({
         });
       },
     }),
+
+    // Carpool: request-based, no auto-matching -- a crew member posts a
+    // need or an offer, a human (crew or management) pairs them up with
+    // match_ride_requests. None of these four need confirm-before-execute:
+    // this is coordination, not money/inventory/schedule -- same tier as
+    // log_vehicle_location.
+    tool({
+      name: "create_ride_request",
+      label: "Create Ride Request",
+      description:
+        "Post that a crew member needs a ride, or can offer one, for a given date. Confirm the date/site/seat details back in plain language before calling this — not the confirm-before-execute gate, but still worth restating what was understood.",
+      parameters: Type.Object({
+        crew_member_id: Type.String(),
+        request_type: Type.Union([Type.Literal("need_ride"), Type.Literal("offering_ride")]),
+        date: Type.String({ description: "YYYY-MM-DD." }),
+        site_id: Type.Optional(Type.String({ description: "If the site is already known." })),
+        seats_available: Type.Optional(Type.Number({ description: "Offers only — how many riders there's room for." })),
+        notes: Type.Optional(Type.String()),
+      }),
+      async execute(body, config) {
+        return callBackend(config, "/ride-requests", { method: "POST", body: JSON.stringify(body) });
+      },
+    }),
+
+    tool({
+      name: "list_open_ride_requests",
+      label: "List Open Ride Requests",
+      description: "List ride requests, optionally filtered by date or status. Use this so a crew member can check what's available without asking a human to look it up.",
+      parameters: Type.Object({
+        date: Type.Optional(Type.String({ description: "YYYY-MM-DD." })),
+        status: Type.Optional(Type.Union([Type.Literal("open"), Type.Literal("matched"), Type.Literal("cancelled")])),
+      }),
+      async execute({ date, status }, config) {
+        const params = new URLSearchParams();
+        if (date) params.set("date", date);
+        if (status) params.set("status", status);
+        const qs = params.toString();
+        return callBackend(config, `/ride-requests${qs ? `?${qs}` : ""}`);
+      },
+    }),
+
+    tool({
+      name: "match_ride_requests",
+      label: "Match Ride Requests",
+      description: "Pair an open 'need a ride' request with an open 'offering a ride' request — both must currently be open, and one of each type. Sets both to matched.",
+      parameters: Type.Object({
+        id: Type.String({ description: "One of the two ride_requests ids." }),
+        matched_with_id: Type.String({ description: "The other ride_requests id." }),
+      }),
+      async execute({ id, matched_with_id }, config) {
+        return callBackend(config, `/ride-requests/${id}/match`, {
+          method: "PATCH",
+          body: JSON.stringify({ matched_with_id }),
+        });
+      },
+    }),
+
+    tool({
+      name: "cancel_ride_request",
+      label: "Cancel Ride Request",
+      description: "Cancel an open or matched ride request (e.g. plans changed).",
+      parameters: Type.Object({ id: Type.String() }),
+      async execute({ id }, config) {
+        return callBackend(config, `/ride-requests/${id}/cancel`, { method: "PATCH" });
+      },
+    }),
+
+    // No new schema -- reuses crew_telemetry/vehicle_telemetry directly.
+    // Resolves the matched offer's driver (following matched_request_id),
+    // then whichever location source they actually have: their own
+    // crew_telemetry, falling back to an assigned vehicle's telemetry.
+    tool({
+      name: "get_ride_driver_location",
+      label: "Get Ride Driver Location",
+      description: "Get a matched ride's driver's current location — resolves the matched 'offering_ride' request's driver, then returns their latest location (person-level if they've shared one, otherwise their assigned vehicle's).",
+      parameters: Type.Object({
+        ride_request_id: Type.String({ description: "Either side of a matched pair — need or offer." }),
+      }),
+      async execute({ ride_request_id }, config) {
+        const requests = (await callBackend(config, "/ride-requests")) as any[];
+        if (!Array.isArray(requests)) return { error: true, message: "Couldn't look up ride requests." };
+        const mine = requests.find((r) => r.id === ride_request_id);
+        if (!mine) return { error: true, message: "Ride request not found." };
+        const offer = mine.request_type === "offering_ride" ? mine : requests.find((r) => r.id === mine.matched_request_id);
+        if (!offer || offer.request_type !== "offering_ride") {
+          return { error: true, message: "This ride request isn't matched to a driver." };
+        }
+        const crewLocation = await callBackend(config, `/crew-members/${offer.crew_member_id}/telemetry`);
+        if (crewLocation && typeof crewLocation === "object" && "lat" in crewLocation) {
+          return { driver_name: offer.crew_member_name, source: "crew_location", location: crewLocation };
+        }
+        const vehicles = (await callBackend(config, `/vehicles?assigned_crew_id=${offer.crew_member_id}`)) as any[];
+        const vehicle = Array.isArray(vehicles) ? vehicles[0] : undefined;
+        if (vehicle?.latest_location) {
+          return { driver_name: offer.crew_member_name, source: "vehicle_location", location: vehicle.latest_location };
+        }
+        return { driver_name: offer.crew_member_name, error: true, message: "No location shared yet by the driver." };
+      },
+    }),
+
     // Every proactive message the agent wants to send -- a scheduled
     // digest's group post or its management/owner/IT DM, a critical alert,
     // anything not a direct reply within an ongoing conversation -- goes

@@ -21,6 +21,7 @@ import { notificationsRouter } from "./routes/notifications.js";
 import { ordersRouter } from "./routes/orders.js";
 import { payrollRouter } from "./routes/payroll.js";
 import { reportsRouter } from "./routes/reports.js";
+import { rideRequestsRouter } from "./routes/rideRequests.js";
 import { shiftsRouter } from "./routes/shifts.js";
 import { sitesRouter } from "./routes/sites.js";
 import { spendingRouter } from "./routes/spending.js";
@@ -78,6 +79,7 @@ app.use("/api/v1", reportsRouter);
 app.use("/api/v1", timesheetsRouter);
 app.use("/api/v1", spendingRouter);
 app.use("/api/v1", confirmationsRouter);
+app.use("/api/v1", rideRequestsRouter);
 app.use("/api/v1", systemRouter);
 app.use("/api/v1", meRouter);
 

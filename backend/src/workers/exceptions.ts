@@ -25,12 +25,16 @@ const CRITICAL_ALERT_TYPES = new Set([
   "disk_space_low",
   "it_issue",
   "system_offline",
+  "crew_location_stale",
+  "crew_off_site",
 ]);
 
 const ALERT_MESSAGES: Record<string, string> = {
   overdue: "🚨 A checked-out asset is overdue for return.",
   order_stalled: "🚨 An order has been sitting unconfirmed for over 24 hours.",
   wrong_site: "🚨 A vehicle is outside its expected site's geofence.",
+  crew_location_stale: "🚨 A crew member's live location hasn't updated during their shift.",
+  crew_off_site: "🚨 A crew member's live location is outside their assigned site's geofence.",
   idle: "A crew member has been on-shift 2+ hours with no recorded site activity.",
   vehicle_dark: "A vehicle was reporting location today and has since gone quiet for 3+ hours.",
   dashboard_unreachable: "🚨 The dashboard's public URL is unreachable — the Quick Tunnel may be down.",
@@ -217,6 +221,65 @@ async function checkWrongSite(client: PoolClient): Promise<void> {
     const distance = haversineDistanceMeters(row.lat, row.lng, row.center_lat, row.center_lng);
     if (distance > row.geofence_radius_m) {
       await raiseAlert(client, "wrong_site", row.site_id, row.vehicle_id);
+    }
+  }
+}
+
+// Person-level counterpart to checkWrongSite above, now that crew_telemetry
+// (added alongside this check) gives a crew member their own location
+// stream independent of any assigned vehicle. Two distinct conditions, two
+// distinct alert types -- "gone quiet" and "off-site" are different
+// problems (a dead phone/reception gap vs. actually being somewhere else),
+// and collapsing them into one alert type would lose that distinction for
+// whoever's paged. Both route to it_escalation_roles, same audience as
+// every other IT-flagged/safety-adjacent condition tonight.
+async function checkCrewLocationStale(client: PoolClient, settings: NotificationSettings): Promise<void> {
+  const result = await client.query(`
+    SELECT
+      cm.id AS crew_member_id,
+      s.id AS site_id, s.center_lat, s.center_lng, s.geofence_radius_m,
+      ct.lat, ct.lng, ct.timestamp AS telemetry_at
+    FROM crew_members cm
+    JOIN shifts sh ON sh.crew_member_id = cm.id
+      AND sh.date = CURRENT_DATE AND sh.status = 'confirmed'
+    JOIN sites s ON s.id = sh.site_id
+    LEFT JOIN LATERAL (
+      SELECT lat, lng, timestamp FROM crew_telemetry
+      WHERE crew_member_id = cm.id
+      ORDER BY timestamp DESC
+      LIMIT 1
+    ) ct ON true
+  `);
+
+  for (const row of result.rows) {
+    if (!row.telemetry_at) continue; // never shared today -- nothing to judge stale or off-site against yet
+
+    const ageMinutes = (Date.now() - new Date(row.telemetry_at).getTime()) / (1000 * 60);
+    if (ageMinutes > settings.crew_location_stale_minutes) {
+      await raiseAlert(
+        client,
+        "crew_location_stale",
+        row.site_id,
+        row.crew_member_id,
+        undefined,
+        undefined,
+        settings.it_escalation_roles,
+      );
+      continue; // stale already covers it -- an old point being outside the geofence isn't a live off-site signal
+    }
+
+    if (row.center_lat == null || row.center_lng == null || row.geofence_radius_m == null) continue;
+    const distance = haversineDistanceMeters(row.lat, row.lng, row.center_lat, row.center_lng);
+    if (distance > row.geofence_radius_m) {
+      await raiseAlert(
+        client,
+        "crew_off_site",
+        row.site_id,
+        row.crew_member_id,
+        undefined,
+        undefined,
+        settings.it_escalation_roles,
+      );
     }
   }
 }
@@ -456,6 +519,7 @@ export async function runExceptionChecks(): Promise<void> {
     await checkStalledOrders(client, settings);
     await checkIdleCrew(client, settings);
     await checkWrongSite(client);
+    await checkCrewLocationStale(client, settings);
     await checkVehicleDark(client, settings);
     await checkDelayedArrivals(client, settings);
     await checkLoadoutGap(client);
