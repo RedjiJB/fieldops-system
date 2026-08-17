@@ -4,6 +4,7 @@ import {
   createCrewMember,
   createSite,
   deleteById,
+  deletePendingConfirmationsForCrewMember,
   deleteShiftsForCrewMember,
   findVehicleByPlate,
   shiftExists,
@@ -80,6 +81,8 @@ const batchDispatchConfirmFlow: Scenario = {
     } finally {
       await deleteShiftsForCrewMember(crewA);
       await deleteShiftsForCrewMember(crewB);
+      await deletePendingConfirmationsForCrewMember(crewA);
+      await deletePendingConfirmationsForCrewMember(crewB);
       await deleteById("crew_members", crewA);
       await deleteById("crew_members", crewB);
       await deleteById("sites", siteA);

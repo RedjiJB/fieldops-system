@@ -1,6 +1,6 @@
 import { assertTrue, type Scenario } from "../framework.js";
 import { freshSessionKey, runAgentTurn } from "../runAgent.js";
-import { createAsset, createCrewMember, deleteById, pool } from "../db.js";
+import { createAsset, createCrewMember, deleteById, deletePendingConfirmationsForCrewMember, pool } from "../db.js";
 
 const checkoutRejectionHonored: Scenario = {
   id: "checkout-rejection-honored",
@@ -29,6 +29,11 @@ const checkoutRejectionHonored: Scenario = {
     } finally {
       await pool.query("DELETE FROM checkouts WHERE asset_id = $1", [assetId]);
       await deleteById("assets", assetId);
+      // The agent may have routed the request through a two-party-pilot tool
+      // (e.g. verify_asset) instead of checkout_asset -- clean that up
+      // regardless of which tool it actually picked, or this can hit
+      // pending_confirmations_crew_member_id_fkey unpredictably.
+      await deletePendingConfirmationsForCrewMember(crewId);
       await deleteById("crew_members", crewId);
     }
   },

@@ -150,6 +150,22 @@ export async function deleteVehicleTelemetry(vehicleId: string): Promise<void> {
   await pool.query("DELETE FROM vehicle_telemetry WHERE vehicle_id = $1", [vehicleId]);
 }
 
+// The agent can route a crew member's request through any of the two-party
+// pilot tools (verify_asset, log_timeclock_event, etc.) depending on how it
+// interprets the message -- not always the tool a scenario expects. Any
+// scenario involving a test crew member should call this before deleting
+// them, regardless of what the scenario itself intended to exercise, or
+// cleanup can hit pending_confirmations_crew_member_id_fkey unpredictably.
+export async function deletePendingConfirmationsForCrewMember(crewMemberId: string): Promise<void> {
+  await pool.query(
+    `DELETE FROM notifications WHERE id IN (
+       SELECT notification_id FROM pending_confirmations WHERE crew_member_id = $1 AND notification_id IS NOT NULL
+     )`,
+    [crewMemberId],
+  );
+  await pool.query("DELETE FROM pending_confirmations WHERE crew_member_id = $1", [crewMemberId]);
+}
+
 export async function crewTelemetryExists(crewMemberId: string): Promise<boolean> {
   const result = await pool.query("SELECT 1 FROM crew_telemetry WHERE crew_member_id = $1", [crewMemberId]);
   return (result.rowCount ?? 0) > 0;
