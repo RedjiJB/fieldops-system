@@ -155,12 +155,13 @@ openclaw cron add --name fieldops-model-usage --display-name "Model Usage Sync" 
   --cron "30 3 * * *" --timeout-seconds 120 --no-deliver
 ```
 
-`export-nightly-transcripts.mjs` installs nightly, no `AGENT_SERVICE_TOKEN` needed (never calls the backend, just reads local session files and sends one WhatsApp message):
+`export-nightly-transcripts.mjs` installs nightly, no `AGENT_SERVICE_TOKEN` needed (never calls the backend, just reads local session files and sends one WhatsApp message) but does need `OPENCLAW_BIN` for that send, the same PATH gotcha as `nudge-shifts.mjs` above — confirmed live 2026-08-17 as a real, silent failure: the job ran and wrote the transcript fine every night, but its notify step failed every single time with `spawnSync openclaw ENOENT` since this env var was missing from the original install:
 
 ```bash
 openclaw cron add --name fieldops-transcript-export --display-name "Nightly Transcript Export" \
   --command "node ~/fieldops-system/openclaw/notifier/export-nightly-transcripts.mjs" \
   --command-env "TRANSCRIPT_NOTIFY_TARGET=<IT's real number>" \
+  --command-env "OPENCLAW_BIN=$(which openclaw)" \
   --cron "15 3 * * *" --timeout-seconds 120 --no-deliver
 ```
 
