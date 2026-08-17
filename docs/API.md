@@ -160,8 +160,9 @@ Surfaced by a real gap: nothing in the original spec could look up or register a
 | `POST` | `/shifts/batch` | Assign several shifts at once, all-or-nothing — matches the real dispatch pattern of one message assigning multiple people to multiple sites |
 | `PATCH` | `/shifts/:id/confirm` | Crew confirms or declines |
 | `GET` | `/shifts?date=&site_id=&crew_member_id=&status=&job_id=` | List shifts — includes `crew_member_phone`, used by `openclaw/notifier/nudge-shifts.mjs` to message a specific crew member directly |
-| `PATCH` | `/shifts/:id/nudged` | Marks a shift-confirmation reminder sent — called by the nudge script after a successful send, so a same-evening re-run doesn't double-nudge |
-| `POST` | `/timeclock` | Log a check-in/break/check-out event |
+| `PATCH` | `/shifts/:id/nudged` | Marks a shift-confirmation reminder sent (evening before) — called by `nudge-shifts.mjs` after a successful send, so a same-evening re-run doesn't double-nudge |
+| `PATCH` | `/shifts/:id/reminder-sent` | Marks the 1-hour-before "starting soon" reminder sent — called by `openclaw/notifier/shift-reminder.mjs`, same idempotency pattern as `/nudged` above, distinct column (`reminder_sent_at`) since it's a separate notification |
+| `POST` | `/timeclock` | Log a check-in/break/check-out event. Accepts optional `lat`/`lng` — when present (and `site_id` resolves to a site with geofence data configured), `geofence_verified` is computed server-side via haversine distance, never trusted from the caller. No `lat`/`lng`, no site geofence, or no `site_id` all resolve to `false` |
 | `GET` | `/crew/status` | Live status for every active crew member (site, last event, geofence match) — powers the team-wide map view |
 
 ## Jobs
@@ -229,6 +230,28 @@ Surfaced by the same gap crew-members/sites had: nothing could look up or regist
 | `GET` | `/vehicles/:id/trips` | Trip history for a vehicle |
 
 `PATCH /trips/:id/end` sums haversine distance across `vehicle_telemetry` points recorded for that vehicle between the trip's `started_at` and the close-out time. Telemetry is WhatsApp-share-driven, not continuous GPS, so this is a lower-bound distance estimate, not GPS-accurate — `distance_meters` is `NULL` (not `0`) when fewer than 2 telemetry points fall in the window, meaning no data rather than no movement.
+
+**Crew location** (person-level, added 2026-08-16) — same shape as vehicle telemetry above, but for the crew member directly, independent of any assigned vehicle:
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/crew-members/:id/telemetry` | Log a WhatsApp location share (one-time pin or a live share, e.g. an 8-hour shift-long share) against the crew member themselves — same reverse-geocode-reuse-within-100m behavior as vehicle telemetry |
+| `GET` | `/crew-members/:id/telemetry` | Latest logged point for that crew member, or `null` |
+
+Built because `vehicle_telemetry.vehicle_id` is a hard FK to `vehicles` — a crew member with no assigned vehicle (or riding as a carpool passenger) had no location path at all before this. `checkCrewLocationStale` (see [EXCEPTION_HANDLING.md](EXCEPTION_HANDLING.md)) watches this for anyone on a confirmed shift today.
+
+## Carpool
+
+Request-based, no auto-matching — a crew member posts they need a ride or can offer one; a human (crew or management) pairs a need with an offer. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#ride_requests).
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/ride-requests` | Post a `need_ride` or `offering_ride` request for a date, optionally a site (offers can also set `seats_available`) |
+| `GET` | `/ride-requests?status=&date=` | List/filter ride requests — powers the dashboard's read-only Carpool page and the `list_open_ride_requests` agent tool |
+| `PATCH` | `/ride-requests/:id/match` | `{matched_with_id}` — pairs one `need_ride` row with one `offering_ride` row, both must be `open`, sets both to `matched` and cross-references `matched_request_id` in one transaction |
+| `PATCH` | `/ride-requests/:id/cancel` | Cancel an open or matched request |
+
+"Live tracking" for a matched ride reuses crew/vehicle telemetry directly (no separate schema) — the `get_ride_driver_location` agent tool resolves the matched offer's driver, then returns whichever location source they actually have.
 
 ## Documents
 

@@ -21,6 +21,10 @@ Pushes **critical** management notifications (tool marked missing/retired, wrong
 
 Runs once daily, evening before, and messages each crew member directly (not management) whose shift for tomorrow is still `status=assigned`: `GET /shifts?date=<tomorrow>&status=assigned`, skips anything with `nudged_at` already set or no phone on file, sends a "reply CONFIRM or DECLINE" message to `shift.crew_member_phone`, then `PATCH /shifts/:id/nudged`. The reply lands as a normal inbound message the agent already routes to the existing `confirm_shift` tool — no new correlation logic needed for this one.
 
+## `shift-reminder.mjs`
+
+Runs every 10 minutes, a distinct notification from `nudge-shifts.mjs` above (that one asks for confirm/decline the evening before; this one is a "starting soon" heads-up the day of, only for shifts already `confirmed`). `GET /shifts?date=<today>&status=confirmed`, filters to `start_time` within the next ~70 minutes (the reminder's own 60-minute target window plus this script's own 10-minute poll interval, so a shift starting in 55 minutes doesn't get missed by a tick landing just past the 60-minute mark) and `reminder_sent_at IS NULL`, sends `"Your shift starts in about an hour — {site} @ {start_time}."`, then `PATCH /shifts/:id/reminder-sent`. Same idempotency shape as `nudged_at`, different column, since these are two independent notifications that can both legitimately fire for the same shift on the same day.
+
 ## `deliver-confirmation-outcomes.mjs`
 
 Same shape as `nudge-shifts.mjs` (targets the crew member directly, not management), but polls continuously (~1min, same cadence as `deliver-notifications.mjs`) rather than once daily: `GET /pending-confirmations/unnotified` (`status IN ('approved','rejected','expired') AND crew_notified_at IS NULL`), sends a plain-language outcome message to `crew_member_phone`, `PATCH /pending-confirmations/:id/mark-notified`. This is the "tell the crew member the outcome" half of the two-party confirm-before-execute pilot (see `AGENTS.md`'s "Two-party confirm-before-execute" section and `docs/DATABASE_SCHEMA.md#confirmations`) — the crew member doesn't need to check back after submitting one of the six gated tool calls, this delivers the decision proactively once management (or a timeout) resolves it.
@@ -91,6 +95,16 @@ openclaw cron add --name fieldops-shift-nudge --display-name "Shift Confirmation
   --command-env "AGENT_SERVICE_TOKEN=<real token>" \
   --command-env "OPENCLAW_BIN=$(which openclaw)" \
   --cron "0 18 * * *" --timeout-seconds 60 --no-deliver
+```
+
+`shift-reminder.mjs` installs every 10 minutes, same token/`OPENCLAW_BIN` needs as `nudge-shifts.mjs` (also resolves target per-shift from `crew_members.phone`):
+
+```bash
+openclaw cron add --name fieldops-shift-reminder --display-name "Shift Start Reminders" \
+  --command "node ~/fieldops-system/openclaw/notifier/shift-reminder.mjs" \
+  --command-env "AGENT_SERVICE_TOKEN=<real token>" \
+  --command-env "OPENCLAW_BIN=$(which openclaw)" \
+  --every 10m --timeout-seconds 30 --no-deliver
 ```
 
 `deliver-confirmation-outcomes.mjs` installs like `deliver-notifications.mjs` (every minute) — per-crew-member target though, same as `nudge-shifts.mjs`, not role-queried:

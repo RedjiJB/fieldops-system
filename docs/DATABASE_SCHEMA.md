@@ -276,7 +276,8 @@ CREATE TABLE shifts (
   start_time      TIME,
   end_time        TIME,
   status          shift_status NOT NULL DEFAULT 'assigned',
-  nudged_at       TIMESTAMPTZ, -- set by openclaw/notifier/nudge-shifts.mjs once a confirm/decline reminder is sent, so a same-evening cron re-run doesn't double-nudge
+  nudged_at       TIMESTAMPTZ, -- set by openclaw/notifier/nudge-shifts.mjs once a confirm/decline reminder is sent (evening before), so a same-evening cron re-run doesn't double-nudge
+  reminder_sent_at TIMESTAMPTZ, -- added in 0074. Set by openclaw/notifier/shift-reminder.mjs's 1-hour-before "starting soon" ping -- distinct from nudged_at above (a different notification, a different cadence: every 10 min, only for already-confirmed shifts)
   job_id          UUID REFERENCES jobs(id), -- nullable; only set when the dispatch message identified a job type
   import_source   TEXT -- added in 0066. NULL means system-captured/real (an agent tool call, a dashboard action); a non-NULL value (e.g. 'whatsapp_history_import') means reconstructed from historical chat text and should never be treated as equivalent to a real dispatch assignment -- see backend/src/db/importWhatsappHistory/'s own comments
 );
@@ -289,8 +290,50 @@ CREATE TABLE timeclock_entries (
   event_type        timeclock_event NOT NULL,
   site_id           UUID REFERENCES sites(id),
   timestamp         TIMESTAMPTZ NOT NULL DEFAULT now(),
-  geofence_verified BOOLEAN NOT NULL DEFAULT false,
+  geofence_verified BOOLEAN NOT NULL DEFAULT false, -- server-derived since 2026-08-16 (backend/src/routes/shifts.ts's resolveGeofenceVerified), not client-asserted -- POST /timeclock and approveTimeclockEvent both compute this from lat/lng (if supplied) against the shift's site geofence via haversineDistanceMeters. No lat/lng, no site geofence configured, or no site_id at all all fall through to false -- there's no path left to assert true without real coordinates
   import_source     TEXT -- same meaning/reasoning as shifts.import_source above
+);
+
+-- Person-level location, added in 0075 -- mirrors vehicle_telemetry's exact
+-- shape (below) rather than a different pattern. Needed because
+-- vehicle_telemetry is keyed to vehicle_id only; a crew member with no
+-- assigned vehicle (or riding as a carpool passenger) had no location path
+-- at all before this. POST/GET /crew-members/:id/telemetry, log_crew_location
+-- tool. checkCrewLocationStale (exceptions.ts) watches this for anyone on a
+-- confirmed shift today -- raises crew_location_stale if the latest point
+-- is older than notification_settings.crew_location_stale_minutes, or
+-- crew_off_site if it's outside the shift's site geofence.
+CREATE TABLE crew_telemetry (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  crew_member_id  UUID NOT NULL REFERENCES crew_members(id),
+  timestamp       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  lat             DOUBLE PRECISION NOT NULL,
+  lng             DOUBLE PRECISION NOT NULL,
+  source          telemetry_source NOT NULL DEFAULT 'whatsapp_location', -- shared enum with vehicle_telemetry
+  address         TEXT -- reverse-geocoded, same reuse-within-100m logic as vehicle_telemetry.address
+);
+```
+
+## ride_requests
+
+```sql
+-- Carpool, added in 0077 -- request-based, no auto-matching. A crew member
+-- posts a need or an offer; matched_request_id is only ever set by a human
+-- decision (PATCH /ride-requests/:id/match, the match_ride_requests tool),
+-- never computed. "Live tracking" for a matched ride reuses crew_telemetry/
+-- vehicle_telemetry directly (get_ride_driver_location) -- no separate
+-- location schema for carpool specifically.
+CREATE TABLE ride_requests (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  crew_member_id       UUID NOT NULL REFERENCES crew_members(id),
+  request_type         TEXT NOT NULL CHECK (request_type IN ('need_ride', 'offering_ride')),
+  date                 DATE NOT NULL,
+  site_id              UUID REFERENCES sites(id), -- nullable -- a "need a ride" post might not know the exact site yet
+  seats_available      INTEGER CHECK (seats_available IS NULL OR seats_available > 0), -- offers only
+  notes                TEXT,
+  status               TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'matched', 'cancelled')),
+  matched_request_id   UUID REFERENCES ride_requests(id), -- self-referencing; set on both rows of a pair once matched
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
@@ -356,7 +399,7 @@ CREATE TABLE documents (
 The exceptions engine's output — see [EXCEPTION_HANDLING.md](EXCEPTION_HANDLING.md). This table doesn't own operational data; it watches for deviations elsewhere and raises flags.
 
 ```sql
-CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue', 'vehicle_dark', 'weather', 'dashboard_unreachable', 'maintenance_due', 'backup_failed', 'cron_job_failed', 'connectivity_degraded', 'disk_space_low', 'it_issue', 'system_offline'); -- last four added 0067-0070 (2026-08-16) for IT monitoring/escalation, see below
+CREATE TYPE alert_type AS ENUM ('idle', 'delay', 'wrong_site', 'order_stalled', 'loadout_gap', 'overdue', 'vehicle_dark', 'weather', 'dashboard_unreachable', 'maintenance_due', 'backup_failed', 'cron_job_failed', 'connectivity_degraded', 'disk_space_low', 'it_issue', 'system_offline', 'crew_location_stale', 'crew_off_site'); -- connectivity_degraded..system_offline added 0067-0070 (2026-08-16) for IT monitoring/escalation, see below; crew_location_stale/crew_off_site added 0078-0079 (same night) -- checkCrewLocationStale's person-level counterpart to wrong_site, now that crew_telemetry gives a crew member their own location stream independent of any vehicle
 
 CREATE TABLE alerts (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -488,6 +531,7 @@ CREATE TABLE notification_settings (
   -- this table.
   daily_overtime_hours         INTEGER NOT NULL DEFAULT 8,
   break_required_after_hours   INTEGER NOT NULL DEFAULT 5,
+  crew_location_stale_minutes  INTEGER NOT NULL DEFAULT 90, -- added in 0080. checkCrewLocationStale's tolerance for a crew member's live-location share going quiet during a confirmed shift, before raising crew_location_stale -- separate from vehicle telemetry's hardcoded STALE_TELEMETRY_MINUTES constant (60), since a person's phone going quiet for a lunch break or a dead zone is a different tolerance than a vehicle feed going quiet, and this one is dashboard-editable from day one
   updated_at                   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
@@ -644,7 +688,7 @@ CREATE TABLE spend_records (
 
 ## Confirmations
 
-Two-party confirm-before-execute — a **pilot**, not a full cutover: only 6 of the agent's 58 tools route through this (`log_timeclock_event`, `adjust_consumable_quantity`, `return_checkout`, `submit_mileage_claim`, `verify_asset`, `mark_purchase_order_fulfilled`) — self-reported physical-reality/money claims where the crew member's own confirmation isn't independent verification of anything (hours, material-usage, damage/condition claims, mileage, asset condition, delivery receipt). The other mutating tools are unchanged — the crew member's own confirmation is still sufficient for those. Added in `0043_pending_confirmations.sql`; `action_type` widened to 6 values in `0045_pending_confirmations_more_action_types.sql`. See [API.md](API.md#confirmations) and [ARCHITECTURE.md](ARCHITECTURE.md).
+Two-party confirm-before-execute — a **pilot**, not a full cutover: only 7 of the agent's 78 tools route through this (`log_timeclock_event`, `adjust_consumable_quantity`, `return_checkout`, `submit_mileage_claim`, `verify_asset`, `mark_purchase_order_fulfilled`, `request_shift_extension`) — self-reported physical-reality/money/payroll claims where the crew member's own confirmation isn't independent verification of anything (hours, material-usage, damage/condition claims, mileage, asset condition, delivery receipt, shift end time). The other mutating tools are unchanged — the crew member's own confirmation is still sufficient for those. Added in `0043_pending_confirmations.sql`; `action_type` widened to 6 values in `0045_pending_confirmations_more_action_types.sql`, then 7 in `0076_pending_confirmations_shift_extension.sql` (`shift_extension` — approving updates the shift's `end_time`, see `approveShiftExtension` in `backend/src/routes/confirmations.ts`). See [API.md](API.md#confirmations) and [ARCHITECTURE.md](ARCHITECTURE.md).
 
 A pending confirmation is backed by a real `critical` row in `notifications` (`notification_id`) — escalation is inherited from that table's existing mechanism (`notifications.ts`'s `escalated_count`/`ESCALATION_THRESHOLD_MINUTES`/`MAX_ESCALATIONS`), not duplicated here. `payload` holds whatever the original action needs (e.g. `{event_type, site_id, geofence_verified}` for a timeclock event); approving re-validates against *current* state (not state at submission time) before dispatching to the real mutation.
 
@@ -655,7 +699,7 @@ A pending confirmation is backed by a real `critical` row in `notifications` (`n
 ```sql
 CREATE TABLE pending_confirmations (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  action_type          TEXT NOT NULL CHECK (action_type IN ('timeclock_event', 'consumable_adjustment', 'checkout_return', 'mileage_claim', 'asset_verification', 'purchase_order_fulfillment')), -- widened from 4 to 6 in 0045
+  action_type          TEXT NOT NULL CHECK (action_type IN ('timeclock_event', 'consumable_adjustment', 'checkout_return', 'mileage_claim', 'asset_verification', 'purchase_order_fulfillment', 'shift_extension')), -- widened from 4 to 6 in 0045, to 7 in 0076
   summary              TEXT NOT NULL, -- agent-authored, human-readable -- what the manager sees, on the dashboard or in a WhatsApp list
   payload              JSONB NOT NULL, -- args needed to execute the action once approved
   crew_member_id       UUID NOT NULL REFERENCES crew_members(id),
