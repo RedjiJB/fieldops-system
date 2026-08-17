@@ -59,6 +59,16 @@ Runs nightly, reads the same `~/.openclaw/agents/fieldops/sessions/*.jsonl` tran
 
 Built the same night as the `send_role_digest`/group-chat rollout, after two real bugs (a `NO_REPLY` silence on a genuine @-mention, and a digest reply that narrated its own tool calls as literal message text) were only found by reading raw `.jsonl` session files by hand over SSH -- this is that same read, automated and delivered nightly instead of ad hoc.
 
+## `run-scheduled-audit.mjs`
+
+Runs every 12 hours -- a different category from every script above, which all react to *live* state (a notification to push, a shift to remind). This one re-runs the same build/typecheck/vitest/plugin-validate/agent-tests steps a human would run by hand before trusting a deploy, on a schedule, and saves the full output (not just pass/fail) to `~/fieldops-audit-logs/audit-<timestamp>.log` (deliberately outside the repo, 30-day local retention, same reasoning as `backup-database.mjs`'s dump location) -- so "when did this actually start failing" has a real answer instead of only whatever was true the last time someone happened to run the suite by hand. Also runs a light system audit alongside it: backend `/health`, the public dashboard URL, `docker compose ps`, and counts of open alerts/pending message drafts/pending confirmations (informational context next to the test results, not itself a pass/fail gate -- the Alerts and Confirmations pages already own that).
+
+Every step runs to completion regardless of an earlier one failing, same reasoning as `heartbeat.mjs`'s deliberately-not-short-circuited checks -- one broken step should never hide the state of the rest in the saved log.
+
+**Deliberately doesn't page IT on every agent-tests scenario failure.** `docs/SECURITY.md` already documents this suite has a real, bounded LLM-reliability noise floor (DeepSeek not always following confirm-before-execute, or picking a slightly different valid tool some turns) -- normal healthy runs land around 12-14/14, not always a clean 14/14. Alerting on every such run would be exactly the alert-fatigue failure mode this whole notification system exists to avoid. Only two things escalate to IT (via `POST /system/it-issue`, the same role-queried critical-notification path every other alert in this system uses, so no bypass and no new delivery mechanism): a deterministic step failing (typecheck, a plugin build, vitest, `plugins validate`, or the audit's own health/dashboard checks -- none of these have any legitimate reason to fail in a healthy repo), or the agent-tests pass rate dropping below 50% (something structurally broken, not per-scenario noise). A normal, mostly-passing run reports nothing and just saves its log quietly.
+
+Built 2026-08-17 after a real ~50-minute connectivity blip (05:36-06:25) self-recovered with nothing checking back in on it afterward -- `connectivity_degraded` deliberately never auto-resolves (see `backend/src/routes/system.ts`'s comment on that route, same convention `dashboard_unreachable` already follows: a human confirms recovery, not the system silently marking itself healthy again unwatched), which is correct, but it meant the 2 morning-digest send attempts that failed during the blip stayed stuck `approved`-but-undelivered with nothing else re-checking the underlying pipeline until someone happened to look. This script doesn't fix that specific gap (that's still a human decision, correctly), but it means a broken build or a badly-failing test suite won't silently sit undetected for the same reason between whenever someone last happened to run the tests by hand and whenever they next think to.
+
 ## Environment variables
 
 - `BACKEND_URL` — defaults to `http://localhost:3000/api/v1`
@@ -69,6 +79,7 @@ Built the same night as the `send_role_digest`/group-chat rollout, after two rea
 - `FIELDOPS_SESSIONS_DIR` — `export-nightly-transcripts.mjs` only, defaults to `~/.openclaw/agents/fieldops/sessions`.
 - `FIELDOPS_TRANSCRIPTS_DIR` — `export-nightly-transcripts.mjs` only, defaults to `~/fieldops-transcripts`. Deliberately outside the repo, same reasoning as `backup-database.mjs`'s dump location.
 - `TRANSCRIPT_NOTIFY_TARGET` — `export-nightly-transcripts.mjs` only, defaults to Redji's number. Set empty to skip the completion notification entirely.
+- `FIELDOPS_AUDIT_LOGS_DIR` — `run-scheduled-audit.mjs` only, defaults to `~/fieldops-audit-logs`. Deliberately outside the repo, same reasoning as `backup-database.mjs`'s dump location.
 - `TRANSCRIPT_LOOKBACK_HOURS` — `export-nightly-transcripts.mjs` only, defaults to `24`.
 
 ## Install
@@ -151,6 +162,18 @@ openclaw cron add --name fieldops-transcript-export --display-name "Nightly Tran
   --command "node ~/fieldops-system/openclaw/notifier/export-nightly-transcripts.mjs" \
   --cron "15 3 * * *" --timeout-seconds 120 --no-deliver
 ```
+
+`run-scheduled-audit.mjs` installs every 12 hours, needs `OPENCLAW_BIN` (agent-tests' own `openclaw agent` shell-out, same PATH gotcha as `nudge-shifts.mjs` above) and a generous timeout — a full build+test+agent-tests pass genuinely takes several minutes, not seconds:
+
+```bash
+openclaw cron add --name fieldops-scheduled-audit --display-name "Scheduled Test + Audit (12h)" \
+  --command "node ~/fieldops-system/openclaw/notifier/run-scheduled-audit.mjs" \
+  --command-env "AGENT_SERVICE_TOKEN=<real token>" \
+  --command-env "OPENCLAW_BIN=$(which openclaw)" \
+  --every 12h --timeout-seconds 900 --no-deliver
+```
+
+Verify with `openclaw cron run <id>` the first time rather than waiting 12 hours, then check `~/fieldops-audit-logs/` for the saved report and `openclaw cron runs --id <id>` for the run's own summary line.
 
 ## Live reply-id check (do once, not blocking)
 
