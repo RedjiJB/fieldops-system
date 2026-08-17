@@ -329,3 +329,64 @@ systemRouter.post(
     res.json({ ok: true, rowsUpserted: rows.length });
   }),
 );
+
+// Every proactive message the agent wants to send now goes through IT for
+// review first -- see migration 0073's comment for why. This route only
+// ever stores state; the actual WhatsApp send happens host-side (the
+// fieldops-tools plugin's resolve_message_draft tool), same reasoning as
+// every other WhatsApp-touching action in this stack -- the backend
+// container has no path to the `openclaw` CLI.
+systemRouter.post(
+  "/system/message-drafts",
+  asyncHandler(async (req, res) => {
+    requireServiceToken(req);
+    const { source, target_description, target_group_jid, target_roles, draft_text } = req.body;
+    if (!source || !target_description || !draft_text) {
+      throw new HttpError(400, "source, target_description, and draft_text are required");
+    }
+    if (!target_group_jid && !target_roles) {
+      throw new HttpError(400, "one of target_group_jid or target_roles is required");
+    }
+    const result = await pool.query(
+      `INSERT INTO message_drafts (source, target_description, target_group_jid, target_roles, draft_text)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [source, target_description, target_group_jid ?? null, target_roles ?? null, draft_text],
+    );
+    res.status(201).json(result.rows[0]);
+  }),
+);
+
+systemRouter.get(
+  "/system/message-drafts",
+  asyncHandler(async (req, res) => {
+    requireServiceToken(req);
+    const { status } = req.query;
+    const result = await pool.query(
+      status
+        ? "SELECT * FROM message_drafts WHERE status = $1 ORDER BY created_at"
+        : "SELECT * FROM message_drafts ORDER BY created_at DESC LIMIT 50",
+      status ? [status] : [],
+    );
+    res.json(result.rows);
+  }),
+);
+
+systemRouter.patch(
+  "/system/message-drafts/:id/resolve",
+  asyncHandler(async (req, res) => {
+    requireServiceToken(req);
+    const { status, final_text } = req.body;
+    if (!["approved", "rejected"].includes(status)) {
+      throw new HttpError(400, "status must be 'approved' or 'rejected'");
+    }
+    const existing = await pool.query("SELECT * FROM message_drafts WHERE id = $1", [req.params.id]);
+    if (!existing.rows[0]) throw new HttpError(404, "Draft not found");
+    if (existing.rows[0].status !== "pending") throw new HttpError(400, "Draft already resolved");
+
+    const result = await pool.query(
+      `UPDATE message_drafts SET status = $2, final_text = $3, resolved_at = now() WHERE id = $1 RETURNING *`,
+      [req.params.id, status, status === "approved" ? (final_text ?? existing.rows[0].draft_text) : null],
+    );
+    res.json(result.rows[0]);
+  }),
+);

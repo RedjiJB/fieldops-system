@@ -1375,58 +1375,97 @@ export default defineToolPlugin({
         });
       },
     }),
-    // The only tool here that sends a WhatsApp message directly rather than
-    // returning data for the agent's own reply to carry -- needed because a
-    // single agent turn only has one outbound "announce" target (whatever
-    // the triggering cron's `delivery.to` is set to), so fanning a message
-    // out to several *other* people/numbers has no path except sending it
-    // explicitly, mid-turn, the same way the host notifier scripts do.
-    // Shells out to the `openclaw` CLI already on this host (this plugin
-    // runs as part of the same native systemd service, not a container --
-    // see restart_dashboard_tunnel's `docker` shell-out just above for the
-    // same reasoning), reusing the exact `message send` invocation
-    // deliver-notifications.mjs already relies on rather than inventing a
-    // second way to deliver WhatsApp messages.
-    //
-    // Narrowly scoped on purpose: this exists for the three scheduled
-    // digest crons (see AGENTS.md's "Scheduled digests: group vs. DM") to
-    // DM the full-detail version to management/owner/IT before posting a
-    // basic version to the group as their own final reply -- never call
-    // this from a normal conversation, even at management's request; that
-    // would let one person trigger a broadcast to everyone else's phone.
+    // Every proactive message the agent wants to send -- a scheduled
+    // digest's group post or its management/owner/IT DM, a critical alert,
+    // anything not a direct reply within an ongoing conversation -- goes
+    // through this draft-and-approve flow instead of being sent directly.
+    // Built after a live incident: a scheduled digest posted hallucinated
+    // content, and a separate run leaked its own tool-call narration as
+    // literal message text, neither of which a human ever saw before it
+    // would have gone out. create_message_draft only ever writes state (the
+    // backend container has no path to the `openclaw` CLI); the actual send
+    // happens in resolve_message_draft below, which runs host-side in this
+    // same plugin process, same reasoning as restart_dashboard_tunnel's
+    // `docker` shell-out just above.
     tool({
-      name: "send_role_digest",
-      label: "Send Role Digest",
+      name: "create_message_draft",
+      label: "Create Message Draft",
       description:
-        "Send a WhatsApp message directly to every active crew member holding any of the given roles -- ONLY call this from within the three scheduled digest routines (morning/midday/end-of-day), to DM the full-detail version to management/owner/IT before your own final reply (which goes to the crew group) drops down to the basic, least-privileged version. Never call this in response to a conversational request, even from management or owner -- it messages other people's phones directly and has no place in an ordinary reply.",
+        "Submit a proactive outbound message (a scheduled digest's group post or management/owner/IT summary, a critical alert, anything you're initiating rather than replying to) for IT's review before it's sent. Never delivers anything itself -- IT sees the draft and calls resolve_message_draft to approve (as-is or edited) or reject it. Use this from the three scheduled digest routines and any other proactive notification instead of sending directly. Does not apply to a normal reply within an ongoing conversation someone else started -- that still goes out as your own turn's reply, unedited.",
       parameters: Type.Object({
-        roles: Type.Array(Type.String(), { description: "Crew roles to DM, e.g. [\"management\", \"owner\", \"IT\"]." }),
-        message: Type.String({ description: "The full-detail digest text to send, verbatim, to each matching crew member." }),
+        source: Type.String({ description: "Short machine label for what generated this, e.g. 'digest_morning_group', 'digest_evening_management', 'critical_notification'." }),
+        target_description: Type.String({ description: "Human-readable description of who this would go to, e.g. \"Crew group\" or \"Management, Owner, IT\"." }),
+        target_group_jid: Type.Optional(Type.String({ description: "WhatsApp group JID, if this is a group post. Exactly one of target_group_jid/target_roles must be set." })),
+        target_roles: Type.Optional(Type.Array(Type.String(), { description: "Crew roles to DM if approved, e.g. [\"management\",\"owner\",\"IT\"]. Exactly one of target_group_jid/target_roles must be set." })),
+        draft_text: Type.String({ description: "The proposed message text, verbatim." }),
       }),
-      async execute({ roles, message }, config) {
-        const seenPhones = new Set<string>();
-        for (const role of roles) {
-          const result = await callBackend(config, `/crew-members?role=${encodeURIComponent(role)}&active=true`);
-          if (!Array.isArray(result)) continue;
-          for (const member of result as { phone?: string }[]) {
-            if (member.phone) seenPhones.add(member.phone);
+      async execute({ source, target_description, target_group_jid, target_roles, draft_text }, config) {
+        return callBackend(config, "/system/message-drafts", {
+          method: "POST",
+          body: JSON.stringify({ source, target_description, target_group_jid, target_roles, draft_text }),
+        });
+      },
+    }),
+
+    tool({
+      name: "list_pending_message_drafts",
+      label: "List Pending Message Drafts",
+      description: "List every message draft still awaiting IT's decision. Use this to find a draft's id when IT refers to one conversationally (\"approve the group one\", \"what's pending\").",
+      parameters: Type.Object({}),
+      async execute(_input, config) {
+        return callBackend(config, "/system/message-drafts?status=pending");
+      },
+    }),
+
+    // The actual send lives here, not in create_message_draft -- this tool
+    // is the one place a proactive message ever really goes out, and it
+    // only runs after IT's explicit decision.
+    tool({
+      name: "resolve_message_draft",
+      label: "Resolve Message Draft",
+      description:
+        "Approve or reject a pending message draft. Only call this on IT's explicit instruction -- never assume approval. To approve as written, call with action='approve' and no final_text. To approve an edited version, call with action='approve' and final_text set to the revised message (IT's edit wins verbatim, don't paraphrase it further). action='reject' discards it -- nothing is sent. On approval, this actually delivers the message to the draft's original target (the group or the role-queried recipients) -- there is no further step after this.",
+      parameters: Type.Object({
+        id: Type.String({ description: "The message_drafts row id, from list_pending_message_drafts." }),
+        action: Type.Union([Type.Literal("approve"), Type.Literal("reject")]),
+        final_text: Type.Optional(Type.String({ description: "IT's edited message text, if they revised the draft. Omit to send the draft unchanged." })),
+      }),
+      async execute({ id, action, final_text }, config) {
+        const resolved = (await callBackend(config, `/system/message-drafts/${id}/resolve`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: action === "approve" ? "approved" : "rejected", final_text }),
+        })) as { error?: true; message?: string; final_text?: string; target_group_jid?: string | null; target_roles?: string[] | null };
+        if ("error" in resolved && resolved.error) return resolved;
+        if (action === "reject") return { rejected: true };
+
+        const text = resolved.final_text ?? "";
+        const targets = new Set<string>();
+        if (resolved.target_group_jid) {
+          targets.add(resolved.target_group_jid);
+        } else if (resolved.target_roles) {
+          for (const role of resolved.target_roles) {
+            const members = await callBackend(config, `/crew-members?role=${encodeURIComponent(role)}&active=true`);
+            if (!Array.isArray(members)) continue;
+            for (const member of members as { phone?: string }[]) {
+              if (member.phone) targets.add(member.phone);
+            }
           }
         }
         let sent = 0;
         const failures: string[] = [];
-        for (const phone of seenPhones) {
+        for (const target of targets) {
           try {
             execFileSync(
               process.env.OPENCLAW_BIN ?? "openclaw",
-              ["message", "send", "--channel", "whatsapp", "--target", phone, "--message", message, "--json"],
+              ["message", "send", "--channel", "whatsapp", "--target", target, "--message", text, "--json"],
               { stdio: "pipe" },
             );
             sent += 1;
           } catch {
-            failures.push(phone);
+            failures.push(target);
           }
         }
-        return { sent_to: sent, recipient_count: seenPhones.size, failures };
+        return { sent_to: sent, recipient_count: targets.size, failures };
       },
     }),
 

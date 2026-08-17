@@ -72,7 +72,9 @@ describe("fieldops-tools", () => {
       "approve_pending_confirmation",
       "reject_pending_confirmation",
       "report_safety_incident",
-      "send_role_digest",
+      "create_message_draft",
+      "list_pending_message_drafts",
+      "resolve_message_draft",
       "report_it_issue",
     ]);
   });
