@@ -157,13 +157,25 @@ export async function deleteVehicleTelemetry(vehicleId: string): Promise<void> {
 // them, regardless of what the scenario itself intended to exercise, or
 // cleanup can hit pending_confirmations_crew_member_id_fkey unpredictably.
 export async function deletePendingConfirmationsForCrewMember(crewMemberId: string): Promise<void> {
-  await pool.query(
-    `DELETE FROM notifications WHERE id IN (
-       SELECT notification_id FROM pending_confirmations WHERE crew_member_id = $1 AND notification_id IS NOT NULL
-     )`,
+  // pending_confirmations.notification_id references notifications.id --
+  // deleting the notification first (the order this had until 2026-08-17)
+  // throws pending_confirmations_notification_id_fkey whenever a real
+  // notification is actually linked. Confirmed live: this crashed
+  // checkout-rejection-honored outright (raw FK error, not an assertion
+  // failure) the moment the agent routed through a two-party-pilot tool
+  // that created one. Capture the ids first, delete the referencing row,
+  // then the now-unreferenced notification.
+  const linked = await pool.query(
+    `SELECT notification_id FROM pending_confirmations WHERE crew_member_id = $1 AND notification_id IS NOT NULL`,
     [crewMemberId],
   );
   await pool.query("DELETE FROM pending_confirmations WHERE crew_member_id = $1", [crewMemberId]);
+  if (linked.rowCount) {
+    await pool.query(
+      "DELETE FROM notifications WHERE id = ANY($1)",
+      [linked.rows.map((r) => r.notification_id)],
+    );
+  }
 }
 
 export async function crewTelemetryExists(crewMemberId: string): Promise<boolean> {
