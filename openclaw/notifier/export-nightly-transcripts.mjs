@@ -15,7 +15,7 @@ import { execFileSync } from "node:child_process";
 
 const SESSIONS_DIR = process.env.FIELDOPS_SESSIONS_DIR ?? `${process.env.HOME}/.openclaw/agents/fieldops/sessions`;
 const OUTPUT_DIR = process.env.FIELDOPS_TRANSCRIPTS_DIR ?? `${process.env.HOME}/fieldops-transcripts`;
-const NOTIFY_TARGET = process.env.TRANSCRIPT_NOTIFY_TARGET ?? "+18193196405";
+const NOTIFY_TARGET = process.env.TRANSCRIPT_NOTIFY_TARGET ?? "";
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN ?? "openclaw";
 const LOOKBACK_HOURS = Number(process.env.TRANSCRIPT_LOOKBACK_HOURS ?? 24);
 

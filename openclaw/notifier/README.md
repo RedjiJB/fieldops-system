@@ -78,7 +78,7 @@ Built 2026-08-17 after a real ~50-minute connectivity blip (05:36-06:25) self-re
 - `DASHBOARD_PUBLIC_URL` — `sync-dashboard-url.mjs` only, defaults to `https://dashboard.sodboysltd.org`. The known, stable named-tunnel hostname this script confirms is reachable each run.
 - `FIELDOPS_SESSIONS_DIR` — `export-nightly-transcripts.mjs` only, defaults to `~/.openclaw/agents/fieldops/sessions`.
 - `FIELDOPS_TRANSCRIPTS_DIR` — `export-nightly-transcripts.mjs` only, defaults to `~/fieldops-transcripts`. Deliberately outside the repo, same reasoning as `backup-database.mjs`'s dump location.
-- `TRANSCRIPT_NOTIFY_TARGET` — `export-nightly-transcripts.mjs` only, defaults to Redji's number. Set empty to skip the completion notification entirely.
+- `TRANSCRIPT_NOTIFY_TARGET` — `export-nightly-transcripts.mjs` only, no default (empty/unset skips the completion notification entirely). Set it to IT's own number in the job's `--command-env`, same as every other real value in this file -- never hardcode a real phone number as a fallback default in source, since this repo is public.
 - `FIELDOPS_AUDIT_LOGS_DIR` — `run-scheduled-audit.mjs` only, defaults to `~/fieldops-audit-logs`. Deliberately outside the repo, same reasoning as `backup-database.mjs`'s dump location.
 - `TRANSCRIPT_LOOKBACK_HOURS` — `export-nightly-transcripts.mjs` only, defaults to `24`.
 
@@ -160,6 +160,7 @@ openclaw cron add --name fieldops-model-usage --display-name "Model Usage Sync" 
 ```bash
 openclaw cron add --name fieldops-transcript-export --display-name "Nightly Transcript Export" \
   --command "node ~/fieldops-system/openclaw/notifier/export-nightly-transcripts.mjs" \
+  --command-env "TRANSCRIPT_NOTIFY_TARGET=<IT's real number>" \
   --cron "15 3 * * *" --timeout-seconds 120 --no-deliver
 ```
 

@@ -41,17 +41,17 @@ Jobs live in OpenClaw's own cron store on the Pi (`openclaw cron list`), not in 
 ```bash
 openclaw cron add --name fieldops-digest-morning --display-name "Morning Dispatch Check" \
   --agent fieldops --cron "0 6 * * *" --tz America/Toronto \
-  --channel whatsapp --to "+18193196405" --announce \
+  --channel whatsapp --to "<IT's real number>" --announce \
   --message "Morning dispatch check. Using list_shifts for today's date and list_alerts (resolved=false), summarize who is assigned where today, flag anyone not yet confirmed, and flag any unresolved alerts. Keep it brief, no filler."
 
 openclaw cron add --name fieldops-digest-midday --display-name "Midday Status Check" \
   --agent fieldops --cron "0 12 * * *" --tz America/Toronto \
-  --channel whatsapp --to "+18193196405" --announce \
+  --channel whatsapp --to "<IT's real number>" --announce \
   --message "Midday status check. Using get_crew_status and list_alerts (resolved=false), summarize where the crew currently is, explicitly call out anyone currently on break (get_crew_status's most recent event per crew member), flag anyone idle or off-site, and flag any unresolved alerts. Keep it brief, no filler."
 
 openclaw cron add --name fieldops-digest-evening --display-name "End-of-Day Wrap-up" \
   --agent fieldops --cron "0 18 * * *" --tz America/Toronto \
-  --channel whatsapp --to "+18193196405" --announce \
+  --channel whatsapp --to "<IT's real number>" --announce \
   --message "End-of-day wrap-up. Using list_shifts for today's date, get_crew_status, list_overdue_checkouts, list_alerts (resolved=false), list_expiring_documents (within_days=30), and list_notifications (routine events since this morning), summarize who worked today, explicitly call out anyone currently on break, anything still checked out, any tools registered/verified/sent to maintenance today, any job/order status changes, any unresolved issues, and any insurance/permit/cert documents expiring in the next 30 days. Keep it brief, no filler."
 ```
 

@@ -10,12 +10,12 @@ import {
 describe("extractSenderPhone", () => {
   it("prefers metadata.senderE164 when present", () => {
     expect(
-      extractSenderPhone({ from: "18193196405@s.whatsapp.net", content: "", metadata: { senderE164: "+18193196405" } }),
-    ).toBe("+18193196405");
+      extractSenderPhone({ from: "15559990601@s.whatsapp.net", content: "", metadata: { senderE164: "+15559990601" } }),
+    ).toBe("+15559990601");
   });
 
   it("falls back to digits from `from` when senderE164 is absent", () => {
-    expect(extractSenderPhone({ from: "18193196405@s.whatsapp.net", content: "" })).toBe("+18193196405");
+    expect(extractSenderPhone({ from: "15559990601@s.whatsapp.net", content: "" })).toBe("+15559990601");
   });
 
   it("returns undefined when neither yields digits", () => {
@@ -60,9 +60,9 @@ function makeDeps(overrides: Partial<MediaLoggerDeps> = {}): MediaLoggerDeps {
 
 describe("logPhotoIfPresent", () => {
   const photoContext: MessageReceivedContext = {
-    from: "18193196405@s.whatsapp.net",
+    from: "15559990601@s.whatsapp.net",
     content: "",
-    metadata: { mediaPath: "/tmp/photo.jpg", mediaType: "image/jpeg", senderE164: "+18193196405" },
+    metadata: { mediaPath: "/tmp/photo.jpg", mediaType: "image/jpeg", senderE164: "+15559990601" },
   };
 
   it("does nothing when the message has no image attachment", async () => {
@@ -86,7 +86,7 @@ describe("logPhotoIfPresent", () => {
     const deps = makeDeps({ callBackend });
     await logPhotoIfPresent(photoContext, deps);
 
-    expect(callBackend).toHaveBeenNthCalledWith(1, "/crew-members?phone=%2B18193196405");
+    expect(callBackend).toHaveBeenNthCalledWith(1, "/crew-members?phone=%2B15559990601");
     const uploadCall = callBackend.mock.calls[1];
     expect(uploadCall[0]).toBe("/documents/upload");
     const body = JSON.parse((uploadCall[1] as RequestInit).body as string);
