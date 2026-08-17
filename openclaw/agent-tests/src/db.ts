@@ -149,3 +149,12 @@ export async function deleteShiftsForCrewMember(crewMemberId: string): Promise<v
 export async function deleteVehicleTelemetry(vehicleId: string): Promise<void> {
   await pool.query("DELETE FROM vehicle_telemetry WHERE vehicle_id = $1", [vehicleId]);
 }
+
+export async function crewTelemetryExists(crewMemberId: string): Promise<boolean> {
+  const result = await pool.query("SELECT 1 FROM crew_telemetry WHERE crew_member_id = $1", [crewMemberId]);
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function deleteCrewTelemetry(crewMemberId: string): Promise<void> {
+  await pool.query("DELETE FROM crew_telemetry WHERE crew_member_id = $1", [crewMemberId]);
+}
