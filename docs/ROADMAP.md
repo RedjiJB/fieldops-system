@@ -1,6 +1,6 @@
 # Roadmap
 
-This is the original pre-build plan — phases 0–7 below are what was scoped before any code existed. The system has since grown past this list (geofence verification, shift reminders, crew-level live location, shift extension, carpool, and the message-draft review queue all landed after phase 7 and aren't reflected in the table below). See [CHANGELOG.md](../CHANGELOG.md) for what was actually built, in order, and [SECURITY.md](SECURITY.md) for the "what's fixed vs. still open" status. This file is kept as-is for the historical planning record, not updated to track current scope.
+This is the original pre-build plan — phases 0–7 below are what was scoped before any code existed. The system has since grown past this list (geofence verification, shift reminders, crew-level live location, shift extension, carpool, and the message-draft review queue all landed after phase 7 and aren't reflected in the table below). See [CHANGELOG.md](../CHANGELOG.md) for what was actually built, in order, [SECURITY.md](SECURITY.md) for the "what's fixed vs. still open" status, and [ROADMAP_V2.md](ROADMAP_V2.md) for post-v1 candidates. This file is kept as-is for the historical planning record, not updated to track current scope.
 
 ## Build order
 
